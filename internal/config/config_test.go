@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -154,6 +155,25 @@ func TestBrandingRejectsBadValues(t *testing.T) {
 	cfg.Branding.LogoFile = "../config.yaml"
 	if err := ValidateBranding(cfg); err == nil {
 		t.Fatal("expected logo traversal to fail")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "scene.css"), []byte("body{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg = DefaultConfig()
+	cfg.Branding.AssetsDir = dir
+	cfg.Branding.BackgroundFile = "scene.css"
+	if err := ValidateBranding(cfg); err == nil || !strings.Contains(err.Error(), "svg") {
+		t.Fatalf("css background error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "scene.jpg"), []byte("jpeg"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg = DefaultConfig()
+	cfg.Branding.AssetsDir = dir
+	cfg.Branding.BackgroundFile = "scene.jpg"
+	if err := ValidateBranding(cfg); err != nil {
+		t.Fatal(err)
 	}
 	cfg = DefaultConfig()
 	cfg.Branding.Templates = filepath.Join(t.TempDir(), "missing-templates")

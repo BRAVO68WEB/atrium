@@ -183,6 +183,10 @@ func (r *Router) setupRoutes() {
 		r2.Get("/jwks", r.oidcHandler.HandleJWKS)
 	})
 
+	if r.webCtrl != nil && r.webCtrl.PreviewEnabled() {
+		r.mux.Get("/preview", r.webCtrl.HandlePreview)
+		r.mux.Get("/preview/{page}", r.webCtrl.HandlePreview)
+	}
 	r.mux.Get("/branding/assets/{name}", r.webCtrl.ServeBrandAsset)
 	r.mux.Get("/login/social/{provider}/callback", r.webCtrl.HandleSocialCallback)
 	r.mux.Get("/login/social/{provider}", r.webCtrl.HandleSocialStart)

@@ -17,15 +17,15 @@ func NewOrgRepository(db database.SQL) *OrgRepository {
 }
 
 func (r *OrgRepository) Create(org *models.Organization) error {
-	_, err := r.db.Exec(`INSERT INTO organizations (id, slug, name, created_at) VALUES (?, ?, ?, ?)`,
-		org.ID, org.Slug, org.Name, org.CreatedAt)
+	_, err := r.db.Exec(`INSERT INTO organizations (id, slug, name, logo_url, created_at) VALUES (?, ?, ?, ?, ?)`,
+		org.ID, org.Slug, org.Name, org.LogoURL, org.CreatedAt)
 	return err
 }
 
 func scanOrg(scan func(dest ...any) error) (*models.Organization, error) {
 	org := &models.Organization{}
 	var created dbTime
-	if err := scan(&org.ID, &org.Slug, &org.Name, &created); err != nil {
+	if err := scan(&org.ID, &org.Slug, &org.Name, &org.LogoURL, &created); err != nil {
 		return nil, err
 	}
 	org.CreatedAt = created.Time
@@ -33,7 +33,7 @@ func scanOrg(scan func(dest ...any) error) (*models.Organization, error) {
 }
 
 func (r *OrgRepository) Get(id string) (*models.Organization, error) {
-	org, err := scanOrg(r.db.QueryRow(`SELECT id, slug, name, created_at FROM organizations WHERE id = ?`, id).Scan)
+	org, err := scanOrg(r.db.QueryRow(`SELECT id, slug, name, logo_url, created_at FROM organizations WHERE id = ?`, id).Scan)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func (r *OrgRepository) Get(id string) (*models.Organization, error) {
 }
 
 func (r *OrgRepository) GetBySlug(slug string) (*models.Organization, error) {
-	org, err := scanOrg(r.db.QueryRow(`SELECT id, slug, name, created_at FROM organizations WHERE slug = ?`, slug).Scan)
+	org, err := scanOrg(r.db.QueryRow(`SELECT id, slug, name, logo_url, created_at FROM organizations WHERE slug = ?`, slug).Scan)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func (r *OrgRepository) GetBySlug(slug string) (*models.Organization, error) {
 }
 
 func (r *OrgRepository) GetByDomain(domain string) (*models.Organization, error) {
-	org, err := scanOrg(r.db.QueryRow(`SELECT o.id, o.slug, o.name, o.created_at
+	org, err := scanOrg(r.db.QueryRow(`SELECT o.id, o.slug, o.name, o.logo_url, o.created_at
 		FROM organizations o JOIN organization_domains d ON d.org_id = o.id
 		WHERE d.domain = ?`, domain).Scan)
 	if err != nil {
@@ -59,7 +59,7 @@ func (r *OrgRepository) GetByDomain(domain string) (*models.Organization, error)
 }
 
 func (r *OrgRepository) ListForUser(userID string) ([]*models.Organization, error) {
-	return r.list(`SELECT o.id, o.slug, o.name, o.created_at
+	return r.list(`SELECT o.id, o.slug, o.name, o.logo_url, o.created_at
 		FROM organizations o
 		JOIN org_memberships m ON m.org_id = o.id
 		WHERE m.user_id = ?
@@ -67,7 +67,7 @@ func (r *OrgRepository) ListForUser(userID string) ([]*models.Organization, erro
 }
 
 func (r *OrgRepository) List() ([]*models.Organization, error) {
-	return r.list(`SELECT id, slug, name, created_at FROM organizations ORDER BY slug`)
+	return r.list(`SELECT id, slug, name, logo_url, created_at FROM organizations ORDER BY slug`)
 }
 
 // list reads every organization before loading domains. SQLite allows one

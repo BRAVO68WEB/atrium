@@ -53,6 +53,20 @@ func (c *WebController) Templates() *template.Template {
 func ParseTemplates(templateFS embed.FS, overlayDir string) (*template.Template, error) {
 	funcMap := template.FuncMap{
 		"split": strings.Split,
+		"scopeLabel": func(scope string) string {
+			switch scope {
+			case "openid":
+				return "Sign you in"
+			case "profile":
+				return "Read your profile"
+			case "email":
+				return "Read your email address"
+			case "offline_access":
+				return "Stay signed in"
+			default:
+				return scope
+			}
+		},
 	}
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "internal/templates/*.html")
 	if err != nil {
@@ -692,8 +706,17 @@ func (c *WebController) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Registration successful → redirect to login with OAuth params preserved
-	loginURL := "/login?" + r.Form.Encode()
+	// Registration successful. Keep the OAuth request, not the password.
+	q := url.Values{}
+	for k, v := range params {
+		if v != "" {
+			q.Set(k, v)
+		}
+	}
+	loginURL := "/login"
+	if encoded := q.Encode(); encoded != "" {
+		loginURL += "?" + encoded
+	}
 	http.Redirect(w, r, loginURL, http.StatusFound)
 }
 

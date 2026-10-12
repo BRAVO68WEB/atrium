@@ -1,13 +1,13 @@
 {{template "head" .}}
-{{template "brand_header" .}}
-    <p class="lede"><strong>{{if .Brand.ClientName}}{{.Brand.ClientName}}{{else}}{{.ClientID}}{{end}}</strong> is requesting access. Signed in as <strong>{{.Username}}</strong>.</p>
+    <div class="sheet-wide">
+    <h1>{{if .Brand.ClientName}}{{.Brand.ClientName}}{{else}}{{.ClientID}}{{end}}</h1>
+    <p class="who">Signed in as {{.Username}}</p>
     {{if .ActorName}}<p class="lede">This lets <strong>{{.ActorName}}</strong> act on your behalf.</p>{{end}}
-    <div class="scope-list">
-        <h3>Requested access</h3>
-        {{range .Scopes}}
-        <div class="scope-item">{{.}}</div>
-        {{end}}
-    </div>
+    {{if .Scopes}}
+    <ul class="grant">
+        {{range .Scopes}}<li><span class="grant-label">{{scopeLabel .}}</span><span class="grant-id">{{.}}</span></li>{{end}}
+    </ul>
+    {{end}}
     <form method="POST" action="/consent">
         {{template "oauth_fields" .}}
         <div class="buttons">
@@ -15,5 +15,6 @@
             <button type="submit" name="action" value="approve" class="btn-approve">Approve</button>
         </div>
     </form>
+    </div>
 {{template "card_close" .}}
 {{template "brand_footer" .}}

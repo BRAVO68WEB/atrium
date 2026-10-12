@@ -1,18 +1,21 @@
 {{template "head" .}}
-{{template "brand_header" .}}
-    <p class="lede">Signed in as <strong>{{.Username}}</strong>. Choose the organization for this sign-in.</p>
+    <div class="sheet-wide">
+    <h1>Choose an organization</h1>
+    <p class="who">Signed in as {{.Username}}</p>
     {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
     <form method="POST" action="/organization">
         {{template "oauth_fields" .}}
         <div class="org-list">
             {{range .Orgs}}
             <label class="org-choice">
+                {{if .LogoURL}}<img class="org-mark" src="{{.LogoURL}}" alt="">{{else}}<span class="org-mark" style="background:{{.MarkColor}}">{{.Initial}}</span>{{end}}
+                <span class="org-copy"><strong>{{.Name}}</strong><span>{{.Slug}}</span></span>
                 <input type="radio" name="organization" value="{{.Slug}}" required>
-                <span><strong>{{.Name}}</strong><span>{{.Slug}}</span></span>
             </label>
             {{end}}
         </div>
         <button type="submit">Continue</button>
     </form>
+    </div>
 {{template "card_close" .}}
 {{template "brand_footer" .}}

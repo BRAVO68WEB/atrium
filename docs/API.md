@@ -226,6 +226,15 @@ POST   /api/orgs
 GET    /api/orgs/{orgID}
 POST   /api/orgs/{orgID}/domains
 POST   /api/orgs/{orgID}/members
+```
+
+`POST /api/orgs` takes `name`, `slug`, optional `domains`, and optional
+`logo_url`. `logo_url` is an absolute http or https URL. The organization
+picker shows that image. An empty `logo_url` shows the first letter of
+the name on a colored ground. The color is chosen from the name, so it
+stays the same each visit.
+
+```
 
 GET    /api/webhooks
 POST   /api/webhooks
