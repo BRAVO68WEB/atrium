@@ -1,0 +1,5 @@
+.git
+e2e/node_modules
+bin
+*.db
+certs

@@ -43,6 +43,15 @@ just run
 With no `config.yaml`, the server listens on `http://localhost:8080`. When
 that file is present, `just run` uses its port and TLS settings.
 
+Postgres install:
+
+```bash
+docker compose -f deploy/compose.yaml up --build
+```
+
+Change `management.client_secret` in `deploy/config.yaml` before you use
+that file anywhere but a laptop. `just run` still uses SQLite.
+
 ```bash
 just build
 ./bin/oauth-cli init
