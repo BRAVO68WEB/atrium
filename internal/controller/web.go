@@ -17,6 +17,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/handlers/oauth"
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/push"
 	"github.com/bravo68web/oauth-impl/internal/service"
 )
 
@@ -30,6 +31,13 @@ type WebController struct {
 	theme        branding.Theme
 	social       *service.SocialService
 	audit        *service.AuditLog
+	push         *push.Handler
+}
+
+func (c *WebController) SetPush(h *push.Handler) {
+	if c != nil {
+		c.push = h
+	}
 }
 
 func (c *WebController) SetAudit(a *service.AuditLog) {
@@ -45,6 +53,20 @@ func (c *WebController) Templates() *template.Template {
 func ParseTemplates(templateFS embed.FS, overlayDir string) (*template.Template, error) {
 	funcMap := template.FuncMap{
 		"split": strings.Split,
+		"scopeLabel": func(scope string) string {
+			switch scope {
+			case "openid":
+				return "Sign you in"
+			case "profile":
+				return "Read your profile"
+			case "email":
+				return "Read your email address"
+			case "offline_access":
+				return "Stay signed in"
+			default:
+				return scope
+			}
+		},
 	}
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "internal/templates/*.html")
 	if err != nil {
@@ -212,7 +234,7 @@ func isLocalURL(raw string) bool {
 	if err != nil || parsed.IsAbs() || parsed.Host != "" {
 		return false
 	}
-	return parsed.Path == "/device" || parsed.Path == "/oauth/authorize"
+	return parsed.Path == "/device" || parsed.Path == "/oauth/authorize" || parsed.Path == "/push/enroll" || parsed.Path == "/push/approve"
 }
 
 func (c *WebController) buildAuthorizeURL(params map[string]string) string {
@@ -301,6 +323,81 @@ func oauthTemplateData(params map[string]string, extra map[string]interface{}) m
 // ──────────────────────────────────────────────
 // Login Flow
 // ──────────────────────────────────────────────
+
+func (c *WebController) HandlePushEnroll(w http.ResponseWriter, r *http.Request) {
+	if c == nil || c.push == nil {
+		http.NotFound(w, r)
+		return
+	}
+	session := c.getSession(r)
+	if session == nil || !session.Authenticated {
+		next := "/push/enroll"
+		if r.URL.RawQuery != "" {
+			next += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, "/login?next="+url.QueryEscape(next), http.StatusFound)
+		return
+	}
+	item, ok := c.push.Enroll(w, r)
+	if !ok {
+		return
+	}
+	c.renderPage(w, r, "push_enroll.html", "Register a device", "Register a device", map[string]string{}, map[string]any{
+		"QRCodeBase64":      item.QR,
+		"EnrollURL":         item.URL,
+		"RegistrationToken": item.Token,
+	})
+}
+
+func (c *WebController) HandlePushApprove(w http.ResponseWriter, r *http.Request) {
+	if c == nil || c.push == nil {
+		http.NotFound(w, r)
+		return
+	}
+	session := c.getSession(r)
+	if session == nil || !session.Authenticated {
+		http.Redirect(w, r, "/login?next="+url.QueryEscape("/push/approve"), http.StatusFound)
+		return
+	}
+	if r.Method == http.MethodPost {
+		_ = r.ParseForm()
+		if !csrfOK(r) {
+			rejectCSRF(w)
+			return
+		}
+		approve := r.Form.Get("action") != "deny"
+		status := "denied"
+		if approve {
+			status = "approved"
+		}
+		if err := c.push.Service().FinishLogin(session.UserID, r.Form.Get("auth_req_id"), status); err != nil {
+			http.Error(w, "sign-in request is not pending", http.StatusBadRequest)
+			return
+		}
+		if err := c.oauthHandler.CompleteCIBA(r.Form.Get("auth_req_id"), session.UserID, approve); err != nil {
+			http.Error(w, "sign-in request is not pending", http.StatusBadRequest)
+			return
+		}
+		c.renderPage(w, r, "push_approve.html", "Sign-in", "Sign-in", map[string]string{}, map[string]any{
+			"Approved": approve,
+			"Pending":  false,
+		})
+		return
+	}
+	pending, err := c.push.Service().PendingLogins(session.UserID)
+	if err != nil || len(pending) == 0 {
+		c.renderPage(w, r, "push_approve.html", "Sign-in", "Sign-in", map[string]string{}, map[string]any{
+			"Pending": false,
+		})
+		return
+	}
+	item := pending[0]
+	c.renderPage(w, r, "push_approve.html", "Sign-in", "Approve sign-in", map[string]string{}, map[string]any{
+		"Pending":        true,
+		"AuthReqID":      item.AuthReqID,
+		"BindingMessage": item.BindingMessage,
+	})
+}
 
 func (c *WebController) HandleLoginPage(w http.ResponseWriter, r *http.Request) {
 	params := extractOAuthParams(r)
@@ -609,8 +706,17 @@ func (c *WebController) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Registration successful → redirect to login with OAuth params preserved
-	loginURL := "/login?" + r.Form.Encode()
+	// Registration successful. Keep the OAuth request, not the password.
+	q := url.Values{}
+	for k, v := range params {
+		if v != "" {
+			q.Set(k, v)
+		}
+	}
+	loginURL := "/login"
+	if encoded := q.Encode(); encoded != "" {
+		loginURL += "?" + encoded
+	}
 	http.Redirect(w, r, loginURL, http.StatusFound)
 }
 

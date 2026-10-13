@@ -62,6 +62,8 @@ existing file in place unless you pass `--force`.
 | [Infrastructure](docs/INFRA.md) | Process layout, SQL, Redis, signing keys |
 | [Testing](docs/TESTING.md) | Go tests, Postgres, and the browser suite |
 | [API](docs/API.md) | Route map and the OpenAPI spec |
+| [Push devices](docs/PUSH.md) | Authenticator registration |
+| [AAuth](docs/AAUTH.md) | Agent authorization discovery |
 | [Contributing](CONTRIBUTING.md) | Checks, hasher contract, and pull requests |
 
 After the server is running, the Scalar UI is at

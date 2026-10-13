@@ -6,7 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"errors"
+
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/push"
 	"github.com/bravo68web/oauth-impl/internal/queue"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
@@ -78,6 +81,7 @@ func (h *Handler) HandleBCAuthorize(w http.ResponseWriter, r *http.Request) {
 	scopes := crypto.NormalizeScopes(scope)
 
 	bindingMessage := r.Form.Get("binding_message")
+	interaction := r.Form.Get("interaction_type")
 
 	authReqID, err := crypto.GenerateToken()
 	if err != nil {
@@ -95,6 +99,33 @@ func (h *Handler) HandleBCAuthorize(w http.ResponseWriter, r *http.Request) {
 	if h.userSvc != nil {
 		if user, err := h.userSvc.FindByLogin(loginHint); err == nil && user != nil {
 			resolvedUserID = user.ID
+		}
+	}
+	if h.deviceLogin != nil && resolvedUserID != "" {
+		chosen, message, prepErr := h.deviceLogin.PrepareLogin(resolvedUserID, authReqID, interaction, bindingMessage)
+		if errors.Is(prepErr, push.ErrDeviceRevoked) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error":             "device_revoked",
+				"error_description": "the authenticator device was revoked",
+			})
+			return
+		}
+		if errors.Is(prepErr, push.ErrWeakInteraction) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error":             "invalid_request",
+				"error_description": "interaction_type is below the minimum",
+			})
+			return
+		}
+		if prepErr != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error":             "server_error",
+				"error_description": "Failed to bind the authenticator",
+			})
+			return
+		}
+		if chosen != "" {
+			bindingMessage = message
 		}
 	}
 	cibaReq := &models.CIBARequest{
@@ -179,6 +210,11 @@ func (h *Handler) HandleCIBAToken(w http.ResponseWriter, r *http.Request) {
 
 	if authenticateClient(client, clientID, clientSecret, true) != "" {
 		writeTokenError(w, http.StatusUnauthorized, "invalid_client", "Client authentication failed")
+		return
+	}
+
+	if h.deviceLogin != nil && h.deviceLogin.DeviceRevoked(authReqID) {
+		writeTokenError(w, http.StatusBadRequest, "device_revoked", "the authenticator device was revoked")
 		return
 	}
 
@@ -283,6 +319,23 @@ func (h *Handler) HandleCIBAListPending(w http.ResponseWriter, r *http.Request) 
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"pending_requests": []interface{}{},
 	})
+}
+
+// CompleteCIBA records the device owner's decision for a pending request.
+func (h *Handler) CompleteCIBA(authReqID, userID string, approve bool) error {
+	if _, err := h.cibaRepo.GetByID(authReqID); err != nil {
+		return err
+	}
+	if approve {
+		if err := h.cibaRepo.UpdateStatus(authReqID, "approved"); err != nil {
+			return err
+		}
+		return h.q.Approve(authReqID, userID)
+	}
+	if err := h.cibaRepo.UpdateStatus(authReqID, "denied"); err != nil {
+		return err
+	}
+	return h.q.Deny(authReqID, "User denied the request")
 }
 
 func (h *Handler) HandleCIBAApprove(w http.ResponseWriter, r *http.Request) {

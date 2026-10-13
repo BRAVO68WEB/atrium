@@ -351,6 +351,7 @@ func (db *DB) Migrate() error {
 			id TEXT PRIMARY KEY,
 			slug TEXT NOT NULL UNIQUE,
 			name TEXT NOT NULL,
+			logo_url TEXT NOT NULL DEFAULT '',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS organization_domains (
@@ -377,6 +378,36 @@ func (db *DB) Migrate() error {
 			description TEXT,
 			scopes TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS push_registration_tokens (
+			jti TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			client_id TEXT,
+			expires_at TEXT NOT NULL,
+			used INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE TABLE IF NOT EXISTS push_devices (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			client_id TEXT,
+			jwk TEXT NOT NULL,
+			jkt TEXT NOT NULL,
+			credential_hash TEXT NOT NULL,
+			platform TEXT,
+			push_address TEXT,
+			interaction_types TEXT NOT NULL,
+			attestation TEXT,
+			status TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			last_used_at TEXT
+		)`,
+		`CREATE TABLE IF NOT EXISTS push_auth_requests (
+			auth_req_id TEXT PRIMARY KEY,
+			device_id TEXT NOT NULL,
+			user_id TEXT NOT NULL,
+			interaction_type TEXT NOT NULL,
+			binding_message TEXT,
+			status TEXT NOT NULL
 		)`,
 	}
 
@@ -433,6 +464,7 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE clients ADD COLUMN org_id TEXT`,
 		`ALTER TABLE authorization_codes ADD COLUMN org_id TEXT`,
 		`ALTER TABLE authorization_codes ADD COLUMN requested_actor TEXT`,
+		`ALTER TABLE organizations ADD COLUMN logo_url TEXT NOT NULL DEFAULT ''`,
 	}
 	for _, alter := range alters {
 		if _, err := db.Exec(alter); err != nil && db.driver == "postgres" && !isDuplicateColumn(err) {

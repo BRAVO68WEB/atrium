@@ -32,6 +32,11 @@ and `POST /api/account/email/verify`.
 
 `GET /health` needs no token.
 
+Push-device registration is separate from `/oauth/device`. It is off
+unless `push.enabled` is true. See [Push devices](PUSH.md).
+AAuth discovery is separate from these routes. It is off unless
+`aauth.enabled` is true. See [AAuth](AAUTH.md).
+
 ## OAuth and OIDC
 
 | Method | Path | Role |
@@ -221,6 +226,15 @@ POST   /api/orgs
 GET    /api/orgs/{orgID}
 POST   /api/orgs/{orgID}/domains
 POST   /api/orgs/{orgID}/members
+```
+
+`POST /api/orgs` takes `name`, `slug`, optional `domains`, and optional
+`logo_url`. `logo_url` is an absolute http or https URL. The organization
+picker shows that image. An empty `logo_url` shows the first letter of
+the name on a colored ground. The color is chosen from the name, so it
+stays the same each visit.
+
+```
 
 GET    /api/webhooks
 POST   /api/webhooks

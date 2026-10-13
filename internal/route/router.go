@@ -13,10 +13,12 @@ import (
 	"github.com/go-chi/cors"
 	"gopkg.in/yaml.v3"
 
+	"github.com/bravo68web/oauth-impl/internal/aauth"
 	"github.com/bravo68web/oauth-impl/internal/auth"
 	"github.com/bravo68web/oauth-impl/internal/controller"
 	"github.com/bravo68web/oauth-impl/internal/handlers/oauth"
 	"github.com/bravo68web/oauth-impl/internal/oidc"
+	"github.com/bravo68web/oauth-impl/internal/push"
 	"github.com/bravo68web/oauth-impl/internal/service"
 	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
@@ -27,6 +29,8 @@ type Router struct {
 	webCtrl        *controller.WebController
 	oauthHandler   *oauth.Handler
 	oidcHandler    *oidc.Handler
+	pushHandler    *push.Handler
+	aauthHandler   *aauth.Handler
 	accountCtrl    *controller.AccountController
 	authn          *auth.Middleware
 	openapiJSON    []byte
@@ -45,6 +49,8 @@ func NewRouter(
 	webCtrl *controller.WebController,
 	oauthHandler *oauth.Handler,
 	oidcHandler *oidc.Handler,
+	pushHandler *push.Handler,
+	aauthHandler *aauth.Handler,
 	accountCtrl *controller.AccountController,
 	authn *auth.Middleware,
 	openapiSpec []byte,
@@ -62,6 +68,8 @@ func NewRouter(
 		webCtrl:        webCtrl,
 		oauthHandler:   oauthHandler,
 		oidcHandler:    oidcHandler,
+		pushHandler:    pushHandler,
+		aauthHandler:   aauthHandler,
 		accountCtrl:    accountCtrl,
 		authn:          authn,
 		openapiJSON:    openapiJSON,
@@ -151,13 +159,34 @@ func (r *Router) setupRoutes() {
 	r.mux.Route("/.well-known", func(r2 chi.Router) {
 		r2.Get("/openid-configuration", r.oidcHandler.HandleDiscovery)
 		r2.Get("/oauth-authorization-server", r.oidcHandler.HandleASMetadata)
+		if r.pushHandler != nil {
+			r2.Get("/oauth-push-notification", r.pushHandler.Discovery)
+		}
 	})
+
+	if r.pushHandler != nil {
+		r.mux.Get("/push/enroll", r.webCtrl.HandlePushEnroll)
+		r.mux.Get("/push/approve", r.webCtrl.HandlePushApprove)
+		r.mux.Post("/push/approve", r.webCtrl.HandlePushApprove)
+		r.mux.Post("/push/register", r.pushHandler.Register)
+		r.mux.Post("/push/revoke", r.pushHandler.Revoke)
+		r.mux.Post("/push/rotate-key", r.pushHandler.Rotate)
+		r.mux.Get("/push/devices", r.pushHandler.Devices)
+	}
+
+	if r.aauthHandler != nil {
+		r.aauthHandler.Mount(r.mux)
+	}
 
 	r.mux.Route("/oidc", func(r2 chi.Router) {
 		r2.Get("/userinfo", r.oidcHandler.HandleUserInfo)
 		r2.Get("/jwks", r.oidcHandler.HandleJWKS)
 	})
 
+	if r.webCtrl != nil && r.webCtrl.PreviewEnabled() {
+		r.mux.Get("/preview", r.webCtrl.HandlePreview)
+		r.mux.Get("/preview/{page}", r.webCtrl.HandlePreview)
+	}
 	r.mux.Get("/branding/assets/{name}", r.webCtrl.ServeBrandAsset)
 	r.mux.Get("/login/social/{provider}/callback", r.webCtrl.HandleSocialCallback)
 	r.mux.Get("/login/social/{provider}", r.webCtrl.HandleSocialStart)

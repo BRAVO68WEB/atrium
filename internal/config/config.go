@@ -28,6 +28,35 @@ type Config struct {
 	Registration RegistrationConfig `yaml:"registration"`
 	Telemetry    TelemetryConfig    `yaml:"telemetry"`
 	Org          OrgConfig          `yaml:"org"`
+	Push         PushConfig         `yaml:"push"`
+	AAuth        AAuthConfig        `yaml:"aauth"`
+	Debug        DebugConfig        `yaml:"debug"`
+}
+
+// DebugConfig turns on developer-only routes. UI is the auth-page preview.
+type DebugConfig struct {
+	UI bool `yaml:"ui"`
+}
+
+// PushConfig is authenticator-device registration. Enabled stays false
+// unless set, so a default server does not publish the push document.
+type PushConfig struct {
+	Enabled                bool   `yaml:"enabled"`
+	RegistrationTokenTTL   int    `yaml:"registration_token_ttl"`
+	MinimumInteractionType string `yaml:"minimum_interaction_type"`
+	MaxDevicesPerUser      int    `yaml:"max_devices_per_user"`
+	ClientAttestation      bool   `yaml:"client_attestation_required"`
+}
+
+// AAuthConfig is the agent authorization protocol. Enabled stays false
+// unless set, so a default server does not publish AAuth metadata.
+type AAuthConfig struct {
+	Enabled        bool   `yaml:"enabled"`
+	APIssuer       string `yaml:"ap_issuer"`
+	PSIssuer       string `yaml:"ps_issuer"`
+	ASIssuer       string `yaml:"as_issuer"`
+	ResourceIssuer string `yaml:"resource_issuer"`
+	ResourceMode   string `yaml:"resource_mode"`
 }
 
 // OrgConfig turns organizations on. Both flags stay false unless set, so a
@@ -143,6 +172,7 @@ type BrandingConfig struct {
 	AssetsDir          string `yaml:"assets_dir"`
 	LogoFile           string `yaml:"logo_file"`
 	FaviconFile        string `yaml:"favicon_file"`
+	BackgroundFile     string `yaml:"background_file"`
 	PrimaryColor       string `yaml:"primary_color"`
 	BackgroundColor    string `yaml:"background_color"`
 	TextColor          string `yaml:"text_color"`
@@ -353,6 +383,18 @@ func DefaultConfig() *Config {
 			ServiceName: "oauth-server",
 			SampleRatio: 1,
 		},
+		Push: PushConfig{
+			Enabled:                false,
+			RegistrationTokenTTL:   300,
+			MinimumInteractionType: "boolean",
+			MaxDevicesPerUser:      5,
+			ClientAttestation:      false,
+		},
+		AAuth: AAuthConfig{
+			Enabled:      false,
+			ResourceMode: "as",
+		},
+		Debug: DebugConfig{UI: false},
 	}
 }
 
@@ -443,6 +485,66 @@ func (c *Config) Normalize() {
 	if c.Telemetry.SampleRatio == 0 {
 		c.Telemetry.SampleRatio = 1
 	}
+	if c.Push.RegistrationTokenTTL <= 0 {
+		c.Push.RegistrationTokenTTL = 300
+	}
+	if c.Push.MaxDevicesPerUser <= 0 {
+		c.Push.MaxDevicesPerUser = 5
+	}
+	c.Push.MinimumInteractionType = strings.ToLower(strings.TrimSpace(c.Push.MinimumInteractionType))
+	if c.Push.MinimumInteractionType == "" {
+		c.Push.MinimumInteractionType = "boolean"
+	}
+
+	fallback := strings.TrimRight(strings.TrimSpace(c.Security.Issuer), "/")
+	c.AAuth.APIssuer = aauthIssuer(c.AAuth.APIssuer, fallback)
+	c.AAuth.PSIssuer = aauthIssuer(c.AAuth.PSIssuer, fallback)
+	c.AAuth.ASIssuer = aauthIssuer(c.AAuth.ASIssuer, fallback)
+	c.AAuth.ResourceIssuer = aauthIssuer(c.AAuth.ResourceIssuer, fallback)
+	c.AAuth.ResourceMode = strings.ToLower(strings.TrimSpace(c.AAuth.ResourceMode))
+	if c.AAuth.ResourceMode == "" {
+		c.AAuth.ResourceMode = "as"
+	}
+}
+
+// ValidatePush checks the interaction floor when push devices are on.
+func ValidatePush(c *Config) error {
+	if c == nil || !c.Push.Enabled {
+		return nil
+	}
+	switch c.Push.MinimumInteractionType {
+	case "boolean", "number_choose", "input_manual":
+		return nil
+	default:
+		return fmt.Errorf("push.minimum_interaction_type must be boolean, number_choose, or input_manual")
+	}
+}
+
+func aauthIssuer(value, fallback string) string {
+	value = strings.TrimRight(strings.TrimSpace(value), "/")
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
+// ValidateAAuth checks the flag's issuers. A disabled block is left alone.
+func ValidateAAuth(c *Config) error {
+	if c == nil || !c.AAuth.Enabled {
+		return nil
+	}
+	switch c.AAuth.ResourceMode {
+	case "ps", "as":
+	default:
+		return fmt.Errorf("aauth.resource_mode must be ps or as")
+	}
+	for _, iss := range []string{c.AAuth.APIssuer, c.AAuth.PSIssuer, c.AAuth.ASIssuer, c.AAuth.ResourceIssuer} {
+		parsed, err := url.Parse(iss)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return fmt.Errorf("aauth issuer %q is not an absolute url", iss)
+		}
+	}
+	return nil
 }
 
 var brandColorPattern = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
@@ -504,7 +606,25 @@ func ValidateBranding(cfg *Config) error {
 	if err := checkBrandAssetRef(b.AssetsDir, b.FaviconFile, "favicon_file"); err != nil {
 		return err
 	}
+	if err := checkBrandAssetRef(b.AssetsDir, b.BackgroundFile, "background_file"); err != nil {
+		return err
+	}
+	if err := checkBrandBackgroundExt(b.BackgroundFile); err != nil {
+		return err
+	}
 	return nil
+}
+
+func checkBrandBackgroundExt(name string) error {
+	if name == "" {
+		return nil
+	}
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg":
+		return nil
+	default:
+		return fmt.Errorf("branding.background_file must be a png, jpg, jpeg, gif, webp, or svg file")
+	}
 }
 
 func checkBrandColor(value, field string, required bool) error {

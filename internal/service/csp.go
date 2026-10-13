@@ -3,7 +3,8 @@ package service
 import "strings"
 
 // ContentSecurityPolicy is the browser policy. Provider hosts are added only
-// while bot protection is configured. img-src stays 'self' data:.
+// while bot protection is configured. img-src allows https so an
+// organization logo_url can load.
 func ContentSecurityPolicy(provider string) string {
 	script := []string{"'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"}
 	connect := []string{"'self'", "https://cdn.jsdelivr.net"}
@@ -19,7 +20,7 @@ func ContentSecurityPolicy(provider string) string {
 		frame = append(frame, "https://challenges.cloudflare.com")
 	}
 	policy := "default-src 'self'; script-src " + strings.Join(script, " ") +
-		"; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; connect-src " +
+		"; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' https://cdn.jsdelivr.net; connect-src " +
 		strings.Join(connect, " ")
 	if len(frame) > 0 {
 		policy += "; frame-src " + strings.Join(frame, " ")

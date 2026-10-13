@@ -54,6 +54,19 @@ type Handler struct {
 	orgs         *service.OrgService
 	actorMu      sync.Mutex
 	actorGrants  map[string]time.Time
+	deviceLogin  DeviceLogin
+}
+
+// DeviceLogin binds a CIBA sign-in to a registered authenticator.
+type DeviceLogin interface {
+	PrepareLogin(userID, authReqID, interaction, binding string) (string, string, error)
+	DeviceRevoked(authReqID string) bool
+}
+
+func (h *Handler) SetDeviceLogin(login DeviceLogin) {
+	if h != nil {
+		h.deviceLogin = login
+	}
 }
 
 type LoginRecorder interface {

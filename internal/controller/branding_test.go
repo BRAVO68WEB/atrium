@@ -11,6 +11,7 @@ import (
 	root "github.com/bravo68web/oauth-impl"
 	"github.com/bravo68web/oauth-impl/internal/branding"
 	"github.com/bravo68web/oauth-impl/internal/config"
+	"github.com/bravo68web/oauth-impl/internal/models"
 )
 
 func TestOverlayReplacesLoginOnly(t *testing.T) {
@@ -28,7 +29,7 @@ func TestOverlayReplacesLoginOnly(t *testing.T) {
 		t.Fatalf("login overlay = %s", login)
 	}
 	register := executePage(t, tmpl, "register.html", config.DefaultConfig(), "Register", "Create Account")
-	if !strings.Contains(register, "Create Account") || strings.Contains(register, "Acme Sign In") {
+	if !strings.Contains(register, "Create your account") || strings.Contains(register, "Acme Sign In") {
 		t.Fatalf("register = %s", register)
 	}
 }
@@ -66,8 +67,63 @@ func TestLoginHidesRegisterLink(t *testing.T) {
 		t.Fatal("login fields missing")
 	}
 	register := executePage(t, tmpl, "register.html", cfg, "Register", "Create Account")
-	if !strings.Contains(register, `action="/register"`) || !strings.Contains(register, "Create Account") {
+	if !strings.Contains(register, `action="/register"`) || !strings.Contains(register, "Create your account") {
 		t.Fatalf("register page = %s", register)
+	}
+}
+
+func TestOrganizationMarkUsesLogoOrInitial(t *testing.T) {
+	tmpl, err := ParseTemplates(root.TemplateFS, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := map[string]any{
+		"Username": "ada",
+		"Orgs": []*models.Organization{
+			{Name: "Field Notes", Slug: "field-notes"},
+			{Name: "Archive", Slug: "archive", LogoURL: "https://cdn.example/archive.png"},
+		},
+	}
+	branding.Prepare(config.DefaultConfig()).Apply(data, "Organization", "Choose an organization", "")
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "organization.html", data); err != nil {
+		t.Fatal(err)
+	}
+	body := buf.String()
+	if !strings.Contains(body, ">F<") || !strings.Contains(body, "https://cdn.example/archive.png") {
+		t.Fatalf("org marks = %s", body)
+	}
+	if strings.Contains(body, ">A<") {
+		t.Fatal("letter mark replaced the logo")
+	}
+}
+
+func TestBrandSceneStaysInsideTheCard(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Branding.LogoFile = "mark.png"
+	cfg.Branding.BackgroundFile = "scene.jpg"
+	cfg.Branding.FooterText = "Northwind"
+	tmpl, err := ParseTemplates(root.TemplateFS, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	login := executePage(t, tmpl, "login.html", cfg, "Login", "Sign In")
+	logo := strings.Index(login, `alt="OAuth Server"`)
+	title := strings.Index(login, "Continue to Example App")
+	signup := strings.Index(login, "Sign up")
+	footer := strings.Index(login, "Northwind")
+	section := strings.Index(login, "</section>")
+	if !strings.Contains(login, `/branding/assets/scene.jpg`) {
+		t.Fatal("background image missing")
+	}
+	if logo < 0 || title < 0 || logo > title {
+		t.Fatal("logo is not above the title")
+	}
+	if strings.Contains(login, `class="product"`) {
+		t.Fatal("product name is shown next to the logo")
+	}
+	if signup < 0 || footer < 0 || section < 0 || signup > section || footer > section {
+		t.Fatal("sign up or footer sits outside the card")
 	}
 }
 

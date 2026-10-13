@@ -556,7 +556,7 @@ func SafeNext(raw string) string {
 	if err != nil || u.IsAbs() || u.Host != "" {
 		return ""
 	}
-	if u.Path != "/device" && u.Path != "/oauth/authorize" {
+	if u.Path != "/device" && u.Path != "/oauth/authorize" && u.Path != "/push/enroll" && u.Path != "/push/approve" {
 		return ""
 	}
 	return u.RequestURI()

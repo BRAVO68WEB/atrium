@@ -194,6 +194,9 @@ func (ks *KeySet) ToJWKS() JWKS {
 		if key.Status != "active" && (key.RetireAt.IsZero() || !key.RetireAt.After(now)) {
 			continue
 		}
+		if key.RSA == nil && key.EC == nil {
+			continue
+		}
 		out.Keys = append(out.Keys, publicJWK(key))
 	}
 	return out
@@ -245,6 +248,11 @@ func parsePrivatePEM(alg, text string) (storedKey, error) {
 			return storedKey{}, err
 		}
 		return storedKey{EC: key}, nil
+	case "Ed25519":
+		if _, err := x509.ParsePKCS8PrivateKey(block.Bytes); err != nil {
+			return storedKey{}, err
+		}
+		return storedKey{}, nil
 	default:
 		return storedKey{}, fmt.Errorf("unknown alg %s", alg)
 	}

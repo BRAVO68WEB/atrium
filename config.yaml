@@ -105,8 +105,9 @@ branding:
   assets_dir: ""
   logo_file: ""
   favicon_file: ""
+  background_file: ""
   primary_color: "#445f88"
-  background_color: "#d9d9d9"
+  background_color: ""
   text_color: ""
   footer_text: ""
   support_url: ""
@@ -187,3 +188,6 @@ oidc:
     - none
     - tls_client_auth
     - self_signed_tls_client_auth
+
+debug:
+  ui: true

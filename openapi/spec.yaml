@@ -251,7 +251,8 @@ paths:
       tags: [Management]
       summary: Create an organization
       description: |
-        Body is `name`, `slug`, and optional `domains`. A management client bound
+        Body is `name`, `slug`, optional `domains`, and optional `logo_url`
+        (an absolute http or https URL). A management client bound
         to an organization cannot create another organization.
       security: [{ bearerAuth: [] }]
       responses:

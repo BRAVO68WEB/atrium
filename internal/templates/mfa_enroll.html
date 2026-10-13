@@ -1,6 +1,7 @@
 {{template "head" .}}
-{{template "brand_header" .}}
-    <p class="lede">Scan this code with your authenticator app, then enter the 6-digit code it shows.</p>
+    <div class="sheet-narrow">
+    <h1>Set up an authenticator</h1>
+    <p class="who">Scan this code, then enter the 6-digit code it shows.</p>
     {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
     <div class="qr-code">
         <img src="data:image/png;base64,{{.QRCodeBase64}}" alt="Authenticator QR code" width="220" height="220">
@@ -14,10 +15,11 @@
         {{template "oauth_fields" .}}
         <input type="hidden" name="secret" value="{{.Secret}}">
         <div class="form-group">
-            <label for="code">Verification code</label>
-            <input type="text" class="code" id="code" name="code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" placeholder="000000" required autofocus autocomplete="one-time-code">
+            <label class="visually-hidden" for="code">Verification code</label>
+            <input type="text" class="code" id="code" name="code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required autofocus autocomplete="one-time-code">
         </div>
-        <button type="submit">Verify and enable</button>
+        <button type="submit">Continue</button>
     </form>
+    </div>
 {{template "card_close" .}}
 {{template "brand_footer" .}}

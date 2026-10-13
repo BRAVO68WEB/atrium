@@ -9,7 +9,8 @@ Key names and defaults are in [Configuration](CONFIG.md).
 `submit_label`, and `footer_text` are the visible strings. Empty copy
 falls back to the built-in labels. `primary_color`, `background_color`,
 and `text_color` are `#rgb` or `#rrggbb`. An empty primary color becomes
-`#0066ff`.
+`#0066ff`. With no `background_color` and no `background_file`, the page
+behind the card is a deep shade of the primary color.
 
 `support_url`, `privacy_url`, and `terms_url` are optional links in the
 page footer.
@@ -27,13 +28,19 @@ return 403. Management `POST /api/users` still creates accounts.
 
 ## Assets
 
-`assets_dir` is a directory of files named by `logo_file` and
-`favicon_file`, plus an optional `custom.css`. The server serves one
-file at `/branding/assets/{name}`. An image hosted on another site does
-not load through this path.
+`assets_dir` is a directory of files named by `logo_file`,
+`favicon_file`, and `background_file`, plus an optional `custom.css`.
+The server serves one file at `/branding/assets/{name}`. An image hosted
+on another site does not load through this path.
 
 Allowed extensions are png, jpg, jpeg, gif, webp, svg, ico, and css.
 Each file is at most 1 MiB. Names stay inside `assets_dir`.
+`background_file` accepts only png, jpg, jpeg, gif, webp, and svg.
+
+When `background_file` is set, that image covers the page behind the
+card. `background_color` shows through only while the image is not set.
+The card stays white, and footer text and links stay in the card so they
+remain readable on any photo. Set a custom typeface in `custom.css`.
 
 ## HTML overlays
 

@@ -148,6 +148,7 @@ branding:
   assets_dir: ""
   logo_file: ""
   favicon_file: ""
+  background_file: ""
   primary_color: "#0066ff"
   background_color: ""
   text_color: ""
@@ -169,6 +170,24 @@ social:
 org:
   enabled: false
   enabled_domain_based_autolookup: false
+
+push:
+  enabled: false
+  registration_token_ttl: 300
+  minimum_interaction_type: boolean
+  max_devices_per_user: 5
+  client_attestation_required: false
+
+aauth:
+  enabled: false
+  ap_issuer: ""
+  ps_issuer: ""
+  as_issuer: ""
+  resource_issuer: ""
+  resource_mode: as
+
+debug:
+  ui: false
 
 telemetry:
   enabled: false
@@ -252,6 +271,25 @@ default server never selects an organization.
 an organization from the user's email domain only when they are already
 a member. It does not create a membership. Naming an organization the
 user is not in returns `access_denied`.
+
+`push.enabled` defaults to false. It registers authenticator devices
+for a later wake signal. It does not change `/oauth/device`. See
+[Push devices](PUSH.md).
+
+`debug.ui` defaults to false. Set it to true to serve `/preview`, a
+catalog of the auth screens with sample data. Leave it off on a
+server that other people can reach. Submitting a form on a preview
+still uses the real endpoint.
+## AAuth
+
+`aauth.enabled` defaults to false. A default server does not publish
+AAuth metadata and does not mount AAuth routes. The OAuth and OpenID
+Connect endpoints stay as they are.
+
+When you set it to true, the process publishes four discovery documents
+and one Ed25519 key. An empty issuer uses `security.issuer`.
+`resource_mode` is `as` or `ps`. Token issuance is not served yet. See
+[AAuth](AAUTH.md).
 
 The browser authorize flow uses `/organization` when the user belongs to
 more than one organization, the request did not name one, and the client

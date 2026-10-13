@@ -1,0 +1,12 @@
+{{template "head" .}}
+    <div class="sheet-narrow">
+    <h1>Add an authenticator</h1>
+    <p class="who">Scan the code with the authenticator you want to register.</p>
+    <div class="qr-code">
+        <img id="enroll-qr" src="data:image/png;base64,{{.QRCodeBase64}}" alt="Enrollment QR code" width="220" height="220">
+    </div>
+    <p id="enroll-url" class="who enroll-url">{{.EnrollURL}}</p>
+    <div id="registration-token" class="secret-box">{{.RegistrationToken}}</div>
+    </div>
+{{template "card_close" .}}
+{{template "brand_footer" .}}
