@@ -162,7 +162,7 @@ func profileGET(t *testing.T, client *http.Client, raw string) profilePage {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	return profilePage{StatusCode: resp.StatusCode, body: string(body), cookies: client.Jar.Cookies(mustURL(raw))}
 }
@@ -177,7 +177,7 @@ func profilePOST(t *testing.T, client *http.Client, raw, token string, form url.
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	return profilePage{StatusCode: resp.StatusCode, body: string(body)}
 }
