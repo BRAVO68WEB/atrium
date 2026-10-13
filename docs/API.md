@@ -162,7 +162,18 @@ GET    /api/me/refresh-tokens
 DELETE /api/me/refresh-tokens/{id}
 GET    /api/me/activity
 GET    /api/me/login-analytics?window=720h
+GET    /api/me/consents
+DELETE /api/me/consents/{clientID}
 ```
+
+`DELETE /api/me/consents/{clientID}` removes that application's consent
+and revokes its access and refresh tokens. The same removal is
+`DELETE /api/consents?user_id=&client_id=` for a management client, and
+the browser page `GET /profile` for the signed-in user.
+
+`/profile` also changes the password, sends a verification email, turns
+off an authenticator after a valid code, and signs out other browsers.
+The current browser has no sign-out button on that list.
 
 `window` is a Go duration. The default is 30 days (`720h`).
 

@@ -256,7 +256,28 @@
         }
         .org-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
         .org-copy strong { font-size: 0.95rem; }
-        .org-copy span { color: var(--muted); font-size: 0.82rem; }
+        .org-copy span { color: var(--muted); font-size: 0.82rem; overflow-wrap: anywhere; }
+
+        h2.apps { margin: 22px 0 8px; font-size: 1rem; font-weight: 600; text-align: left; }
+        .account-list { margin: 0 0 8px; }
+        .account-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 0;
+            border-top: 1px solid var(--line);
+            text-align: left;
+        }
+        .account-row form { margin: 0; }
+        .account-row .btn-deny, .org-choice .btn-deny {
+            width: auto;
+            min-width: 5.5rem;
+            height: 36px;
+            margin-top: 0;
+            white-space: nowrap;
+            flex: 0 0 auto;
+        }
         .social a {
             display: flex;
             align-items: center;
@@ -354,18 +375,15 @@
 {{end}}
 
 {{define "card_close"}}
-    {{if or .Brand.FooterText .Brand.SupportURL .Brand.PrivacyURL .Brand.TermsURL}}
     <footer class="brand-footer">
         {{if .Brand.FooterText}}<p>{{.Brand.FooterText}}</p>{{end}}
-        {{if or .Brand.SupportURL .Brand.PrivacyURL .Brand.TermsURL}}
         <p>
+            <a href="/profile">Account</a>
             {{if .Brand.SupportURL}}<a href="{{.Brand.SupportURL}}">Support</a>{{end}}
             {{if .Brand.PrivacyURL}}<a href="{{.Brand.PrivacyURL}}">Privacy</a>{{end}}
             {{if .Brand.TermsURL}}<a href="{{.Brand.TermsURL}}">Terms</a>{{end}}
         </p>
-        {{end}}
     </footer>
-    {{end}}
     </section>
 {{end}}
 
