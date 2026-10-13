@@ -234,7 +234,7 @@ func isLocalURL(raw string) bool {
 	if err != nil || parsed.IsAbs() || parsed.Host != "" {
 		return false
 	}
-	return parsed.Path == "/device" || parsed.Path == "/oauth/authorize" || parsed.Path == "/push/enroll" || parsed.Path == "/push/approve"
+	return parsed.Path == "/device" || parsed.Path == "/oauth/authorize" || parsed.Path == "/push/enroll" || parsed.Path == "/push/approve" || parsed.Path == "/profile"
 }
 
 func (c *WebController) buildAuthorizeURL(params map[string]string) string {

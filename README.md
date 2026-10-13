@@ -23,7 +23,7 @@ and traces turn on when you set them.
   a client opts in
 - DPoP and mutual TLS client authentication
 - TOTP enrollment, browser login, registration, consent, organization
-  choice, and logout
+  choice, a signed-in profile at `/profile`, and logout
 - Account APIs for the signed-in user, and management APIs for the
   management client
 - Dynamic client registration and client ID metadata documents

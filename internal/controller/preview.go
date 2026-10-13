@@ -88,6 +88,34 @@ func previewCatalog() []previewPage {
 				"Username":     "ada",
 			}}
 		}},
+		{Name: "profile", Label: "Profile", Variants: []string{"", "empty", "unverified", "mfa"}, render: func(variant string) previewView {
+			extra := map[string]any{
+				"Username": "ada", "Email": "ada@fieldnotes.example", "EmailVerified": true,
+				"MFAEnabled": false, "Removed": false,
+				"Sessions": []profileSession{{ID: "current", Detail: "127.0.0.1 · 12 Oct 2026 09:00", Current: true}},
+			}
+			switch variant {
+			case "empty":
+				extra["Sessions"] = []profileSession{}
+			case "unverified":
+				extra["EmailVerified"] = false
+			case "mfa":
+				extra["MFAEnabled"] = true
+			default:
+				extra["Grants"] = []profileGrant{{
+					ClientID: "field-notes",
+					Name:     "Field Notes",
+					Initial:  "F",
+					Detail:   "openid profile email · 12 Oct 2026",
+					Color:    "#1d4ed8",
+				}}
+				extra["Sessions"] = []profileSession{
+					{ID: "current", Detail: "127.0.0.1 · 12 Oct 2026 09:00", Current: true},
+					{ID: "other", Detail: "203.0.113.10 · Firefox · 11 Oct 2026 18:12", Current: false},
+				}
+			}
+			return previewView{Page: "profile.html", Title: "Account", Heading: "Your account", ClientName: "Field Notes", Params: sample, Extra: extra}
+		}},
 		{Name: "organization", Label: "Organization", Variants: []string{""}, render: func(string) previewView {
 			return previewView{Page: "organization.html", Title: "Organization", Heading: "Choose an organization", ClientName: "Field Notes", Params: sample, Extra: map[string]any{
 				"Username": "ada",
