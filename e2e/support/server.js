@@ -46,6 +46,7 @@ function renderConfig(port, dsn, overrides) {
     `  access_token_format: ${yamlValue(security.access_token_format || "opaque")}`,
     `  login_identifier: ${yamlValue(security.login_identifier || "username")}`,
     `  require_pkce: ${yamlValue(Boolean(security.require_pkce))}`,
+    `  oob_helper: ${yamlValue(Boolean(security.oob_helper))}`,
     `  disable_registration: ${yamlValue(Boolean(security.disable_registration))}`,
     `  allow_insecure_fetch: ${yamlValue(Boolean(security.allow_insecure_fetch))}`,
     "  fetch_allow_ips:",
