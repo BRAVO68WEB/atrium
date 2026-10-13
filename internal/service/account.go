@@ -438,9 +438,16 @@ func (a *AccountService) sendMail(user *models.User, name string, data mailer.Da
 	if a == nil || a.mail == nil || user == nil || user.Email == "" {
 		return nil
 	}
-	data.Issuer = a.issuer
-	data.Username = user.Username
-	data.Email = user.Email
+	data.Issuer = mailer.SanitizeText(a.issuer)
+	data.Username = mailer.SanitizeText(user.Username)
+	data.Email = mailer.SanitizeText(user.Email)
+	data.Link = mailer.SanitizeText(data.Link)
+	data.TTL = mailer.SanitizeText(data.TTL)
+	data.Time = mailer.SanitizeText(data.Time)
+	data.IP = mailer.SanitizeText(data.IP)
+	data.Agent = mailer.SanitizeText(data.Agent)
+	data.Count = mailer.SanitizeText(data.Count)
+
 	subject, body, err := mailer.Render(a.templates, name, data)
 	if err != nil {
 		return err

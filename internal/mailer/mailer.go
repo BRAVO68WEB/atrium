@@ -121,6 +121,11 @@ func sanitizeMailText(text string) string {
 	return b.String()
 }
 
+// SanitizeText normalizes untrusted text before including it in email content.
+func SanitizeText(text string) string {
+	return sanitizeMailText(text)
+}
+
 // validMailHeaders rejects header values that could add extra SMTP headers.
 func validMailHeaders(to, from, subject string) error {
 	if strings.ContainsAny(to, "\r\n") || strings.ContainsAny(from, "\r\n") || strings.ContainsAny(subject, "\r\n") {
