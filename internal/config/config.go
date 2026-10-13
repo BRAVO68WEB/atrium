@@ -30,6 +30,12 @@ type Config struct {
 	Org          OrgConfig          `yaml:"org"`
 	Push         PushConfig         `yaml:"push"`
 	AAuth        AAuthConfig        `yaml:"aauth"`
+	Debug        DebugConfig        `yaml:"debug"`
+}
+
+// DebugConfig turns on developer-only routes. UI is the auth-page preview.
+type DebugConfig struct {
+	UI bool `yaml:"ui"`
 }
 
 // PushConfig is authenticator-device registration. Enabled stays false
@@ -166,6 +172,7 @@ type BrandingConfig struct {
 	AssetsDir          string `yaml:"assets_dir"`
 	LogoFile           string `yaml:"logo_file"`
 	FaviconFile        string `yaml:"favicon_file"`
+	BackgroundFile     string `yaml:"background_file"`
 	PrimaryColor       string `yaml:"primary_color"`
 	BackgroundColor    string `yaml:"background_color"`
 	TextColor          string `yaml:"text_color"`
@@ -387,6 +394,7 @@ func DefaultConfig() *Config {
 			Enabled:      false,
 			ResourceMode: "as",
 		},
+		Debug: DebugConfig{UI: false},
 	}
 }
 
@@ -598,7 +606,25 @@ func ValidateBranding(cfg *Config) error {
 	if err := checkBrandAssetRef(b.AssetsDir, b.FaviconFile, "favicon_file"); err != nil {
 		return err
 	}
+	if err := checkBrandAssetRef(b.AssetsDir, b.BackgroundFile, "background_file"); err != nil {
+		return err
+	}
+	if err := checkBrandBackgroundExt(b.BackgroundFile); err != nil {
+		return err
+	}
 	return nil
+}
+
+func checkBrandBackgroundExt(name string) error {
+	if name == "" {
+		return nil
+	}
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg":
+		return nil
+	default:
+		return fmt.Errorf("branding.background_file must be a png, jpg, jpeg, gif, webp, or svg file")
+	}
 }
 
 func checkBrandColor(value, field string, required bool) error {

@@ -5,18 +5,17 @@ When bot protection is on, the form also posts bot_token.
 Ship login.html alone to change this page. Shipping a file that also defines "head"
 replaces the shared frame on every auth page. */}}
 {{template "head" .}}
-{{template "brand_header" .}}
-    {{if .Brand.ClientName}}<p class="lede">Continue to {{.Brand.ClientName}}</p>{{end}}
+    {{if .Brand.ClientName}}<h1>Continue to {{.Brand.ClientName}}</h1>{{else}}<h1>{{.Brand.Heading}}</h1>{{end}}
     {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
     <form method="POST" action="/login">
         {{template "oauth_fields" .}}
         <div class="form-group">
             <label for="username">{{.Brand.UsernameLabel}}</label>
-            <input type="text" id="username" name="username" value="{{.LoginHint}}" placeholder="{{.Brand.UsernameLabel}}" required autofocus autocomplete="{{.Brand.Autocomplete}}">
+            <input type="text" id="username" name="username" value="{{.LoginHint}}" required autofocus autocomplete="{{.Brand.Autocomplete}}">
         </div>
         <div class="form-group">
             <label for="password">{{.Brand.PasswordLabel}}</label>
-            <input type="password" id="password" name="password" placeholder="{{.Brand.PasswordLabel}}" required autocomplete="current-password">
+            <input type="password" id="password" name="password" required autocomplete="current-password">
         </div>
         {{template "bot_widget" .}}
         {{if .Brand.ShowForgot}}<p class="hint"><a href="/forgot">Forgot password</a></p>{{end}}
@@ -28,6 +27,6 @@ replaces the shared frame on every auth page. */}}
         {{range .Providers}}<a href="/login/social/{{.ID}}?{{$.OAuthQuery}}">Continue with {{.Name}}</a>{{end}}
     </div>
     {{end}}
-{{template "card_close" .}}
     {{if .Brand.ShowRegister}}<p class="below">Don't have an account? <a href="/register?client_id={{.ClientID}}&redirect_uri={{.RedirectURI}}&response_type={{.ResponseType}}&scope={{.Scope}}&state={{.State}}&nonce={{.Nonce}}&code_challenge={{.CodeChallenge}}&code_challenge_method={{.CodeChallengeMethod}}&next={{.Next}}">Sign up</a></p>{{end}}
+{{template "card_close" .}}
 {{template "brand_footer" .}}

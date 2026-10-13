@@ -60,9 +60,10 @@ HEADED=1 npm test
 `HEADLESS=false` is the same switch. The suite covers grants, CIBA,
 refresh and signing-key rotation, webhooks, brute-force detection,
 password rules, PKCE, closed registration, MFA enrollment, DPoP, client
-ID metadata documents, JWT access tokens, login identifier, pairwise
-subjects, organizations, encrypted ID tokens, and AAuth discovery.
-Default access tokens in these tests stay opaque unless a case sets
+ID metadata documents, JWT access tokens, out-of-band codes, the
+combined-code helper, on-behalf-of delegation, login identifier, pairwise
+subjects, organizations, encrypted ID tokens and AAuth discovery. Default access tokens
+in these tests stay opaque unless a case sets
 `security.access_token_format` to `jwt`.
 
 Mocha is serial. The spec pattern is `test/**/*.test.js`, so naming one

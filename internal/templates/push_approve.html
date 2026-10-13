@@ -1,19 +1,23 @@
 {{template "head" .}}
-{{template "brand_header" .}}
-    <p class="lede">A sign-in is waiting on your authenticator.</p>
-    {{if .Approved}}<p id="push-approved" class="lede">Sign-in approved.</p>{{end}}
-    {{if not .Pending}}
-        {{if not .Approved}}<p class="lede">Nothing is waiting.</p>{{end}}
+    <div class="sheet-wide">
+    {{if .Approved}}
+        <h1>Sign-in approved</h1>
+        <p id="push-approved" class="lede">You can return to the application.</p>
+    {{else if not .Pending}}
+        <h1>Nothing is waiting</h1>
+        <p class="lede">There is no sign-in to approve.</p>
     {{else}}
-    <form method="POST" action="/push/approve">
-        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-        <input type="hidden" name="auth_req_id" value="{{.AuthReqID}}">
-        {{if .BindingMessage}}<p id="binding-message">Confirm <strong>{{.BindingMessage}}</strong></p>{{end}}
-        <div class="buttons">
-            <button type="submit" name="action" value="deny" class="btn-deny">Deny</button>
-            <button type="submit" name="action" value="approve" class="btn-approve">Approve sign-in</button>
-        </div>
-    </form>
+        <h1>Approve this sign-in</h1>
+        {{if .BindingMessage}}<p id="binding-message" class="who">Confirm <strong>{{.BindingMessage}}</strong></p>{{else}}<p class="who">Your authenticator is asking to continue.</p>{{end}}
+        <form method="POST" action="/push/approve">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <input type="hidden" name="auth_req_id" value="{{.AuthReqID}}">
+            <div class="buttons">
+                <button type="submit" name="action" value="deny" class="btn-deny">Deny</button>
+                <button type="submit" name="action" value="approve" class="btn-approve">Approve sign-in</button>
+            </div>
+        </form>
     {{end}}
+    </div>
 {{template "card_close" .}}
 {{template "brand_footer" .}}

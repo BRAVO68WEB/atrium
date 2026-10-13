@@ -80,4 +80,27 @@ describe("JWT access tokens", function () {
     const inactive = await introspect(server.base, client, refreshed.body.access_token);
     assert.equal(inactive.body.active, false);
   });
+
+  it("uses the resource as aud for a client-credentials token", async function () {
+    const api = await createClient(server, {
+      name: "JWT API",
+      grant_types: ["client_credentials"],
+      scopes: ["openid"],
+    });
+    const resource = "https://api.example/finance";
+    const issued = await tokenRequest(server.base, {
+      grant_type: "client_credentials",
+      scope: "openid",
+      resource,
+    }, { id: api.id, secret: api.secret });
+    assert.equal(issued.status, 200, JSON.stringify(issued.body));
+    const verified = await jwtVerify(issued.body.access_token, jwks, {
+      issuer: server.base,
+      audience: resource,
+      typ: "at+jwt",
+    });
+    assert.equal(verified.payload.sub, api.id);
+    assert.equal(verified.payload.azp, api.id);
+    assert.equal(verified.payload.act, undefined);
+  });
 });

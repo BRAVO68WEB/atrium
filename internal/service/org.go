@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 	"unicode"
@@ -111,7 +112,7 @@ func choice(org *models.Organization) *OrgChoice {
 	return &OrgChoice{ID: org.ID, Slug: org.Slug, Name: org.Name}
 }
 
-func (s *OrgService) Create(name, slug string, domains []string) (*models.Organization, error) {
+func (s *OrgService) Create(name, slug string, domains []string, logoURL string) (*models.Organization, error) {
 	if !s.Enabled() {
 		return nil, ErrOrgDisabled
 	}
@@ -122,7 +123,11 @@ func (s *OrgService) Create(name, slug string, domains []string) (*models.Organi
 	if strings.TrimSpace(name) == "" {
 		return nil, fmt.Errorf("name is required")
 	}
-	org := &models.Organization{ID: uuid.NewString(), Slug: slug, Name: strings.TrimSpace(name), CreatedAt: time.Now().UTC()}
+	logoURL, err := normalizeLogoURL(logoURL)
+	if err != nil {
+		return nil, err
+	}
+	org := &models.Organization{ID: uuid.NewString(), Slug: slug, Name: strings.TrimSpace(name), LogoURL: logoURL, CreatedAt: time.Now().UTC()}
 	if err := s.repo.Create(org); err != nil {
 		return nil, err
 	}
@@ -132,6 +137,18 @@ func (s *OrgService) Create(name, slug string, domains []string) (*models.Organi
 		}
 	}
 	return s.repo.Get(org.ID)
+}
+
+func normalizeLogoURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", fmt.Errorf("logo_url must be an absolute http or https url")
+	}
+	return raw, nil
 }
 
 func (s *OrgService) AddDomain(orgID, domain string) error {

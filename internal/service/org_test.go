@@ -34,7 +34,7 @@ func TestOrgResolveHonorsFlags(t *testing.T) {
 	}
 
 	cfg.Org.Enabled = true
-	org, err := svc.Create("Acme", "acme", []string{"acme.example"})
+	org, err := svc.Create("Acme", "acme", []string{"acme.example"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,9 +71,15 @@ func TestOrgResolveHonorsFlags(t *testing.T) {
 	if err != nil || single {
 		t.Fatalf("single membership needs=%v err=%v", single, err)
 	}
-	second, err := svc.Create("Beta", "beta", nil)
+	second, err := svc.Create("Beta", "beta", nil, "https://cdn.example/beta.png")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if second.LogoURL != "https://cdn.example/beta.png" || second.Initial() != "B" {
+		t.Fatalf("logo org = %+v", second)
+	}
+	if _, err := svc.Create("Nope", "nope", nil, "javascript:alert(1)"); err == nil {
+		t.Fatal("expected a bad logo url to fail")
 	}
 	if err := svc.AddMember(second.ID, user.ID, "member"); err != nil {
 		t.Fatal(err)

@@ -1,14 +1,15 @@
 {{template "head" .}}
-{{template "brand_header" .}}
+    <div class="sheet-narrow">
     {{if .Error}}
-    <div class="error">{{.Error}}</div>
-    {{if .ErrorDescription}}<p class="lede">{{.ErrorDescription}}</p>{{end}}
+    {{template "stopped" .}}
     {{else}}
-    <p class="lede">Paste this single value into the application that asked you to sign in. You can paste this page's address instead.</p>
+    <h1>Copy this code</h1>
+    <p class="who">Paste this value, or this page's address, into the application.</p>
     <div class="form-group">
-        <label for="combined-code">Authorization code</label>
-        <input id="combined-code" readonly value="{{.Combined}}" onclick="this.select()">
+        <label class="visually-hidden" for="combined-code">Authorization code</label>
+        <input class="display" type="text" id="combined-code" readonly value="{{.Combined}}" onclick="this.select()">
     </div>
     {{end}}
+    </div>
 {{template "card_close" .}}
 {{template "brand_footer" .}}

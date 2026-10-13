@@ -176,6 +176,9 @@ async function authorize(page, url, options) {
     await waitForStep(page);
   }
   if (options.consent !== false && page.url().includes("/consent")) {
+    if (typeof options.onConsent === "function") {
+      await options.onConsent(page);
+    }
     page._oauthCookies = await page.context().cookies();
     const decision = options.consent || "approve";
     try {
