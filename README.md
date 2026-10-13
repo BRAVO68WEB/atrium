@@ -23,7 +23,7 @@ and traces turn on when you set them.
   a client opts in
 - DPoP and mutual TLS client authentication
 - TOTP enrollment, browser login, registration, consent, organization
-  choice, and logout
+  choice, a signed-in profile at `/profile`, and logout
 - Account APIs for the signed-in user, and management APIs for the
   management client
 - Dynamic client registration and client ID metadata documents
@@ -42,6 +42,15 @@ just run
 
 With no `config.yaml`, the server listens on `http://localhost:8080`. When
 that file is present, `just run` uses its port and TLS settings.
+
+Postgres install:
+
+```bash
+docker compose -f deploy/compose.yaml up --build
+```
+
+Change `management.client_secret` in `deploy/config.yaml` before you use
+that file anywhere but a laptop. `just run` still uses SQLite.
 
 ```bash
 just build

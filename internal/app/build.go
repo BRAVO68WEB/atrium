@@ -194,8 +194,11 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 	webCtrl.SetAudit(auditLog)
 	webCtrl.SetSocial(service.NewSocialService(cfg, userSvc, userRepo, repository.NewSocialRepository(conn), accountSvc, nil))
 	oauthHandler.SetTemplates(webCtrl.Templates())
+	grants := service.NewGrantService(consentRepo, tokenRepo, clientRepo)
+	mgmtCtrl.SetGrants(grants)
 	accountCtrl := controller.NewAccountController(accountSvc, userSvc, sessionSvc, tokenRepo, totpSvc, oauthHandler, webCtrl.Templates(), cfg)
 	accountCtrl.SetAudit(auditLog)
+	accountCtrl.SetGrants(grants)
 	authn := auth.NewMiddleware(tokenRepo, clientRepo, userRepo, dpopSvc)
 
 	var pushHandler *push.Handler

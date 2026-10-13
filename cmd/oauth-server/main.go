@@ -201,6 +201,7 @@ Endpoints:
     GET  /login               - Login page
     GET  /register            - Registration page
     GET  /consent             - OIDC consent screen
+    GET  /profile             - Signed-in account and application access
     GET  /mfa/enroll          - MFA enrollment with QR code
 
   API Documentation:

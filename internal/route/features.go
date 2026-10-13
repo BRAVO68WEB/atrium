@@ -27,6 +27,8 @@ func MountAccountAPI(api chi.Router, account *controller.AccountController, user
 		me.Delete("/me/refresh-tokens/{id}", account.HandleRevokeRefresh)
 		me.Get("/me/activity", account.HandleActivity)
 		me.Get("/me/login-analytics", account.HandleLoginAnalytics)
+		me.Get("/me/consents", account.HandleListMyConsents)
+		me.Delete("/me/consents/{clientID}", account.HandleRevokeMyConsent)
 	})
 }
 
@@ -66,6 +68,12 @@ func MountBrowserExtras(r chi.Router, account *controller.AccountController, oau
 	r.Get("/reset", account.HandleResetPage)
 	r.Post("/reset", account.HandleResetSubmit)
 	r.Get("/verify-email", account.HandleVerifyPage)
+	r.Get("/profile", account.HandleProfile)
+	r.Post("/profile/consents", account.HandleProfileRevoke)
+	r.Post("/profile/password", account.HandleProfilePassword)
+	r.Post("/profile/email", account.HandleProfileEmail)
+	r.Post("/profile/mfa", account.HandleProfileMFA)
+	r.Post("/profile/sessions", account.HandleProfileSession)
 	r.Get("/oauth/logout", oauthHandler.HandleLogout)
 	r.Post("/oauth/logout", oauthHandler.HandleLogout)
 }

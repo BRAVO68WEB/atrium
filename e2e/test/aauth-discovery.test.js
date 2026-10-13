@@ -58,22 +58,24 @@ describe("AAuth discovery", function () {
     const person = await getJSON(`${server.base}/.well-known/aauth-person.json`);
     assert.equal(person.status, 200, JSON.stringify(person.body));
     assert.equal(person.body.issuer, server.base);
-    assert.equal(person.body.person_token_endpoint, `${server.base}/aauth/person-token`);
-    assert.equal(person.body.auth_token_endpoint, `${server.base}/aauth/auth-token`);
-    assert.equal(person.body.revocation_endpoint, `${server.base}/aauth/revoke`);
+    assert.equal(person.body.jwks_uri, `${server.base}/aauth/jwks`);
+    assert.equal(person.body.person_token_endpoint, undefined);
+    assert.equal(person.body.auth_token_endpoint, undefined);
+    assert.equal(person.body.revocation_endpoint, undefined);
 
     const agent = await getJSON(`${server.base}/.well-known/aauth-agent.json`);
     assert.equal(agent.body.issuer, server.base);
     assert.equal(agent.body.jwks_uri, `${server.base}/aauth/jwks`);
 
     const resource = await getJSON(`${server.base}/.well-known/aauth-resource.json`);
-    assert.equal(resource.body.authorization_endpoint, `${server.base}/aauth/authorize`);
+    assert.equal(resource.body.authorization_endpoint, undefined);
+    assert.equal(resource.body.jwks_uri, `${server.base}/aauth/jwks`);
 
     const access = await getJSON(`${server.base}/as/.well-known/aauth-access.json`);
     assert.equal(access.status, 200, JSON.stringify(access.body));
     assert.equal(access.body.issuer, `${server.base}/as`);
     assert.equal(access.body.jwks_uri, `${server.base}/as/aauth/jwks`);
-    assert.equal(access.body.auth_token_endpoint, `${server.base}/as/aauth/auth-token`);
+    assert.equal(access.body.auth_token_endpoint, undefined);
 
     const keys = await getJSON(`${server.base}/aauth/jwks`);
     assert.equal(keys.status, 200);

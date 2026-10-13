@@ -23,6 +23,16 @@ HASH_ALGO=./myhash.go ./bin/oauth-cli init
 onto `internal/hashalgo/algo.go` during init, and only when the
 destination is still the stock file or `--force` is set.
 
+`internal/hashalgo/examples/` holds drop-in copies: `bcrypt-cost12`,
+`argon2id`, `argon2id-small`, `argon2id-only`, `pepper`, `scrypt`,
+`migrate`, `pbkdf2-sha256`, and `pbkdf2-sha512`. Copy one over the live
+file and rebuild. A single unsalted SHA-256 is not one of them.
+
+```bash
+cp internal/hashalgo/examples/argon2id/algo.go internal/hashalgo/algo.go
+just build
+```
+
 At startup:
 
 - No `--config` flag and no `./config.yaml`: built-in defaults, HTTP on

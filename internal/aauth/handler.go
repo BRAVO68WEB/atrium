@@ -41,21 +41,16 @@ func (h *Handler) documents() []document {
 			"jwks_uri": joinIssuer(aa.APIssuer, "/aauth/jwks"),
 		}},
 		{issuer: aa.PSIssuer, name: "aauth-person.json", body: map[string]any{
-			"issuer":                aa.PSIssuer,
-			"jwks_uri":              joinIssuer(aa.PSIssuer, "/aauth/jwks"),
-			"person_token_endpoint": joinIssuer(aa.PSIssuer, "/aauth/person-token"),
-			"auth_token_endpoint":   joinIssuer(aa.PSIssuer, "/aauth/auth-token"),
-			"revocation_endpoint":   joinIssuer(aa.PSIssuer, "/aauth/revoke"),
+			"issuer":   aa.PSIssuer,
+			"jwks_uri": joinIssuer(aa.PSIssuer, "/aauth/jwks"),
 		}},
 		{issuer: aa.ASIssuer, name: "aauth-access.json", body: map[string]any{
-			"issuer":              aa.ASIssuer,
-			"jwks_uri":            joinIssuer(aa.ASIssuer, "/aauth/jwks"),
-			"auth_token_endpoint": joinIssuer(aa.ASIssuer, "/aauth/auth-token"),
+			"issuer":   aa.ASIssuer,
+			"jwks_uri": joinIssuer(aa.ASIssuer, "/aauth/jwks"),
 		}},
 		{issuer: aa.ResourceIssuer, name: "aauth-resource.json", body: map[string]any{
-			"issuer":                 aa.ResourceIssuer,
-			"jwks_uri":               joinIssuer(aa.ResourceIssuer, "/aauth/jwks"),
-			"authorization_endpoint": joinIssuer(aa.ResourceIssuer, "/aauth/authorize"),
+			"issuer":   aa.ResourceIssuer,
+			"jwks_uri": joinIssuer(aa.ResourceIssuer, "/aauth/jwks"),
 		}},
 	}
 }

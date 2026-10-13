@@ -94,7 +94,8 @@ func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := h.issueAccessTokenFor(clientID, user.ID, strings.Join(scopes, " "), tokenType, orgID, orgSlug, "", "")
+	resource := r.Form.Get("resource")
+	accessToken, err := h.issueAccessTokenFor(clientID, user.ID, strings.Join(scopes, " "), tokenType, orgID, orgSlug, resource, "")
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
 		return
@@ -114,6 +115,7 @@ func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 		TokenType: tokenType,
 		DPoPJKT:   dpopJKT,
 		OrgID:     orgID,
+		Resource:  resource,
 		ExpiresAt: time.Now().Add(h.cfg.Security.AccessTokenLifetime),
 	}
 
@@ -123,6 +125,7 @@ func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 		ClientID:    clientID,
 		UserID:      user.ID,
 		OrgID:       orgID,
+		Resource:    resource,
 		Scopes:      scopes,
 		FamilyID:    uuid.New().String(),
 		ExpiresAt:   time.Now().Add(h.cfg.Security.RefreshTokenLifetime),
