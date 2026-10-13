@@ -1,6 +1,7 @@
 package hashalgo
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,5 +139,33 @@ func TestCheckSourceContract(t *testing.T) {
 func TestArgon2TemplateChecks(t *testing.T) {
 	if err := CheckSource("algo.go", []byte(Argon2Template)); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestExamplesAreDropInHashers(t *testing.T) {
+	entries, err := os.ReadDir("examples")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		n++
+		path := filepath.Join("examples", entry.Name(), "algo.go")
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := CheckSource(path, src); err != nil {
+			t.Errorf("%s: %v", entry.Name(), err)
+		}
+		if entry.Name() == "argon2id" && !bytes.Equal(src, []byte(Argon2Template)) {
+			t.Errorf("argon2id example drifted from init --hash argon2id")
+		}
+	}
+	if n != 9 {
+		t.Fatalf("example count = %d", n)
 	}
 }
