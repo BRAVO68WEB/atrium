@@ -148,6 +148,7 @@ branding:
   assets_dir: ""
   logo_file: ""
   favicon_file: ""
+  background_file: ""
   primary_color: "#0066ff"
   background_color: ""
   text_color: ""
@@ -184,6 +185,9 @@ aauth:
   as_issuer: ""
   resource_issuer: ""
   resource_mode: as
+
+debug:
+  ui: false
 
 telemetry:
   enabled: false
@@ -271,6 +275,11 @@ user is not in returns `access_denied`.
 `push.enabled` defaults to false. It registers authenticator devices
 for a later wake signal. It does not change `/oauth/device`. See
 [Push devices](PUSH.md).
+
+`debug.ui` defaults to false. Set it to true to serve `/preview`, a
+catalog of the auth screens with sample data. Leave it off on a
+server that other people can reach. Submitting a form on a preview
+still uses the real endpoint.
 ## AAuth
 
 `aauth.enabled` defaults to false. A default server does not publish

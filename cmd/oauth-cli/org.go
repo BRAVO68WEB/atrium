@@ -19,7 +19,7 @@ func orgCmd() *cobra.Command {
 }
 
 func orgCreateCmd() *cobra.Command {
-	var name, slug, domain string
+	var name, slug, domain, logoURL string
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create an organization",
@@ -28,12 +28,16 @@ func orgCreateCmd() *cobra.Command {
 			if domain != "" {
 				body["domains"] = []string{domain}
 			}
+			if logoURL != "" {
+				body["logo_url"] = logoURL
+			}
 			return postOrg("/api/orgs", body)
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Display name")
 	cmd.Flags().StringVar(&slug, "slug", "", "URL slug")
 	cmd.Flags().StringVar(&domain, "domain", "", "Email domain for autolookup")
+	cmd.Flags().StringVar(&logoURL, "logo-url", "", "Absolute http or https logo")
 	_ = cmd.MarkFlagRequired("name")
 	_ = cmd.MarkFlagRequired("slug")
 	return cmd

@@ -351,6 +351,7 @@ func (db *DB) Migrate() error {
 			id TEXT PRIMARY KEY,
 			slug TEXT NOT NULL UNIQUE,
 			name TEXT NOT NULL,
+			logo_url TEXT NOT NULL DEFAULT '',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS organization_domains (
@@ -463,6 +464,7 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE clients ADD COLUMN org_id TEXT`,
 		`ALTER TABLE authorization_codes ADD COLUMN org_id TEXT`,
 		`ALTER TABLE authorization_codes ADD COLUMN requested_actor TEXT`,
+		`ALTER TABLE organizations ADD COLUMN logo_url TEXT NOT NULL DEFAULT ''`,
 	}
 	for _, alter := range alters {
 		if _, err := db.Exec(alter); err != nil && db.driver == "postgres" && !isDuplicateColumn(err) {

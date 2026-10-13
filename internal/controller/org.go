@@ -57,12 +57,13 @@ func (c *ManagementController) HandleCreateOrg(w http.ResponseWriter, r *http.Re
 		Name    string   `json:"name"`
 		Slug    string   `json:"slug"`
 		Domains []string `json:"domains"`
+		LogoURL string   `json:"logo_url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
 		return
 	}
-	org, err := c.orgs.Create(req.Name, req.Slug, req.Domains)
+	org, err := c.orgs.Create(req.Name, req.Slug, req.Domains, req.LogoURL)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return

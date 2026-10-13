@@ -18,6 +18,7 @@ type View struct {
 	SubmitLabel     string
 	LogoURL         string
 	FaviconURL      string
+	BackgroundURL   string
 	PrimaryColor    string
 	BackgroundColor string
 	TextColor       string
@@ -56,6 +57,7 @@ func Prepare(cfg *config.Config) Theme {
 		SubmitLabel:     b.SubmitLabel,
 		LogoURL:         assetURL(b.LogoFile),
 		FaviconURL:      assetURL(b.FaviconFile),
+		BackgroundURL:   assetURL(b.BackgroundFile),
 		PrimaryColor:    primary,
 		BackgroundColor: safeColor(b.BackgroundColor, ""),
 		TextColor:       safeColor(b.TextColor, ""),

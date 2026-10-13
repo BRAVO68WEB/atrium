@@ -1,33 +1,47 @@
 {{template "head" .}}
-{{template "brand_header" .}}
     {{if .Done}}
+        <div class="sheet-narrow">
         {{if .Approved}}
-            <p class="lede">The device is authorized. You can return to it.</p>
+            <h1>Device authorized</h1>
+            <p class="lede">You can return to the device.</p>
         {{else}}
-            <p class="lede">The request was denied.</p>
+            <h1>Request denied</h1>
+            <p class="lede">The device was not signed in.</p>
         {{end}}
-    {{else}}
+        </div>
+    {{else if .Confirm}}
+        <div class="sheet-wide">
+        <h1>{{if .ClientName}}{{.ClientName}}{{else}}Approve a device{{end}}</h1>
+        <p class="who">This device is asking to sign in.</p>
         {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
-        {{if .Confirm}}
-            <p class="lede"><strong>{{.ClientName}}</strong> is asking to sign in.</p>
-            {{if .Scopes}}
-            <div class="scope-list">
-                <h3>Requested access</h3>
-                {{range .Scopes}}<div class="scope-item">{{.}}</div>{{end}}
-            </div>
-            {{end}}
+        {{if .Scopes}}
+        <ul class="grant">
+            {{range .Scopes}}<li><span class="grant-label">{{scopeLabel .}}</span><span class="grant-id">{{.}}</span></li>{{end}}
+        </ul>
         {{end}}
         <form method="POST" action="/device">
             {{template "csrf_field" .}}
-            <div class="form-group">
-                <label for="user_code">Code from your device</label>
-                <input type="text" class="device-code" id="user_code" name="user_code" value="{{.UserCode}}" placeholder="ABCD-EFGH" required autofocus>
-            </div>
-            <div class="actions">
-                <button class="deny" type="submit" name="action" value="deny">Deny</button>
-                <button class="approve" type="submit" name="action" value="approve">Approve</button>
+            <input type="hidden" name="user_code" value="{{.UserCode}}">
+            <div class="buttons">
+                <button class="btn-deny" type="submit" name="action" value="deny">Deny</button>
+                <button class="btn-approve" type="submit" name="action" value="approve">Approve</button>
             </div>
         </form>
+        </div>
+    {{else}}
+        <div class="sheet-narrow">
+        <h1>Approve a device</h1>
+        <p class="who">Enter the code shown on the device.</p>
+        {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+        <form method="POST" action="/device">
+            {{template "csrf_field" .}}
+            <div class="form-group">
+                <label class="visually-hidden" for="user_code">Code from your device</label>
+                <input type="text" class="device-code" id="user_code" name="user_code" value="{{.UserCode}}" required autofocus autocomplete="one-time-code">
+            </div>
+            <button type="submit">Continue</button>
+        </form>
+        </div>
     {{end}}
 {{template "card_close" .}}
 {{template "brand_footer" .}}

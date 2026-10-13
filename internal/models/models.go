@@ -75,6 +75,7 @@ type Organization struct {
 	ID        string    `json:"id"`
 	Slug      string    `json:"slug"`
 	Name      string    `json:"name"`
+	LogoURL   string    `json:"logo_url,omitempty"`
 	Domains   []string  `json:"domains,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }

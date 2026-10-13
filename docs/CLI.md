@@ -169,12 +169,13 @@ Organizations do nothing until `org.enabled` is true. See
 [Configuration](CONFIG.md).
 
 ```bash
-./bin/oauth-cli org create --name "North" --slug north --domain north.example
+./bin/oauth-cli org create --name "North" --slug north --domain north.example --logo-url https://cdn.example/north.png
 ./bin/oauth-cli org domain --org north --domain west.example
 ./bin/oauth-cli org member --org north --user-id <id> --role member
 ```
 
-`--role` is `member` or `admin`.
+`--role` is `member` or `admin`. Omit `--logo-url` and the picker shows
+the first letter of the name.
 
 ## oauth-mobile
 
