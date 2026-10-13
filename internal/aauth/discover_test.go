@@ -36,16 +36,24 @@ func TestDiscoveryWhenEnabled(t *testing.T) {
 	if person["issuer"] != "http://localhost:8080" {
 		t.Fatalf("person issuer %v", person["issuer"])
 	}
-	if person["person_token_endpoint"] != "http://localhost:8080/aauth/person-token" || person["auth_token_endpoint"] != "http://localhost:8080/aauth/auth-token" {
-		t.Fatalf("person endpoints %v", person)
+	if person["jwks_uri"] != "http://localhost:8080/aauth/jwks" {
+		t.Fatalf("person jwks %v", person["jwks_uri"])
+	}
+	for _, field := range []string{"person_token_endpoint", "auth_token_endpoint", "revocation_endpoint"} {
+		if _, ok := person[field]; ok {
+			t.Fatalf("person document still names %s", field)
+		}
 	}
 	agent := getJSON(t, ts.URL+"/.well-known/aauth-agent.json")
 	if agent["jwks_uri"] != "http://localhost:8080/aauth/jwks" {
 		t.Fatalf("agent jwks %v", agent["jwks_uri"])
 	}
 	resource := getJSON(t, ts.URL+"/.well-known/aauth-resource.json")
-	if resource["authorization_endpoint"] != "http://localhost:8080/aauth/authorize" {
-		t.Fatalf("resource %v", resource)
+	if _, ok := resource["authorization_endpoint"]; ok {
+		t.Fatalf("resource document still names an authorization endpoint: %v", resource)
+	}
+	if resource["jwks_uri"] != "http://localhost:8080/aauth/jwks" {
+		t.Fatalf("resource jwks %v", resource["jwks_uri"])
 	}
 
 	access := getJSON(t, ts.URL+"/as/.well-known/aauth-access.json")

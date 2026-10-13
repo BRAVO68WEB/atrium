@@ -103,4 +103,23 @@ describe("JWT access tokens", function () {
     assert.equal(verified.payload.azp, api.id);
     assert.equal(verified.payload.act, undefined);
   });
+
+  it("uses the resource as aud for a password grant", async function () {
+    const resource = "https://api.example/finance";
+    const issued = await tokenRequest(server.base, {
+      grant_type: "password",
+      username: user.username,
+      password: user.password,
+      scope: "openid profile",
+      resource,
+    }, { id: client.id, secret: client.secret });
+    assert.equal(issued.status, 200, JSON.stringify(issued.body));
+    const verified = await jwtVerify(issued.body.access_token, jwks, {
+      issuer: server.base,
+      audience: resource,
+      typ: "at+jwt",
+    });
+    assert.equal(verified.payload.sub, user.id);
+    assert.equal(verified.payload.azp, client.id);
+  });
 });

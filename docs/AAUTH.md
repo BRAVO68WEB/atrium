@@ -21,7 +21,7 @@ Every document points `jwks_uri` at `{issuer}/aauth/jwks`. That key is
 Ed25519. It is not the key at `/oidc/jwks`. The server creates it on
 first start with the flag on and keeps it in `signing_keys`.
 
-The documents name the person-token, auth-token, revocation, and
-resource authorization URLs from
+This build publishes discovery and the Ed25519 key. It does not issue
+AAuth tokens. The documents do not name token, revocation, or
+authorization URLs. The draft is
 [draft-hardt-oauth-aauth-protocol-11](https://datatracker.ietf.org/doc/draft-hardt-oauth-aauth-protocol/).
-Those URLs are not handlers yet. A request to one of them is a 404.
