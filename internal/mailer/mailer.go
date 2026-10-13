@@ -100,11 +100,25 @@ func (m *smtpMailer) Send(to, subject, text string) error {
 }
 
 func sanitizeMailText(text string) string {
-	// Strip control chars that can be abused in downstream parsers/MTAs while
-	// preserving plain-text content semantics.
-	text = strings.ReplaceAll(text, "\r", "")
-	text = strings.ReplaceAll(text, "\x00", "")
-	return text
+	// Normalize line endings to LF for predictable downstream handling.
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+
+	// Remove control bytes that may be interpreted by downstream MTAs/parsers.
+	// Keep LF and TAB to preserve plain-text formatting semantics.
+	var b strings.Builder
+	b.Grow(len(text))
+	for _, r := range text {
+		if r == '\n' || r == '\t' {
+			b.WriteRune(r)
+			continue
+		}
+		if (r >= 0x00 && r <= 0x1F) || r == 0x7F {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // validMailHeaders rejects header values that could add extra SMTP headers.
