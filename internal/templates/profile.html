@@ -1,0 +1,85 @@
+{{template "head" .}}
+    <div class="sheet-wide">
+    <h1>Your account</h1>
+    <p class="who">{{.Username}}</p>
+    {{if .Email}}<p class="lede">{{.Email}}</p>{{end}}
+    {{if .Email}}<p class="lede">{{if .EmailVerified}}Email verified{{else}}Email not verified{{end}}</p>{{end}}
+    {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+    {{if .Status}}<div class="status">{{.Status}}</div>{{end}}
+    {{if .Removed}}<div class="status">Access removed.</div>{{end}}
+
+    {{if and .Email (not .EmailVerified)}}
+    <form method="POST" action="/profile/email">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <button type="submit">Send verification email</button>
+    </form>
+    {{end}}
+
+    <h2 class="apps">Password</h2>
+    <form method="POST" action="/profile/password">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <div class="form-group">
+            <label for="current_password">Current password</label>
+            <input id="current_password" name="current_password" type="password" autocomplete="current-password" required>
+        </div>
+        <div class="form-group">
+            <label for="new_password">New password</label>
+            <input id="new_password" name="new_password" type="password" autocomplete="new-password" required>
+        </div>
+        <button type="submit">Update password</button>
+    </form>
+
+    <h2 class="apps">Authenticator</h2>
+    {{if .MFAEnabled}}
+    <form method="POST" action="/profile/mfa">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <div class="form-group">
+            <label for="mfa-code">Current code</label>
+            <input id="mfa-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" required>
+        </div>
+        <button type="submit" class="btn-deny">Turn off authenticator</button>
+    </form>
+    {{else}}
+    <p class="lede">No authenticator is on for this account.</p>
+    <p class="below"><a href="/mfa/enroll">Set up an authenticator</a></p>
+    {{end}}
+
+    <h2 class="apps">Browsers</h2>
+    {{if .Sessions}}
+    <div class="account-list">
+        {{range .Sessions}}
+        <div class="account-row">
+            <span class="org-copy"><strong>{{if .Current}}This browser{{else}}Other browser{{end}}</strong><span>{{.Detail}}</span></span>
+            {{if not .Current}}
+            <form method="POST" action="/profile/sessions">
+                <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                <input type="hidden" name="session_id" value="{{.ID}}">
+                <button type="submit" class="btn-deny">Sign out</button>
+            </form>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <p class="lede">No browsers are signed in.</p>
+    {{end}}
+
+    <h2 class="apps">Applications</h2>
+    {{if .Grants}}
+    <div class="org-list">
+        {{range .Grants}}
+        <form method="POST" action="/profile/consents" class="org-choice">
+            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+            <input type="hidden" name="client_id" value="{{.ClientID}}">
+            <span class="org-mark" style="background:{{.Color}}">{{.Initial}}</span>
+            <span class="org-copy"><strong>{{.Name}}</strong><span>{{.Detail}}</span></span>
+            <button type="submit" class="btn-deny">Remove</button>
+        </form>
+        {{end}}
+    </div>
+    {{else}}
+    <p class="lede">No application has access to this account.</p>
+    {{end}}
+    </div>
+{{template "card_close" .}}
+{{template "brand_footer" .}}

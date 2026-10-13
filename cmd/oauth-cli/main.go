@@ -747,7 +747,7 @@ func consentCmd() *cobra.Command {
 
 	revokeCmd := &cobra.Command{
 		Use:   "revoke",
-		Short: "Revoke consent for a user and client",
+		Short: "Remove a user's consent and that client's tokens",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			userID, _ := cmd.Flags().GetString("user-id")
 			clientID, _ := cmd.Flags().GetString("client-id")

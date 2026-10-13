@@ -33,6 +33,13 @@ type AccountController struct {
 	theme     branding.Theme
 	cfg       *config.Config
 	audit     *service.AuditLog
+	grants    *service.GrantService
+}
+
+func (c *AccountController) SetGrants(g *service.GrantService) {
+	if c != nil {
+		c.grants = g
+	}
 }
 
 func (c *AccountController) SetAudit(a *service.AuditLog) {
@@ -382,6 +389,282 @@ func (c *AccountController) HandleResetSubmit(w http.ResponseWriter, r *http.Req
 	c.render(w, r, "reset.html", map[string]any{"Error": "", "Token": "", "Done": true})
 }
 
+func (c *AccountController) HandleProfile(w http.ResponseWriter, r *http.Request) {
+	session := c.browserSession(r)
+	if session == nil {
+		http.Redirect(w, r, "/login?next="+url.QueryEscape("/profile"), http.StatusFound)
+		return
+	}
+	user, _ := c.users.GetUser(session.UserID)
+	c.renderProfile(w, r, session, user, r.URL.Query().Get("removed") == "1", "", profileStatus(r.URL.Query().Get("status")))
+}
+
+func (c *AccountController) HandleProfileRevoke(w http.ResponseWriter, r *http.Request) {
+	c.postProfile(w, r, func(session *oauth.Session) (string, string) {
+		clientID := strings.TrimSpace(r.Form.Get("client_id"))
+		if clientID == "" || c.grants == nil {
+			return "", "Choose an application to remove"
+		}
+		if err := c.grants.Revoke(session.UserID, clientID); err != nil {
+			return "", "Could not remove access"
+		}
+		if c.audit != nil {
+			c.audit.Write("user", session.UserID, "consent.revoke", "client", clientID, r, nil)
+		}
+		return "/profile?removed=1", ""
+	})
+}
+
+func (c *AccountController) HandleProfilePassword(w http.ResponseWriter, r *http.Request) {
+	c.postProfile(w, r, func(session *oauth.Session) (string, string) {
+		err := c.account.ChangePassword(session.UserID, r.Form.Get("current_password"), r.Form.Get("new_password"), "", session.ID)
+		if err != nil {
+			return "", err.Error()
+		}
+		if c.audit != nil {
+			c.audit.Write("user", session.UserID, "password.change", "user", session.UserID, r, nil)
+		}
+		return "/profile?status=password", ""
+	})
+}
+
+func (c *AccountController) HandleProfileEmail(w http.ResponseWriter, r *http.Request) {
+	c.postProfile(w, r, func(session *oauth.Session) (string, string) {
+		user, err := c.users.GetUser(session.UserID)
+		if err != nil {
+			return "", "Could not load the account"
+		}
+		if err := c.account.SendVerification(user); err != nil {
+			if errors.Is(err, mailer.ErrDisabled) {
+				return "", "SMTP is not configured"
+			}
+			return "", err.Error()
+		}
+		return "/profile?status=email", ""
+	})
+}
+
+func (c *AccountController) HandleProfileMFA(w http.ResponseWriter, r *http.Request) {
+	c.postProfile(w, r, func(session *oauth.Session) (string, string) {
+		if c.totp == nil {
+			return "", "Authenticator is not available"
+		}
+		ok, err := c.totp.VerifyLogin(session.UserID, strings.TrimSpace(r.Form.Get("code")))
+		if err != nil || !ok {
+			return "", "Code is wrong"
+		}
+		if err := c.totp.DisableMFA(session.UserID); err != nil {
+			return "", "Could not remove the authenticator"
+		}
+		if c.audit != nil {
+			c.audit.Write("user", session.UserID, "mfa.disable", "user", session.UserID, r, nil)
+		}
+		return "/profile?status=mfa", ""
+	})
+}
+
+func (c *AccountController) HandleProfileSession(w http.ResponseWriter, r *http.Request) {
+	c.postProfile(w, r, func(session *oauth.Session) (string, string) {
+		sid := strings.TrimSpace(r.Form.Get("session_id"))
+		if sid == "" {
+			return "", "Choose a browser to sign out"
+		}
+		if sid == session.ID {
+			return "", "This browser stays signed in"
+		}
+		if err := c.account.RevokeSession(session.UserID, sid); err != nil {
+			return "", "Session not found"
+		}
+		if c.audit != nil {
+			c.audit.Write("user", session.UserID, "session.revoke", "session", sid, r, nil)
+		}
+		return "/profile?status=session", ""
+	})
+}
+
+func (c *AccountController) postProfile(w http.ResponseWriter, r *http.Request, act func(*oauth.Session) (string, string)) {
+	session := c.browserSession(r)
+	if session == nil {
+		http.Redirect(w, r, "/login?next="+url.QueryEscape("/profile"), http.StatusFound)
+		return
+	}
+	if err := r.ParseForm(); err != nil || !csrfOK(r) {
+		rejectCSRF(w)
+		return
+	}
+	next, message := act(session)
+	if next != "" {
+		http.Redirect(w, r, next, http.StatusFound)
+		return
+	}
+	user, _ := c.users.GetUser(session.UserID)
+	c.renderProfile(w, r, session, user, false, message, "")
+}
+
+func (c *AccountController) HandleListMyConsents(w http.ResponseWriter, r *http.Request) {
+	user, ok := c.caller(w, r)
+	if !ok {
+		return
+	}
+	grants, err := c.grantList(user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "server_error", "Failed to list consents")
+		return
+	}
+	writeJSON(w, http.StatusOK, grants)
+}
+
+func (c *AccountController) HandleRevokeMyConsent(w http.ResponseWriter, r *http.Request) {
+	user, ok := c.caller(w, r)
+	if !ok {
+		return
+	}
+	clientID := strings.TrimSpace(chi.URLParam(r, "clientID"))
+	if clientID == "" || c.grants == nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "client_id is required")
+		return
+	}
+	if err := c.grants.Revoke(user.ID, clientID); err != nil {
+		writeError(w, http.StatusInternalServerError, "server_error", "Failed to revoke consent")
+		return
+	}
+	if c.audit != nil {
+		c.audit.Write("user", user.ID, "consent.revoke", "client", clientID, r, nil)
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
+}
+
+func (c *AccountController) browserSession(r *http.Request) *oauth.Session {
+	if c == nil || c.oauth == nil {
+		return nil
+	}
+	session := c.oauth.GetSession(r)
+	if session == nil || !session.Authenticated || session.UserID == "" {
+		return nil
+	}
+	return session
+}
+
+func (c *AccountController) grantList(userID string) ([]service.GrantedApp, error) {
+	if c.grants == nil {
+		return nil, nil
+	}
+	return c.grants.List(userID)
+}
+
+type profileGrant struct {
+	ClientID string
+	Name     string
+	Initial  string
+	Detail   string
+	Color    string
+}
+
+func profileStatus(raw string) string {
+	switch raw {
+	case "password":
+		return "Password updated."
+	case "session":
+		return "That browser was signed out."
+	case "mfa":
+		return "Authenticator removed."
+	case "email":
+		return "Verification email sent."
+	default:
+		return ""
+	}
+}
+
+type profileSession struct {
+	ID      string
+	Detail  string
+	Current bool
+}
+
+func (c *AccountController) renderProfile(w http.ResponseWriter, r *http.Request, session *oauth.Session, user *models.User, removed bool, message, status string) {
+	email := ""
+	name := session.Username
+	verified := false
+	if user != nil {
+		email = user.Email
+		verified = user.EmailVerified
+		if user.Username != "" {
+			name = user.Username
+		}
+	}
+	rows, err := c.grantList(session.UserID)
+	if err != nil && message == "" {
+		message = "Could not load applications"
+	}
+	view := make([]profileGrant, 0, len(rows))
+	for _, row := range rows {
+		detail := strings.Join(row.Scopes, " ")
+		if !row.GrantedAt.IsZero() {
+			when := row.GrantedAt.UTC().Format("2 Jan 2006")
+			if detail != "" {
+				detail += " · " + when
+			} else {
+				detail = when
+			}
+		}
+		view = append(view, profileGrant{
+			ClientID: row.ClientID,
+			Name:     row.Name,
+			Initial:  row.Initial,
+			Detail:   detail,
+			Color:    (models.Organization{Name: row.Name, Slug: row.ClientID}).MarkColor(),
+		})
+	}
+	mfaOn := false
+	if c.totp != nil {
+		mfaOn, _ = c.totp.IsMFAEnabled(session.UserID)
+	}
+	browsers := []profileSession{}
+	if c.sessions != nil {
+		if list, err := c.sessions.List(session.UserID); err == nil {
+			for _, item := range list {
+				if item == nil || item.Revoked {
+					continue
+				}
+				browsers = append(browsers, profileSession{
+					ID:      item.ID,
+					Detail:  sessionDetail(item),
+					Current: item.ID == session.ID,
+				})
+			}
+		}
+	}
+	c.render(w, r, "profile.html", map[string]any{
+		"Username":      name,
+		"Email":         email,
+		"EmailVerified": verified,
+		"MFAEnabled":    mfaOn,
+		"Sessions":      browsers,
+		"Grants":        view,
+		"Removed":       removed,
+		"Error":         message,
+		"Status":        status,
+	})
+}
+
+func sessionDetail(s *models.BrowserSession) string {
+	parts := []string{}
+	if s.IP != "" {
+		parts = append(parts, s.IP)
+	}
+	agent := s.UserAgent
+	if len(agent) > 80 {
+		agent = agent[:77] + "..."
+	}
+	if agent != "" {
+		parts = append(parts, agent)
+	}
+	if !s.AuthTime.IsZero() {
+		parts = append(parts, s.AuthTime.UTC().Format("2 Jan 2006 15:04"))
+	}
+	return strings.Join(parts, " · ")
+}
+
 func (c *AccountController) HandleVerifyPage(w http.ResponseWriter, r *http.Request) {
 	err := c.account.Verify(r.URL.Query().Get("token"))
 	msg := "Your email is confirmed. You can sign in."
@@ -491,6 +774,8 @@ func accountChrome(name string) (string, string) {
 		return "Choose a Password", "Choose a new password"
 	case "verify_email.html":
 		return "Email Confirmation", "Email confirmation"
+	case "profile.html":
+		return "Account", "Your account"
 	default:
 		return "OAuth Server", "OAuth Server"
 	}
@@ -556,7 +841,7 @@ func SafeNext(raw string) string {
 	if err != nil || u.IsAbs() || u.Host != "" {
 		return ""
 	}
-	if u.Path != "/device" && u.Path != "/oauth/authorize" && u.Path != "/push/enroll" && u.Path != "/push/approve" {
+	if u.Path != "/device" && u.Path != "/oauth/authorize" && u.Path != "/push/enroll" && u.Path != "/push/approve" && u.Path != "/profile" {
 		return ""
 	}
 	return u.RequestURI()
