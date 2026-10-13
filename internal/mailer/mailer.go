@@ -87,8 +87,9 @@ func (m *smtpMailer) Send(to, subject, text string) error {
 	if err != nil {
 		return err
 	}
+	safeText := sanitizeMailText(text)
 	msg := fmt.Sprintf("To: %s\r\nFrom: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
-		to, m.cfg.From, subject, text)
+		to, m.cfg.From, subject, safeText)
 	if _, err := w.Write([]byte(msg)); err != nil {
 		return err
 	}
@@ -96,6 +97,14 @@ func (m *smtpMailer) Send(to, subject, text string) error {
 		return err
 	}
 	return client.Quit()
+}
+
+func sanitizeMailText(text string) string {
+	// Strip control chars that can be abused in downstream parsers/MTAs while
+	// preserving plain-text content semantics.
+	text = strings.ReplaceAll(text, "\r", "")
+	text = strings.ReplaceAll(text, "\x00", "")
+	return text
 }
 
 // validMailHeaders rejects header values that could add extra SMTP headers.
