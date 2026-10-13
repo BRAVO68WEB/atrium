@@ -179,6 +179,30 @@ paths:
         "200":
           description: Updated profile
 
+  /api/me/consents:
+    get:
+      tags: [CIAM]
+      summary: Applications this user has authorized
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Consent grants for the access token subject
+
+  /api/me/consents/{clientID}:
+    delete:
+      tags: [CIAM]
+      summary: Remove one application's access
+      description: Deletes the consent and revokes that client's access and refresh tokens for this user.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: clientID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Consent and tokens revoked
+
   /api/account/register:
     post:
       tags: [CIAM]
@@ -1905,7 +1929,7 @@ paths:
       tags: [Consents]
       security: [{ bearerAuth: [] }]
       summary: Revoke a consent
-      description: Revokes a user's consent for a specific client.
+      description: Deletes the consent and revokes that client's access and refresh tokens for the user. The signed-in user can do the same from `/profile` or `DELETE /api/me/consents/{clientID}`.
       operationId: revokeConsent
       parameters:
         - name: user_id

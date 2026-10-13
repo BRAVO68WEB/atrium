@@ -31,6 +31,13 @@ type ManagementController struct {
 	keys         *oidc.KeySet
 	keyRetain    time.Duration
 	orgs         *service.OrgService
+	grants       *service.GrantService
+}
+
+func (c *ManagementController) SetGrants(g *service.GrantService) {
+	if c != nil {
+		c.grants = g
+	}
 }
 
 func (c *ManagementController) SetAudit(a *service.AuditLog) {
@@ -815,10 +822,17 @@ func (c *ManagementController) HandleRevokeConsent(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if err := c.consentRepo.Delete(userID, clientID); err != nil {
+	var err error
+	if c.grants != nil {
+		err = c.grants.Revoke(userID, clientID)
+	} else if c.consentRepo != nil {
+		err = c.consentRepo.Delete(userID, clientID)
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to revoke consent")
 		return
 	}
+	c.writeAudit(r, "consent.revoke", "client", clientID, map[string]any{"user_id": userID})
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
 }
