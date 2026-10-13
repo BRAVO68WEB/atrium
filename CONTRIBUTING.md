@@ -45,7 +45,8 @@ file exports `Hash()` and nothing else. Edit the function body, then
 rebuild with `just run` or `just build`. The server exits when the file
 on disk does not match the binary. Do not add a second way to pick an
 algorithm from the config file. `security.hash_algo` names that same
-file. See [Configuration](docs/CONFIG.md).
+file. Copy a starting point from `internal/hashalgo/examples/`. See
+[Configuration](docs/CONFIG.md).
 
 ## Files to leave untracked
 
