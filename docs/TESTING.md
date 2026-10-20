@@ -77,13 +77,17 @@ A pull request to `main` runs:
 | Check | What it runs |
 | --- | --- |
 | Build | `oauth-server`, `oauth-cli`, `oauth-mobile` |
-| Test | `go test ./...` |
+| Test | `go test ./...` with the race detector and a coverage profile |
 | Lint | golangci-lint |
 | Vet | `go vet ./...` |
 | Format | `gofmt -l` |
 | Tidy | `go mod tidy` leaves `go.mod` and `go.sum` clean |
 | Test Postgres | tests that need Postgres |
 | E2E | `cd e2e && npm test` |
+
+The Test check uploads `coverage.out` to Codecov. The README badge
+reads the `main` branch report there. `disable_search` is set so
+Codecov uploads that profile only.
 
 ## Related
 

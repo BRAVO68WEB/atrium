@@ -38,6 +38,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -45,12 +47,15 @@ jobs:
           go-version: "1.26"
 
       - name: Run tests
-        run: go test ./... -v -race -count=1
+        run: go test ./... -v -race -count=1 -coverprofile=coverage.out -covermode=atomic
 
-      - name: Run tests with coverage
-        run: |
-          go test ./... -coverprofile=coverage.out -covermode=atomic
-          go tool cover -func=coverage.out
+      - name: Upload coverage reports to Codecov
+        if: hashFiles('coverage.out') != ''
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.out
+          disable_search: true
 
   lint:
     name: Lint
