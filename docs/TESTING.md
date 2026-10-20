@@ -89,6 +89,9 @@ The Test check runs through `gotestsum` and writes `junit.xml` plus
 `coverage.out`. Both files are uploaded to Codecov. The test-results
 upload still runs when tests fail. The README badge reads the `main`
 coverage report. `disable_search` limits each upload to the named file.
+`codecov.yml` leaves `e2e`, docs, migrations, hasher examples, and
+test files out of that percentage. The project status compares the
+branch with its base and allows a one point drop.
 
 ## Related
 
