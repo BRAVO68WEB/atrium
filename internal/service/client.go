@@ -151,7 +151,7 @@ func (s *ClientService) ValidateClient(clientID, clientSecret string) (*models.C
 		return nil, fmt.Errorf("client not found")
 	}
 
-	if client.TokenEndpointAuthMethod != "none" && client.Secret != clientSecret {
+	if client.TokenEndpointAuthMethod != "none" && !crypto.SecretEqual(clientSecret, client.Secret) {
 		return nil, fmt.Errorf("invalid client credentials")
 	}
 

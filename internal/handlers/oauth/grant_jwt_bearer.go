@@ -11,17 +11,8 @@ import (
 )
 
 func (h *Handler) handleJWTBearer(w http.ResponseWriter, r *http.Request) {
-	clientID, clientSecret := presentedClient(r)
-	if clientID == "" {
-		writeTokenError(w, http.StatusBadRequest, "invalid_client", "Client authentication required")
-		return
-	}
-	client, ok := h.requireClient(w, clientID, "", http.StatusUnauthorized)
+	client, ok := h.tokenCaller(w, r)
 	if !ok {
-		return
-	}
-	if authenticateClient(client, clientID, clientSecret, false) != "" {
-		writeTokenError(w, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
 		return
 	}
 	if !service.HasGrant(client.GrantTypes, config.XAAJWTBearerGrant) {

@@ -71,9 +71,6 @@ func (h *Handler) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.tokenRepo.RevokeAccessToken(refreshToken.AccessToken)
-	_ = h.tokenRepo.RevokeRefreshToken(refreshTokenStr)
-
 	accessTok := &models.AccessToken{
 		Token:     newAccessToken,
 		ClientID:  refreshToken.ClientID,
@@ -113,6 +110,8 @@ func (h *Handler) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to save refresh token")
 		return
 	}
+	_ = h.tokenRepo.RevokeAccessToken(refreshToken.AccessToken)
+	_ = h.tokenRepo.RevokeRefreshToken(refreshTokenStr)
 
 	writeTokenResponse(w, newAccessToken, newRefreshToken, int(h.cfg.Security.AccessTokenLifetime.Seconds()), tokenType, strings.Join(refreshToken.Scopes, " "))
 }

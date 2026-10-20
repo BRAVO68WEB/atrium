@@ -1,7 +1,7 @@
 const crypto = require("node:crypto");
 const { SignJWT, exportJWK, generateKeyPair } = require("jose");
 
-async function dpopProof(method, url, accessToken) {
+async function dpopProof(method, url, accessToken, opts) {
   const { publicKey, privateKey } = await generateKeyPair("ES256", { extractable: true });
   const jwk = await exportJWK(publicKey);
   const claims = {
@@ -9,7 +9,7 @@ async function dpopProof(method, url, accessToken) {
     htu: url,
     jti: crypto.randomBytes(16).toString("base64url"),
   };
-  if (accessToken) {
+  if (accessToken && !(opts && opts.ath === false)) {
     claims.ath = crypto.createHash("sha256").update(accessToken).digest("base64url");
   }
   return new SignJWT(claims)

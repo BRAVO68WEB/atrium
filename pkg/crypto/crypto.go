@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -79,6 +80,13 @@ func GenerateCodeVerifier() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(bytes), nil
+}
+
+// SecretEqual compares two client secrets without leaking the match through a byte-by-byte scan.
+func SecretEqual(got, want string) bool {
+	sumGot := sha256.Sum256([]byte(got))
+	sumWant := sha256.Sum256([]byte(want))
+	return subtle.ConstantTimeCompare(sumGot[:], sumWant[:]) == 1
 }
 
 func GenerateCodeChallenge(verifier string) string {
