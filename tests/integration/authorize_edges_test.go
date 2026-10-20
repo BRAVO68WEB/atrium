@@ -122,6 +122,50 @@ func TestMFAEnrollPageAcceptsAValidCode(t *testing.T) {
 	if ok.StatusCode != http.StatusFound {
 		t.Fatalf("confirm %d %s", ok.StatusCode, okBody)
 	}
+
+	again := browserClient()
+	login := url.Values{}
+	login.Set("username", "otto")
+	login.Set("password", "correct-horse")
+	login.Set("csrf_token", csrfToken(t, again, ts.URL+"/login"))
+	loginResp, err := again.PostForm(ts.URL+"/login", login)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loginBody := readBody(t, loginResp)
+	if loginResp.StatusCode != http.StatusOK || !strings.Contains(loginBody, "From your authenticator") {
+		t.Fatalf("mfa login %d %s", loginResp.StatusCode, loginBody)
+	}
+	wrongMFA := url.Values{}
+	wrongMFA.Set("csrf_token", csrfFromBody(t, loginBody))
+	wrongMFA.Set("code", "000000")
+	if code == "000000" {
+		wrongMFA.Set("code", "111111")
+	}
+	rejected, err := again.PostForm(ts.URL+"/login/mfa", wrongMFA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rejectedBody := readBody(t, rejected)
+	if !strings.Contains(rejectedBody, "Invalid TOTP code") {
+		t.Fatalf("mfa code %s", rejectedBody)
+	}
+	nextCode, err := totp.GenerateCode(goodSecret, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted := url.Values{}
+	accepted.Set("csrf_token", csrfFromBody(t, rejectedBody))
+	accepted.Set("code", nextCode)
+	passed, err := again.PostForm(ts.URL+"/login/mfa", accepted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passedBody, _ := io.ReadAll(passed.Body)
+	_ = passed.Body.Close()
+	if passed.StatusCode != http.StatusFound {
+		t.Fatalf("mfa accept %d %s", passed.StatusCode, passedBody)
+	}
 }
 
 type followedLogin struct {
