@@ -158,6 +158,13 @@ func (h *Handler) ClientRedirectURIs(id string) []string {
 	return out
 }
 
+func (h *Handler) xaa() *service.XAA {
+	if h == nil {
+		return nil
+	}
+	return service.NewXAA(h.cfg, h.userRepo, h.cimd)
+}
+
 func (h *Handler) SetCache(c cache.Cache) {
 	if h != nil && c != nil {
 		h.cimd = c
@@ -856,6 +863,12 @@ func (h *Handler) HandleToken(w http.ResponseWriter, r *http.Request) {
 		h.HandleCIBAToken(w, r)
 	case "urn:ietf:params:oauth:grant-type:token-exchange":
 		h.handleTokenExchange(w, r)
+	case config.XAAJWTBearerGrant:
+		if h.cfg == nil || !h.cfg.XAA.Enabled {
+			writeTokenError(w, http.StatusBadRequest, "unsupported_grant_type", "Unsupported grant type: "+grantType)
+			return
+		}
+		h.handleJWTBearer(w, r)
 	default:
 		writeTokenError(w, http.StatusBadRequest, "unsupported_grant_type", "Unsupported grant type: "+grantType)
 	}

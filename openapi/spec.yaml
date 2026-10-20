@@ -629,6 +629,8 @@ paths:
         - **refresh_token**: Get a new access token using a refresh token
         - **device_code**: Poll for device authorization completion (RFC 8628)
         - **CIBA**: Poll for backchannel authentication completion
+        - **token exchange**: Exchange a local access token, or, when `xaa.enabled` is true, exchange an ID token for an ID-JAG
+        - **jwt-bearer**: Redeem an ID-JAG when `xaa.enabled` is true. The grant is rejected while the flag is off
 
         Client can authenticate via HTTP Basic auth or `client_id`/`client_secret` in the body.
       operationId: token
@@ -650,7 +652,9 @@ paths:
                     - refresh_token
                     - urn:ietf:params:oauth:grant-type:device_code
                     - urn:openid:params:grant-type:ciba
-                  description: The grant type to use
+                    - urn:ietf:params:oauth:grant-type:token-exchange
+                    - urn:ietf:params:oauth:grant-type:jwt-bearer
+                  description: The grant type to use. jwt-bearer is accepted only when xaa.enabled is true.
                 code:
                   type: string
                   description: Authorization code received from /oauth/authorize (authorization_code grant)
@@ -678,6 +682,21 @@ paths:
                     Resource indicator (RFC 8707). The URI of the resource server.
                     The issued token will be scoped to this resource.
                   example: "https://api.example.com"
+                subject_token:
+                  type: string
+                  description: Token to exchange. An ID-JAG request sends an ID token.
+                subject_token_type:
+                  type: string
+                  description: urn:ietf:params:oauth:token-type:id_token when requesting an ID-JAG
+                requested_token_type:
+                  type: string
+                  description: urn:ietf:params:oauth:token-type:id-jag when requesting an ID-JAG
+                audience:
+                  type: string
+                  description: Resource authorization server issuer for an ID-JAG request
+                assertion:
+                  type: string
+                  description: ID-JAG for the jwt-bearer grant
                 client_id:
                   type: string
                   description: Client ID (alternative to HTTP Basic auth)
@@ -1302,8 +1321,9 @@ paths:
       security: [{ bearerAuth: [] }]
       summary: Create a new client
       description: |
-        Creates a new OAuth client. Returns the client with generated `id` and `secret`.
-        Note: This endpoint uses `name` (not `client_name` which is for DCR).
+        Creates a new OAuth client and returns it with a secret.
+        Set `id` when a config file must name the client. Omit `id` and the server generates one.
+        This endpoint uses `name` (not `client_name`, which is for dynamic registration).
       operationId: createClient
       requestBody:
         required: true
@@ -2682,7 +2702,10 @@ components:
     ManagementClientCreate:
       type: object
       required: [name]
-      description: Request body for creating a client via Management API (not DCR)
+      description: >
+        Request body for creating a client via the management API.
+        Set id when a config file must name the client. Omit id and the
+        server generates one.
       example:
         name: "My Web App"
         redirect_uris: ["https://example.com/callback"]
@@ -2691,6 +2714,10 @@ components:
         scopes: ["openid", "profile", "email"]
         token_endpoint_auth_method: "client_secret_basic"
       properties:
+        id:
+          type: string
+          description: Client identifier. Omit it and the server generates one.
+          example: "field-notes"
         name:
           type: string
           description: Client application name (required)
@@ -3445,6 +3472,13 @@ components:
               "urn:ietf:params:oauth:grant-type:device_code",
               "urn:openid:params:grant-type:ciba",
             ]
+        authorization_grant_profiles_supported:
+          type: array
+          items:
+            type: string
+          description: >
+            Present only when xaa.enabled is true. Lists
+            urn:ietf:params:oauth:grant-profile:id-jag.
         token_endpoint_auth_methods_supported:
           type: array
           items:

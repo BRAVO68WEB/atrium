@@ -11,7 +11,8 @@ import (
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
-// TokenExchangeService implements RFC 8693 Token Exchange
+// TokenExchangeService implements RFC 8693 for a local access token.
+// An ID-JAG is issued by XAA from the token endpoint, not by ExchangeToken.
 type TokenExchangeService struct {
 	tokenRepo  *repository.TokenRepository
 	userRepo   *repository.UserRepository

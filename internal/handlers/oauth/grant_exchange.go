@@ -2,11 +2,14 @@ package oauth
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/service"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
@@ -30,6 +33,10 @@ func (h *Handler) handleTokenExchange(w http.ResponseWriter, r *http.Request) {
 
 	dpopJKT, ok := h.enforceClientDPoP(w, r, client)
 	if !ok {
+		return
+	}
+	if h.cfg != nil && h.cfg.XAA.Enabled && r.Form.Get("requested_token_type") == config.XAAIDJAGTokenType {
+		h.handleIDJAGExchange(w, r, client)
 		return
 	}
 	tokenType := boundTokenType(client)
@@ -99,4 +106,60 @@ func (h *Handler) handleTokenExchange(w http.ResponseWriter, r *http.Request) {
 		"expires_in":        int(h.cfg.Security.AccessTokenLifetime.Seconds()),
 		"scope":             strings.Join(scopes, " "),
 	})
+}
+
+func (h *Handler) handleIDJAGExchange(w http.ResponseWriter, r *http.Request, client *models.Client) {
+	if !service.HasGrant(client.GrantTypes, "urn:ietf:params:oauth:grant-type:token-exchange") {
+		writeTokenError(w, http.StatusBadRequest, "unauthorized_client", "Client is not authorized for token exchange")
+		return
+	}
+	subjectToken := r.Form.Get("subject_token")
+	subjectTokenType := r.Form.Get("subject_token_type")
+	if subjectToken == "" || subjectTokenType == "" {
+		writeTokenError(w, http.StatusBadRequest, "invalid_request", "subject_token and subject_token_type are required")
+		return
+	}
+	if subjectTokenType != "urn:ietf:params:oauth:token-type:id_token" {
+		writeTokenError(w, http.StatusBadRequest, "invalid_request", "Unsupported subject_token_type: "+subjectTokenType)
+		return
+	}
+	if h.oidcHandler == nil {
+		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to verify the ID token")
+		return
+	}
+	compact, scope, expiresIn, err := h.xaa().Issue(
+		r.Context(), client.ID, subjectToken, r.Form.Get("audience"), r.Form.Get("scope"),
+		h.oidcHandler.ParseSignedToken, h.oidcHandler.SignRSA,
+	)
+	if err != nil {
+		writeGrantError(w, err)
+		return
+	}
+	writeIDJAG(w, compact, scope, expiresIn)
+}
+
+func writeGrantError(w http.ResponseWriter, err error) {
+	var failure *service.GrantFailure
+	if errors.As(err, &failure) {
+		writeTokenError(w, failure.Status, failure.Code, failure.Description)
+		return
+	}
+	writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to complete the grant")
+}
+
+func writeIDJAG(w http.ResponseWriter, token, scope string, expiresIn int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
+	w.WriteHeader(http.StatusOK)
+	body := map[string]any{
+		"access_token":      token,
+		"issued_token_type": config.XAAIDJAGTokenType,
+		"token_type":        "N_A",
+		"expires_in":        expiresIn,
+	}
+	if scope != "" {
+		body["scope"] = scope
+	}
+	_ = json.NewEncoder(w).Encode(body)
 }

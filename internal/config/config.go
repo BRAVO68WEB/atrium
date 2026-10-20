@@ -30,6 +30,7 @@ type Config struct {
 	Org          OrgConfig          `yaml:"org"`
 	Push         PushConfig         `yaml:"push"`
 	AAuth        AAuthConfig        `yaml:"aauth"`
+	XAA          XAAConfig          `yaml:"xaa"`
 	Debug        DebugConfig        `yaml:"debug"`
 }
 
@@ -394,6 +395,11 @@ func DefaultConfig() *Config {
 			Enabled:      false,
 			ResourceMode: "as",
 		},
+		XAA: XAAConfig{
+			Enabled: false,
+			Trusts:  []XAATrust{},
+			IDPs:    []XAAIdentityProvider{},
+		},
 		Debug: DebugConfig{UI: false},
 	}
 }
@@ -505,6 +511,7 @@ func (c *Config) Normalize() {
 	if c.AAuth.ResourceMode == "" {
 		c.AAuth.ResourceMode = "as"
 	}
+	c.normalizeXAA()
 }
 
 // ValidatePush checks the interaction floor when push devices are on.

@@ -106,7 +106,53 @@ function renderConfig(port, dsn, overrides) {
   lines.push(`  as_issuer: ${yamlValue(asIssuer)}`);
   lines.push(`  resource_issuer: ${yamlValue(aauth.resource_issuer || "")}`);
   lines.push(`  resource_mode: ${yamlValue(aauth.resource_mode || "as")}`);
+  if (overrides.xaa) {
+    appendXAA(lines, base, overrides.xaa);
+  }
   return lines.join("\n") + "\n";
+}
+
+function appendXAA(lines, base, xaa) {
+  const trusts = Array.isArray(xaa.trusts) ? xaa.trusts : [];
+  let idps = Array.isArray(xaa.idps) ? xaa.idps : [];
+  if (xaa.enabled && idps.length === 0) {
+    idps = [{ scopes: xaa.scopes || ["notes.read"] }];
+  }
+  lines.push("xaa:");
+  lines.push(`  enabled: ${yamlValue(Boolean(xaa.enabled))}`);
+  if (trusts.length === 0) {
+    lines.push("  trusts: []");
+  } else {
+    lines.push("  trusts:");
+    for (const row of trusts) {
+      lines.push(`    - client_id: ${yamlValue(row.client_id)}`);
+      lines.push(`      audience: ${yamlValue(row.audience || base)}`);
+      lines.push(`      resource_client_id: ${yamlValue(row.resource_client_id)}`);
+      writeScopes(lines, "      ", row.scopes);
+    }
+  }
+  if (idps.length === 0) {
+    lines.push("  idps: []");
+  } else {
+    lines.push("  idps:");
+    for (const row of idps) {
+      lines.push(`    - issuer: ${yamlValue(row.issuer || base)}`);
+      lines.push(`      jwks_uri: ${yamlValue(row.jwks_uri || `${base}/oidc/jwks`)}`);
+      writeScopes(lines, "      ", row.scopes);
+    }
+  }
+}
+
+function writeScopes(lines, indent, scopes) {
+  const list = scopes || [];
+  if (list.length === 0) {
+    lines.push(`${indent}scopes: []`);
+    return;
+  }
+  lines.push(`${indent}scopes:`);
+  for (const scope of list) {
+    lines.push(`${indent}  - ${yamlValue(scope)}`);
+  }
 }
 
 async function waitHealth(base) {

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -20,6 +22,7 @@ func NewClientService(clientRepo *repository.ClientRepository) *ClientService {
 }
 
 type CreateClientInput struct {
+	ID                                         string
 	Name                                       string
 	RedirectURIs                               []string
 	GrantTypes                                 []string
@@ -63,8 +66,23 @@ func (s *ClientService) CreateClient(input CreateClientInput) (*models.Client, e
 		input.PostLogoutRedirectURIs = []string{}
 	}
 
+	clientID := uuid.New().String()
+	if input.ID != "" {
+		if !validClientID(input.ID) {
+			return nil, fmt.Errorf("client id is invalid")
+		}
+		existing, err := s.clientRepo.GetByID(input.ID)
+		if err == nil && existing != nil {
+			return nil, fmt.Errorf("client id is already in use")
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("failed to create client: %w", err)
+		}
+		clientID = input.ID
+	}
+
 	client := &models.Client{
-		ID:                                    uuid.New().String(),
+		ID:                                    clientID,
 		Secret:                                generateSecret(),
 		Name:                                  input.Name,
 		RedirectURIs:                          input.RedirectURIs,
@@ -147,6 +165,21 @@ func (s *ClientService) ValidateGrantType(client *models.Client, grantType strin
 		}
 	}
 	return fmt.Errorf("client not authorized for %s grant", grantType)
+}
+
+func validClientID(id string) bool {
+	if len(id) < 1 || len(id) > 128 {
+		return false
+	}
+	for i, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case i > 0 && (r == '-' || r == '_' || r == '.'):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func generateSecret() string {
