@@ -46,7 +46,6 @@ Key package boundaries:
 - `internal/models/` - Data models
 - `pkg/crypto/` - PKCE, token generation
 - `pkg/passhash/` - bcrypt, argon2id, and fallback hashers
-- `pkg/errors/` - Custom OAuth error types
 - `openapi/` - OpenAPI 3.1 spec
 
 ### New Features
