@@ -398,13 +398,18 @@ func jwtJSON(t *testing.T, token string, index int) map[string]any {
 
 func tamperToken(token string) string {
 	parts := strings.Split(token, ".")
-	sig := []byte(parts[2])
-	if sig[len(sig)-1] == 'a' {
-		sig[len(sig)-1] = 'b'
-	} else {
-		sig[len(sig)-1] = 'a'
+	if len(parts) != 3 {
+		return token + "x"
 	}
-	parts[2] = string(sig)
+	raw, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil || len(raw) == 0 {
+		parts[2] = "AAAA"
+		return strings.Join(parts, ".")
+	}
+	// The last base64 character can change without changing the decoded
+	// signature when that character only carries padding bits.
+	raw[0] ^= 0xff
+	parts[2] = base64.RawURLEncoding.EncodeToString(raw)
 	return strings.Join(parts, ".")
 }
 
