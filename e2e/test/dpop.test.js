@@ -49,6 +49,15 @@ describe("forced DPoP", function () {
 
     const infoURL = `${server.base}/oidc/userinfo`;
     const infoProof = await dpopProof("GET", infoURL, issued.body.access_token);
+    const bareProof = await dpopProof("GET", infoURL, issued.body.access_token, { ath: false });
+    const bare = await fetch(infoURL, {
+      headers: {
+        Authorization: `DPoP ${issued.body.access_token}`,
+        DPoP: bareProof,
+      },
+    });
+    assert.equal(bare.status, 401);
+
     const info = await fetch(infoURL, {
       headers: {
         Authorization: `DPoP ${issued.body.access_token}`,

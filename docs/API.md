@@ -76,7 +76,9 @@ and the JWT bearer grant. The JWT bearer grant is advertised only when
 
 `oauth-cli client master` creates a client that includes `password`.
 The password grant sends the identifier in `username`. CIBA on this
-server is poll mode.
+server is poll mode. A token exchange has to present an access token
+this client already holds. The new scope stays inside that token's
+scope.
 
 With `xaa.enabled` on, token exchange accepts
 `requested_token_type` `urn:ietf:params:oauth:token-type:id-jag`.

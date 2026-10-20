@@ -118,8 +118,11 @@ func (s *DPoPService) ValidateDPoPProof(dpopHeader string, method string, uri st
 		return nil, fmt.Errorf("htu mismatch: expected %s, got %s", expectedHTU, actualHTU)
 	}
 
-	// Validate access token hash if provided
-	if accessToken != "" && ath != "" {
+	// A proof presented with an access token must be bound to that token.
+	if accessToken != "" {
+		if ath == "" {
+			return nil, fmt.Errorf("missing ath claim")
+		}
 		if err := s.validateATH(ath, accessToken); err != nil {
 			return nil, err
 		}

@@ -22,12 +22,3 @@ func (s *TokenService) RevokeToken(token string) error {
 func (s *TokenService) ListTokens(clientID, userID string) ([]*models.AccessToken, error) {
 	return s.tokenRepo.ListAccessTokens(clientID, userID)
 }
-
-func containsScope(scopes []string, target string) bool {
-	for _, scope := range scopes {
-		if scope == target {
-			return true
-		}
-	}
-	return false
-}

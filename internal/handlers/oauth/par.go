@@ -112,7 +112,14 @@ func (h *Handler) HandlePAR(w http.ResponseWriter, r *http.Request) {
 	}
 
 	redirectURI := r.Form.Get("redirect_uri")
-	if redirectURI == "" && len(client.RedirectURIs) > 0 {
+	if redirectURI == "" && len(client.RedirectURIs) > 1 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error":             "invalid_request",
+			"error_description": "redirect_uri is required when multiple redirect URIs are registered",
+		})
+		return
+	}
+	if redirectURI == "" && len(client.RedirectURIs) == 1 {
 		redirectURI = client.RedirectURIs[0]
 	}
 
