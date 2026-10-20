@@ -61,7 +61,7 @@ func TestJARAcceptsOneECKeyWithoutAKID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := &models.Client{ID: "app", JWKS: jwksJSON(t, ecJWK(&key.PublicKey))}
+	client := &models.Client{ID: "app", JWKS: jwksJSON(t, ecJWK(t, &key.PublicKey))}
 	raw := signRequest(t, jwt.SigningMethodES256, key, "", "", jwt.MapClaims{
 		"client_id":    "app",
 		"redirect_uri": "https://app.example/cb",
@@ -128,18 +128,22 @@ func jarPublicJWK(key *rsa.PrivateKey, kid string) JWK {
 	}
 }
 
-func ecJWK(key *ecdsa.PublicKey) JWK {
-	size := (key.Curve.Params().BitSize + 7) / 8
-	x := make([]byte, size)
-	y := make([]byte, size)
-	key.X.FillBytes(x)
-	key.Y.FillBytes(y)
+func ecJWK(t *testing.T, key *ecdsa.PublicKey) JWK {
+	t.Helper()
+	raw, err := key.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) < 3 || raw[0] != 4 || (len(raw)-1)%2 != 0 {
+		t.Fatalf("public key bytes %x", raw)
+	}
+	size := (len(raw) - 1) / 2
 	return JWK{
 		Kty: "EC",
 		Crv: "P-256",
 		Alg: "ES256",
-		X:   base64.RawURLEncoding.EncodeToString(x),
-		Y:   base64.RawURLEncoding.EncodeToString(y),
+		X:   base64.RawURLEncoding.EncodeToString(raw[1 : 1+size]),
+		Y:   base64.RawURLEncoding.EncodeToString(raw[1+size:]),
 	}
 }
 
