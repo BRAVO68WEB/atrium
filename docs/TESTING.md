@@ -85,9 +85,10 @@ A pull request to `main` runs:
 | Test Postgres | tests that need Postgres |
 | E2E | `cd e2e && npm test` |
 
-The Test check uploads `coverage.out` to Codecov. The README badge
-reads the `main` branch report there. `disable_search` is set so
-Codecov uploads that profile only.
+The Test check runs through `gotestsum` and writes `junit.xml` plus
+`coverage.out`. Both files are uploaded to Codecov. The test-results
+upload still runs when tests fail. The README badge reads the `main`
+coverage report. `disable_search` limits each upload to the named file.
 
 ## Related
 
