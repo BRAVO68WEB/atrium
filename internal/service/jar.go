@@ -65,22 +65,25 @@ func (s *JARService) ValidateRequestObject(requestJWT string, client *models.Cli
 		return nil, fmt.Errorf("failed to parse request JWT: %w", err)
 	}
 
-	// Get signing algorithm
 	alg, _ := token.Header["alg"].(string)
-
-	// Try to verify signature if client has keys configured
-	if alg != "none" && (client.JWKS != "" || client.JWKSUri != "") {
-		pubKey, err := s.resolveClientKey(client, token.Header)
-		if err == nil {
-			// Verify signature
-			token, err = jwt.ParseWithClaims(requestJWT, &RequestObjectClaims{}, func(t *jwt.Token) (interface{}, error) {
-				return pubKey, nil
-			})
-			if err != nil {
-				return nil, fmt.Errorf("invalid request JWT signature: %w", err)
-			}
+	if !jarAlgOK(alg) {
+		return nil, fmt.Errorf("request jwt must be signed")
+	}
+	if client == nil || (strings.TrimSpace(client.JWKS) == "" && strings.TrimSpace(client.JWKSUri) == "") {
+		return nil, fmt.Errorf("client has no signing key")
+	}
+	pubKey, err := s.resolveClientKey(client, token.Header)
+	if err != nil {
+		return nil, fmt.Errorf("client signing key: %w", err)
+	}
+	token, err = jwt.ParseWithClaims(requestJWT, &RequestObjectClaims{}, func(t *jwt.Token) (any, error) {
+		if t.Method == nil || t.Method.Alg() != alg {
+			return nil, fmt.Errorf("unexpected signing method")
 		}
-		// If key resolution fails, continue without verification (for testing)
+		return pubKey, nil
+	}, jwt.WithValidMethods([]string{alg}))
+	if err != nil {
+		return nil, fmt.Errorf("invalid request JWT signature: %w", err)
 	}
 
 	// Extract claims
@@ -152,6 +155,15 @@ func (s *JARService) ValidateRequestObject(requestJWT string, client *models.Cli
 	return params, nil
 }
 
+func jarAlgOK(alg string) bool {
+	switch alg {
+	case "RS256", "RS384", "RS512", "ES256", "ES384", "ES512":
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *JARService) resolveClientKey(client *models.Client, header map[string]interface{}) (interface{}, error) {
 	// Try inline JWKS first
 	if client.JWKS != "" {
@@ -191,15 +203,12 @@ func (s *JARService) getKeyFromJWKS(jwksJSON string, header map[string]interface
 			return nil, fmt.Errorf("unsupported key type: %s", key.Kty)
 		}
 	}
-
-	// If no kid match, try the first key
-	if len(jwks.Keys) > 0 {
-		key := jwks.Keys[0]
-		switch key.Kty {
+	if kid == "" && len(jwks.Keys) == 1 {
+		switch jwks.Keys[0].Kty {
 		case "RSA":
-			return parseRSAJWK(key)
+			return parseRSAJWK(jwks.Keys[0])
 		case "EC":
-			return parseECJWK(key)
+			return parseECJWK(jwks.Keys[0])
 		}
 	}
 
@@ -234,14 +243,12 @@ func (s *JARService) getKeyFromJWKSUri(jwksUri string, header map[string]interfa
 			return parseECJWK(key)
 		}
 	}
-
-	if len(jwks.Keys) > 0 {
-		key := jwks.Keys[0]
-		switch key.Kty {
+	if kid == "" && len(jwks.Keys) == 1 {
+		switch jwks.Keys[0].Kty {
 		case "RSA":
-			return parseRSAJWK(key)
+			return parseRSAJWK(jwks.Keys[0])
 		case "EC":
-			return parseECJWK(key)
+			return parseECJWK(jwks.Keys[0])
 		}
 	}
 

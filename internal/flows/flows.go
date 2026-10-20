@@ -47,7 +47,7 @@ func (fc *FlowContext) ValidateClient(clientID, clientSecret string) (*models.Cl
 		return nil, pkgerrors.InvalidClient("Client not found")
 	}
 
-	if client.TokenEndpointAuthMethod != "none" && client.Secret != clientSecret {
+	if client.TokenEndpointAuthMethod != "none" && !crypto.SecretEqual(clientSecret, client.Secret) {
 		return nil, pkgerrors.InvalidClient("Invalid client credentials")
 	}
 

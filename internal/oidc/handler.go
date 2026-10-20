@@ -501,7 +501,7 @@ func (h *Handler) HandleDiscovery(w http.ResponseWriter, r *http.Request) {
 		"request_uri_parameter_supported":                  true,
 		"request_object_signing_alg_values_supported":      []string{"RS256", "ES256", "none"},
 		"require_pushed_authorization_requests":            false,
-		"backchannel_token_delivery_modes_supported":       []string{"poll", "ping"},
+		"backchannel_token_delivery_modes_supported":       []string{"poll"},
 		"backchannel_user_code_parameter_supported":        false,
 		"tls_client_certificate_bound_access_tokens":       h.cfg.Security.MTLS.CertBinding,
 		"dpop_signing_alg_values_supported":                []string{"ES256", "RS256"},

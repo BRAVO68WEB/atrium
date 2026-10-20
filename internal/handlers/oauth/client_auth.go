@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
 func presentedClient(r *http.Request) (string, string) {
@@ -31,8 +32,26 @@ func authenticateClient(client *models.Client, presentedID, presentedSecret stri
 	if presentedSecret == "" {
 		return "missing_secret"
 	}
-	if presentedSecret != client.Secret {
+	if !crypto.SecretEqual(presentedSecret, client.Secret) {
 		return "bad_secret"
 	}
 	return ""
+}
+
+// tokenCaller authenticates the client at the token, revocation, and exchange endpoints.
+func (h *Handler) tokenCaller(w http.ResponseWriter, r *http.Request) (*models.Client, bool) {
+	clientID, clientSecret := presentedClient(r)
+	if clientID == "" {
+		writeTokenError(w, http.StatusBadRequest, "invalid_client", "Client authentication required")
+		return nil, false
+	}
+	client, ok := h.requireClient(w, clientID, "", http.StatusUnauthorized)
+	if !ok {
+		return nil, false
+	}
+	if authenticateClient(client, clientID, clientSecret, false) != "" {
+		writeTokenError(w, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
+		return nil, false
+	}
+	return client, true
 }

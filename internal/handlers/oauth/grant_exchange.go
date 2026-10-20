@@ -10,26 +10,14 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/service"
-	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
 func (h *Handler) handleTokenExchange(w http.ResponseWriter, r *http.Request) {
-	clientID, clientSecret := presentedClient(r)
-
-	if clientID == "" {
-		writeTokenError(w, http.StatusBadRequest, "invalid_client", "Client authentication required")
-		return
-	}
-
-	client, ok := h.requireClient(w, clientID, "", http.StatusUnauthorized)
+	client, ok := h.tokenCaller(w, r)
 	if !ok {
 		return
 	}
-
-	if authenticateClient(client, clientID, clientSecret, false) != "" {
-		writeTokenError(w, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
-		return
-	}
+	clientID := client.ID
 
 	dpopJKT, ok := h.enforceClientDPoP(w, r, client)
 	if !ok {
@@ -68,11 +56,19 @@ func (h *Handler) handleTokenExchange(w http.ResponseWriter, r *http.Request) {
 		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "subject_token is expired or revoked")
 		return
 	}
+	if !service.HasGrant(client.GrantTypes, "urn:ietf:params:oauth:grant-type:token-exchange") {
+		writeTokenError(w, http.StatusBadRequest, "unauthorized_client", "Client is not authorized for token exchange")
+		return
+	}
+	if subjectTokenInfo.ClientID != clientID {
+		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "subject_token was not issued to this client")
+		return
+	}
 
-	scope := r.Form.Get("scope")
-	scopes := crypto.NormalizeScopes(scope)
-	if len(scopes) == 0 {
-		scopes = subjectTokenInfo.Scopes
+	scopes, err := service.AllowedScopes(r.Form.Get("scope"), subjectTokenInfo.Scopes)
+	if err != nil || len(scopes) == 0 {
+		writeTokenError(w, http.StatusBadRequest, "invalid_scope", "Scope is not allowed")
+		return
 	}
 
 	accessToken, err := h.issueAccessToken(clientID, subjectTokenInfo.UserID, strings.Join(scopes, " "), tokenType)

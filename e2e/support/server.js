@@ -109,6 +109,28 @@ function renderConfig(port, dsn, overrides) {
   if (overrides.xaa) {
     appendXAA(lines, base, overrides.xaa);
   }
+  if (overrides.smtp) {
+    const smtp = overrides.smtp;
+    lines.push("smtp:");
+    lines.push("  enabled: true");
+    lines.push(`  host: ${yamlValue(smtp.host || "127.0.0.1")}`);
+    lines.push(`  port: ${yamlValue(smtp.port)}`);
+    lines.push(`  from: ${yamlValue(smtp.from || "reset@fieldnotes.example")}`);
+    lines.push("  starttls: false");
+    lines.push("  implicit_tls: false");
+  }
+  if (overrides.social) {
+    const provider = overrides.social;
+    lines.push("social:");
+    lines.push("  providers:");
+    lines.push(`    - id: ${yamlValue(provider.id || "local")}`);
+    lines.push("      type: oidc");
+    lines.push(`      name: ${yamlValue(provider.name || "Local")}`);
+    lines.push("      enabled: true");
+    lines.push(`      client_id: ${yamlValue(provider.client_id || "notes-social")}`);
+    lines.push(`      client_secret: ${yamlValue(provider.client_secret || "notes-social-secret")}`);
+    lines.push(`      issuer: ${yamlValue(provider.issuer)}`);
+  }
   return lines.join("\n") + "\n";
 }
 
