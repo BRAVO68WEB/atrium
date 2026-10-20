@@ -62,6 +62,14 @@ jobs:
           language: Go
           label: code-coverage/go
 
+      - name: Upload coverage reports to Codecov
+        if: hashFiles('coverage.out') != ''
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.out
+          disable_search: true
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

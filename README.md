@@ -1,5 +1,7 @@
 # OAuth Implementation Server
 
+[![codecov](https://codecov.io/gh/BRAVO68WEB/oauth-impl/branch/main/graph/badge.svg)](https://codecov.io/gh/BRAVO68WEB/oauth-impl)
+
 oauth-impl is a self-hosted OAuth 2.0 and OpenID Connect issuer. One Go
 process serves the protocol, the browser sign-in pages, and the management
 API.

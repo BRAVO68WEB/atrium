@@ -86,10 +86,9 @@ A pull request to `main` runs:
 | E2E | `cd e2e && npm test` |
 
 The Test check converts `coverage.out` to Cobertura XML and uploads
-it with `actions/upload-code-coverage`. After the run,
-`github-code-quality[bot]` comments on the pull request. That comment
-needs Code Quality enabled on the repository. A pull request from a
-fork does not upload coverage.
+it with `actions/upload-code-coverage`. The same profile is uploaded
+to Codecov. The README badge reads the `main` branch report there.
+A pull request from a fork does not upload the Cobertura file.
 
 ## Related
 
