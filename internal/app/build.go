@@ -77,6 +77,9 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 	if err := config.ValidateAAuth(cfg); err != nil {
 		return nil, err
 	}
+	if err := config.ValidateXAA(cfg); err != nil {
+		return nil, err
+	}
 	if err := service.ValidateTrustedProxies(cfg.Security.TrustedProxies); err != nil {
 		return nil, err
 	}

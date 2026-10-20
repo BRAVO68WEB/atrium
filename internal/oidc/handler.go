@@ -485,7 +485,7 @@ func (h *Handler) HandleDiscovery(w http.ResponseWriter, r *http.Request) {
 		"scopes_supported":                                 h.cfg.OIDC.SupportedScopes,
 		"response_types_supported":                         []string{"code", "token", "id_token", "code id_token", "code token", "code id_token token", "none"},
 		"response_modes_supported":                         []string{"query", "fragment", "form_post"},
-		"grant_types_supported":                            h.cfg.OIDC.SupportedGrantTypes,
+		"grant_types_supported":                            discoveryGrants(h.cfg),
 		"token_endpoint_auth_methods_supported":            h.cfg.OIDC.SupportedAuthMethods,
 		"token_endpoint_auth_signing_alg_values_supported": []string{"RS256", "ES256"},
 		"subject_types_supported":                          []string{"public", "pairwise"},
@@ -511,6 +511,10 @@ func (h *Handler) HandleDiscovery(w http.ResponseWriter, r *http.Request) {
 		"backchannel_logout_session_supported":             true,
 	}
 
+	if h.cfg.XAA.Enabled {
+		discovery["authorization_grant_profiles_supported"] = []string{config.XAAIDJAGProfile}
+	}
+
 	// Add mTLS endpoint aliases if mTLS is enabled
 	if h.cfg.Security.MTLS.Enabled && h.cfg.Server.TLS.Enabled {
 		mtlsIssuer := fmt.Sprintf("https://localhost:%d", h.cfg.Server.Port)
@@ -527,6 +531,43 @@ func (h *Handler) HandleDiscovery(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) HandleASMetadata(w http.ResponseWriter, r *http.Request) {
 	h.HandleDiscovery(w, r)
+}
+
+func discoveryGrants(cfg *config.Config) []string {
+	var src []string
+	enabled := false
+	if cfg != nil {
+		src = cfg.OIDC.SupportedGrantTypes
+		enabled = cfg.XAA.Enabled
+	}
+	out := make([]string, 0, len(src)+1)
+	for _, grant := range src {
+		if grant == config.XAAJWTBearerGrant {
+			continue
+		}
+		out = append(out, grant)
+	}
+	if enabled {
+		out = append(out, config.XAAJWTBearerGrant)
+	}
+	return out
+}
+
+// SignRSA signs claims with the active RSA key. typ is the JOSE header type.
+func (h *Handler) SignRSA(claims jwt.MapClaims, typ string) (string, error) {
+	if h == nil || h.keySet == nil {
+		return "", fmt.Errorf("signing keys are not loaded")
+	}
+	key, kid := h.keySet.GetRSAKey()
+	if key == nil {
+		return "", fmt.Errorf("no active rsa signing key")
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	token.Header["kid"] = kid
+	if typ != "" {
+		token.Header["typ"] = typ
+	}
+	return token.SignedString(key)
 }
 
 func (h *Handler) issuer() string {

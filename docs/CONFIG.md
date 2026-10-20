@@ -196,6 +196,11 @@ aauth:
   resource_issuer: ""
   resource_mode: as
 
+xaa:
+  enabled: false
+  trusts: []
+  idps: []
+
 debug:
   ui: false
 
@@ -350,6 +355,46 @@ social:
       client_secret: ""
 ```
 
+## Cross-app access
+
+`xaa.enabled` defaults to false. A default server does not issue an
+ID-JAG and does not accept
+`urn:ietf:params:oauth:grant-type:jwt-bearer`. Leave the grant out of
+`oidc.supported_grant_types`. While the flag is on, discovery adds
+the grant. While it is off, discovery leaves the grant out. See
+[Cross-app access](XAA.md).
+
+`xaa.trusts` is the allow list when this server is the identity
+provider. Each row has `client_id` (the app here), `audience` (the
+resource authorization server's issuer), `resource_client_id` (that
+app's client id there), and `scopes`. A request is refused when no
+row matches the client, the audience, and the scopes.
+
+`xaa.idps` is the allow list when this server is the resource
+authorization server. Each row has `issuer`, `jwks_uri`, and `scopes`.
+The user's email in the assertion must already belong to a verified
+account here. A row with an `http` `jwks_uri` is fetched only when
+`security.allow_insecure_fetch` allows that host.
+
+`POST /api/clients` accepts `id` when the trust row has to name a
+client you choose. Omit `id` and the server generates one.
+
+```yaml
+xaa:
+  enabled: true
+  trusts:
+    - client_id: field-notes
+      audience: https://notes.example
+      resource_client_id: notes-api
+      scopes:
+        - notes.read
+  idps:
+    - issuer: https://idp.example
+      jwks_uri: https://idp.example/oidc/jwks
+      scopes:
+        - notes.read
+```
+
 ## Other switches
 
 `registration.dcr_enabled` allows `POST /oauth/register`. Dynamic
@@ -362,8 +407,9 @@ reCAPTCHA siteverify. A configured provider needs `site_key`,
 `secret_key`, and a token from the browser.
 
 `security.allow_insecure_fetch` and `security.fetch_allow_ips` widen
-outbound fetches the server makes for sector documents, CIMD, and
-webhooks. Leave them at the defaults on a public issuer.
+outbound fetches the server makes for sector documents, CIMD,
+webhooks, and identity-provider signing keys. Leave them at the
+defaults on a public issuer.
 
 `security.dpop.proof_lifetime` and `nonce_lifetime` are seconds, not Go
 durations. `security.mfa.period` is the TOTP step in seconds.

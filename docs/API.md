@@ -68,11 +68,21 @@ allows them:
 | CIBA | `urn:openid:params:grant-type:ciba` |
 | Token exchange | `urn:ietf:params:oauth:grant-type:token-exchange` |
 | Password | `password` |
+| JWT bearer | `urn:ietf:params:oauth:grant-type:jwt-bearer` |
 
-The default discovery list includes every grant above except `password`.
+The default discovery list includes every grant above except `password`
+and the JWT bearer grant. The JWT bearer grant is advertised only when
+`xaa.enabled` is true. See [Cross-app access](XAA.md).
+
 `oauth-cli client master` creates a client that includes `password`.
 The password grant sends the identifier in `username`. CIBA on this
 server is poll mode.
+
+With `xaa.enabled` on, token exchange accepts
+`requested_token_type` `urn:ietf:params:oauth:token-type:id-jag`.
+`subject_token` is an ID token from this server and `audience` is the
+resource authorization server. The JWT bearer grant then accepts that
+assertion. Neither response includes a refresh token.
 
 A client can register `urn:ietf:wg:oauth:2.0:oob` or
 `urn:ietf:wg:oauth:2.0:oob:auto` instead of an HTTP callback. The request

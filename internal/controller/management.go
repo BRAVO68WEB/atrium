@@ -122,6 +122,7 @@ func (c *ManagementController) HandleListClients(w http.ResponseWriter, r *http.
 
 func (c *ManagementController) HandleCreateClient(w http.ResponseWriter, r *http.Request) {
 	var req struct {
+		ID                                         string   `json:"id"`
 		Name                                       string   `json:"name"`
 		RedirectURIs                               []string `json:"redirect_uris"`
 		GrantTypes                                 []string `json:"grant_types"`
@@ -152,6 +153,7 @@ func (c *ManagementController) HandleCreateClient(w http.ResponseWriter, r *http
 	}
 
 	client, err := c.clientSvc.CreateClient(service.CreateClientInput{
+		ID:                                    req.ID,
 		Name:                                  req.Name,
 		RedirectURIs:                          req.RedirectURIs,
 		GrantTypes:                            req.GrantTypes,
