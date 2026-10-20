@@ -12,6 +12,8 @@ bin/
 # Output of go coverage tool
 *.out
 coverage.html
+coverage.txt
+coverage.xml
 
 # Database files
 *.db

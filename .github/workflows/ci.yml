@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  code-quality: write
 
 jobs:
   build:
@@ -38,6 +39,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -45,12 +48,19 @@ jobs:
           go-version: "1.26"
 
       - name: Run tests
-        run: go test ./... -v -race -count=1
+        run: go test ./... -v -race -count=1 -coverprofile=coverage.out -covermode=atomic
 
-      - name: Run tests with coverage
-        run: |
-          go test ./... -coverprofile=coverage.out -covermode=atomic
-          go tool cover -func=coverage.out
+      - name: Convert coverage to Cobertura
+        if: always() && hashFiles('coverage.out') != ''
+        run: go run github.com/boumenot/gocover-cobertura@v1.5.0 -by-files < coverage.out > coverage.xml
+
+      - name: Upload coverage report
+        if: hashFiles('coverage.xml') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/upload-code-coverage@v1
+        with:
+          file: coverage.xml
+          language: Go
+          label: code-coverage/go
 
   lint:
     name: Lint
