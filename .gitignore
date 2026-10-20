@@ -13,7 +13,6 @@ bin/
 *.out
 coverage.html
 coverage.txt
-coverage.xml
 
 # Database files
 *.db

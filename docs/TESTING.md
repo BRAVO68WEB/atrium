@@ -85,10 +85,9 @@ A pull request to `main` runs:
 | Test Postgres | tests that need Postgres |
 | E2E | `cd e2e && npm test` |
 
-The Test check converts `coverage.out` to Cobertura XML and uploads
-it with `actions/upload-code-coverage`. The same profile is uploaded
-to Codecov. The README badge reads the `main` branch report there.
-A pull request from a fork does not upload the Cobertura file.
+The Test check uploads `coverage.out` to Codecov. The README badge
+reads the `main` branch report there. `disable_search` is set so
+Codecov uploads that profile only.
 
 ## Related
 

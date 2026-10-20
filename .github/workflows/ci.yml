@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  code-quality: write
 
 jobs:
   build:
@@ -49,18 +48,6 @@ jobs:
 
       - name: Run tests
         run: go test ./... -v -race -count=1 -coverprofile=coverage.out -covermode=atomic
-
-      - name: Convert coverage to Cobertura
-        if: always() && hashFiles('coverage.out') != ''
-        run: go run github.com/boumenot/gocover-cobertura@v1.5.0 -by-files < coverage.out > coverage.xml
-
-      - name: Upload coverage report
-        if: hashFiles('coverage.xml') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: actions/upload-code-coverage@v1
-        with:
-          file: coverage.xml
-          language: Go
-          label: code-coverage/go
 
       - name: Upload coverage reports to Codecov
         if: hashFiles('coverage.out') != ''
