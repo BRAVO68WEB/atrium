@@ -47,10 +47,18 @@ jobs:
           go-version: "1.26"
 
       - name: Run tests
-        run: go test ./... -v -race -count=1 -coverprofile=coverage.out -covermode=atomic
+        run: go run gotest.tools/gotestsum@v1.13.0 --format standard-verbose --junitfile junit.xml -- -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() && hashFiles('junit.xml') != '' }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: junit.xml
+          disable_search: true
 
       - name: Upload coverage reports to Codecov
-        if: hashFiles('coverage.out') != ''
+        if: ${{ !cancelled() && hashFiles('coverage.out') != '' }}
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
