@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -40,6 +41,63 @@ func setupTestServer(t *testing.T) (*httptest.Server, func()) {
 	}
 
 	return ts, cleanup
+}
+
+func setupConfigured(t *testing.T, mutate func(*config.Config)) *httptest.Server {
+	t.Helper()
+	cfg := config.DefaultConfig()
+	cfg.Security.RequirePKCE = false
+	cfg.Security.AllowInsecureFetch = true
+	cfg.Security.FetchAllowIPs = []string{"127.0.0.1", "::1"}
+	cfg.Management.ClientID = "test-mgmt"
+	cfg.Management.ClientSecret = "test-mgmt-secret"
+	if mutate != nil {
+		mutate(cfg)
+	}
+	srv, err := server.New(cfg, testpg.Open(t), queue.NewMemoryQueue(100))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(srv.GetRouter())
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+func setupBound(t *testing.T, mutate func(*config.Config)) *httptest.Server {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer := "http://" + ln.Addr().String()
+	cfg := config.DefaultConfig()
+	cfg.Security.RequirePKCE = false
+	cfg.Security.AllowInsecureFetch = true
+	cfg.Security.FetchAllowIPs = []string{"127.0.0.1", "::1"}
+	cfg.Security.Issuer = issuer
+	cfg.OIDC.Issuer = issuer
+	cfg.Management.ClientID = "test-mgmt"
+	cfg.Management.ClientSecret = "test-mgmt-secret"
+	if mutate != nil {
+		mutate(cfg)
+	}
+	srv, err := server.New(cfg, testpg.Open(t), queue.NewMemoryQueue(100))
+	if err != nil {
+		_ = ln.Close()
+		t.Fatal(err)
+	}
+	ts := httptest.NewUnstartedServer(srv.GetRouter())
+	if err := ts.Listener.Close(); err != nil {
+		_ = ln.Close()
+		t.Fatal(err)
+	}
+	ts.Listener = ln
+	ts.Start()
+	t.Cleanup(ts.Close)
+	if ts.URL != issuer {
+		t.Fatalf("url %s issuer %s", ts.URL, issuer)
+	}
+	return ts
 }
 
 func TestHealthEndpoint(t *testing.T) {

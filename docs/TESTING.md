@@ -77,13 +77,24 @@ A pull request to `main` runs:
 | Check | What it runs |
 | --- | --- |
 | Build | `oauth-server`, `oauth-cli`, `oauth-mobile` |
-| Test | `go test ./...` |
+| Test | `go test ./...` with the race detector and a coverage profile |
 | Lint | golangci-lint |
 | Vet | `go vet ./...` |
 | Format | `gofmt -l` |
 | Tidy | `go mod tidy` leaves `go.mod` and `go.sum` clean |
 | Test Postgres | tests that need Postgres |
 | E2E | `cd e2e && npm test` |
+
+The Test check runs through `gotestsum` and writes `junit.xml` plus
+`coverage.out`. Both files are uploaded with `codecov-action`. The
+JUnit upload sets `report_type` to `test_results` and still runs when
+tests fail. The README badge reads the `main` coverage report.
+`disable_search` limits each upload to the named file.
+`codecov.yml` leaves `e2e`, docs, migrations, hasher examples, and
+test files out of that percentage. The project status compares the
+branch with its base and allows a one point drop. The test run
+instruments `internal` and `pkg` in every package, so an integration
+test counts toward the handler, controller, and repository it calls.
 
 ## Related
 

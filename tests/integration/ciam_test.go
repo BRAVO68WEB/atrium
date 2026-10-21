@@ -14,15 +14,20 @@ import (
 
 func csrfFromBody(t *testing.T, body string) string {
 	t.Helper()
-	const key = `name="csrf_token" value="`
+	return formValue(t, body, "csrf_token")
+}
+
+func formValue(t *testing.T, body, name string) string {
+	t.Helper()
+	key := `name="` + name + `" value="`
 	i := strings.Index(body, key)
 	if i < 0 {
-		t.Fatalf("csrf field missing: %s", body)
+		t.Fatalf("%s field missing: %s", name, body)
 	}
 	rest := body[i+len(key):]
 	j := strings.Index(rest, `"`)
 	if j < 0 {
-		t.Fatal("csrf field truncated")
+		t.Fatalf("%s field truncated", name)
 	}
 	return rest[:j]
 }

@@ -1,0 +1,18 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        target: auto
+        threshold: 1%
+
+# These paths are tests, examples, or docs. They are not the server.
+ignore:
+  - "e2e"
+  - "docs"
+  - "migrations"
+  - "internal/hashalgo/examples"
+  - "**/*_test.go"

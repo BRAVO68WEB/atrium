@@ -53,6 +53,42 @@ func TestPreviewCatalog(t *testing.T) {
 	}
 }
 
+func TestPreviewVariants(t *testing.T) {
+	ctrl := previewController(t, true)
+	router := chi.NewRouter()
+	router.Get("/preview/{page}", ctrl.HandlePreview)
+	pages := []struct {
+		path   string
+		marker string
+	}{
+		{"/preview/register?variant=error", "already taken"},
+		{"/preview/mfa?variant=error", "That code is not valid"},
+		{"/preview/mfa-enroll", "JBSWY3DPEHPK3PXP"},
+		{"/preview/profile?variant=empty", "No authenticator"},
+		{"/preview/profile?variant=unverified", "Email not verified"},
+		{"/preview/profile?variant=mfa", "Turn off authenticator"},
+		{"/preview/organization", "Field Notes"},
+		{"/preview/device?variant=confirm", "ABCD-EFGH"},
+		{"/preview/device?variant=denied", "Request denied"},
+		{"/preview/oob", "a1b2c3d4e5f6"},
+		{"/preview/oob?variant=error", "access_denied"},
+		{"/preview/oob-helper", "NJcnjhk1_VVaQXYs6yQ"},
+		{"/preview/push-enroll", "eyJhbGciOiJSUzI1NiJ9.preview.signature"},
+		{"/preview/push-approve?variant=empty", "Nothing is waiting"},
+		{"/preview/forgot?variant=sent", "reset link is on its way"},
+		{"/preview/reset?variant=done", "password has been updated"},
+		{"/preview/verify-email", "Your email address is verified."},
+		{"/preview/logout?variant=done", "session has ended"},
+		{"/preview/login?variant=nope", `name="password"`},
+	}
+	for _, page := range pages {
+		got := previewGet(t, router, page.path)
+		if got.Code != http.StatusOK || !strings.Contains(got.Body.String(), page.marker) {
+			t.Fatalf("%s %d %s", page.path, got.Code, got.Body.String())
+		}
+	}
+}
+
 func previewController(t *testing.T, ui bool) *WebController {
 	t.Helper()
 	cfg := config.DefaultConfig()
