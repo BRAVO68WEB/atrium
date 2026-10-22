@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/bravo68web/oauth-impl/internal/oobcode"
+	"github.com/bravo68web/oauth-impl/internal/version"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
@@ -39,10 +40,12 @@ func main() {
 
 func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "oauth-cli",
-		Short: "OAuth Implementation Server Management CLI",
-		Long:  "A CLI tool for managing the OAuth Implementation Server",
+		Use:     "oauth-cli",
+		Short:   "OAuth Implementation Server Management CLI",
+		Long:    "A CLI tool for managing the OAuth Implementation Server",
+		Version: version.Line(),
 	}
+	rootCmd.SetVersionTemplate("{{.Name}} {{.Version}}\n")
 
 	rootCmd.PersistentFlags().StringVar(&serverURL, "server", "http://127.0.0.1:8080", "OAuth server URL")
 	rootCmd.PersistentFlags().StringVar(&mgmtClientID, "client-id", "", "Management client ID")

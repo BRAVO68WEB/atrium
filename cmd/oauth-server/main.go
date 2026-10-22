@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -19,6 +21,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/database"
 	"github.com/bravo68web/oauth-impl/internal/queue"
 	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/oauth-impl/internal/version"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -45,13 +48,48 @@ func loadRuntimeConfig(flagPath string) (*config.Config, error) {
 	return cfg, nil
 }
 
-func main() {
-	configPath := flag.String("config", "", "Path to config file")
-	port := flag.Int("port", 0, "Server port (overrides config)")
-	dbPath := flag.String("db", "", "Database path (overrides config)")
-	flag.Parse()
+var errVersion = errors.New("version")
 
-	cfg, err := loadRuntimeConfig(*configPath)
+type serverOptions struct {
+	configPath string
+	port       int
+	dbPath     string
+}
+
+func parseArgs(args []string, out io.Writer) (serverOptions, error) {
+	fs := flag.NewFlagSet("oauth-server", flag.ContinueOnError)
+	fs.SetOutput(out)
+	var opt serverOptions
+	var showVersion bool
+	fs.StringVar(&opt.configPath, "config", "", "Path to config file")
+	fs.IntVar(&opt.port, "port", 0, "Server port (overrides config)")
+	fs.StringVar(&opt.dbPath, "db", "", "Database path (overrides config)")
+	fs.BoolVar(&showVersion, "version", false, "Print the version and exit")
+	fs.Usage = func() {
+		fmt.Fprintf(out, "Usage: oauth-server [flags]\n\n")
+		fmt.Fprintf(out, "oauth-server is the OAuth and OIDC server.\n\n")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return serverOptions{}, err
+	}
+	if showVersion {
+		fmt.Fprintf(out, "oauth-server %s\n", version.Line())
+		return serverOptions{}, errVersion
+	}
+	return opt, nil
+}
+
+func main() {
+	opt, err := parseArgs(os.Args[1:], os.Stdout)
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) || errors.Is(err, errVersion) {
+			os.Exit(0)
+		}
+		os.Exit(2)
+	}
+
+	cfg, err := loadRuntimeConfig(opt.configPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
@@ -69,11 +107,11 @@ func main() {
 		}
 	}()
 
-	if *port > 0 {
-		cfg.Server.Port = *port
+	if opt.port > 0 {
+		cfg.Server.Port = opt.port
 	}
-	if *dbPath != "" {
-		cfg.Database.Path = *dbPath
+	if opt.dbPath != "" {
+		cfg.Database.Path = opt.dbPath
 	}
 
 	if err := os.MkdirAll(".", 0755); err != nil {
@@ -172,6 +210,7 @@ func main() {
 ║                    OAuth Implementation Server               ║
 ╠══════════════════════════════════════════════════════════════╣
 ║  Server:      %s://%s:%-25s ║
+║  Version:     %-46s ║
 ║  Database:    %-46s ║
 ║  Queue:       %-46s ║
 ║  MFA:         %-46s ║
@@ -222,14 +261,16 @@ Endpoints:
 
   Health:
     GET  /health
+    GET  /version
 
 `, protocol, cfg.Server.Host, fmt.Sprintf("%d", cfg.Server.Port),
+		version.Current().Version,
 		cfg.Database.Path, cfg.Queue.Type, mfaStatus(cfg),
 		tlsStatus(cfg), mtlsStatus(cfg), dpopStatus(cfg))
 
 	// Start server
 	go func() {
-		log.Printf("Starting OAuth server on %s://%s:%d", protocol, cfg.Server.Host, cfg.Server.Port)
+		log.Printf("Starting OAuth server %s on %s://%s:%d", version.Line(), protocol, cfg.Server.Host, cfg.Server.Port)
 		if cfg.Server.TLS.Enabled {
 			if err := httpServer.ListenAndServeTLS(cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("Server failed: %v", err)

@@ -72,6 +72,37 @@ paths:
               example:
                 status: ok
 
+  /version:
+    get:
+      tags: [Health]
+      summary: Build version
+      description: |
+        Returns the build version. No token is required.
+        A local build returns `{"version":"dev"}`. A release build
+        also returns `commit` and `date`.
+      operationId: buildVersion
+      responses:
+        "200":
+          description: Build version
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version]
+                properties:
+                  version:
+                    type: string
+                    description: Release version, or dev for a local build
+                    example: dev
+                  commit:
+                    type: string
+                    description: Git commit recorded at build time
+                  date:
+                    type: string
+                    description: UTC build time
+              example:
+                version: dev
+
   /login/social/{provider}:
     get:
       tags: [Social]

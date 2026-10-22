@@ -6,9 +6,14 @@ COPY . .
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
+ARG VERSION=dev
+ARG COMMIT=
+ARG DATE=
 RUN variant="$TARGETVARIANT"; \
     CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" GOARM="${variant#v}" \
-    go build -trimpath -ldflags="-s -w" -o /oauth-server ./cmd/oauth-server
+    go build -trimpath \
+      -ldflags="-s -w -X github.com/bravo68web/oauth-impl/internal/version.Version=${VERSION} -X github.com/bravo68web/oauth-impl/internal/version.Commit=${COMMIT} -X github.com/bravo68web/oauth-impl/internal/version.Date=${DATE}" \
+      -o /oauth-server ./cmd/oauth-server
 
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates \

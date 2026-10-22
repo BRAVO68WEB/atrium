@@ -10,8 +10,11 @@ builds:
       - CGO_ENABLED=0
     flags:
       - -trimpath
-    ldflags:
+    ldflags: &ldflags
       - -s -w
+      - -X github.com/bravo68web/oauth-impl/internal/version.Version={{.Version}}
+      - -X github.com/bravo68web/oauth-impl/internal/version.Commit={{.Commit}}
+      - -X github.com/bravo68web/oauth-impl/internal/version.Date={{.Date}}
     goos:
       - linux
       - windows
@@ -30,8 +33,7 @@ builds:
       - CGO_ENABLED=0
     flags:
       - -trimpath
-    ldflags:
-      - -s -w
+    ldflags: *ldflags
     goos:
       - linux
       - windows
@@ -50,8 +52,7 @@ builds:
       - CGO_ENABLED=0
     flags:
       - -trimpath
-    ldflags:
-      - -s -w
+    ldflags: *ldflags
     goos:
       - linux
       - windows

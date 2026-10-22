@@ -36,6 +36,11 @@ from the binary.
 
 `GET /health` returns `{"status":"ok"}`.
 
+`oauth-server --version` prints the build version. `--help` lists
+`--config`, `--port`, `--db`, and `--version`. `GET /version` needs no
+token. A local build returns `{"version":"dev"}`. A release build adds
+`commit` and `date`.
+
 ## TLS
 
 Set `server.tls.enabled` and point `cert_file` and `key_file` at the

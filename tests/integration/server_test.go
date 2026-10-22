@@ -15,6 +15,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/queue"
 	"github.com/bravo68web/oauth-impl/internal/server"
 	"github.com/bravo68web/oauth-impl/internal/testpg"
+	"github.com/bravo68web/oauth-impl/internal/version"
 )
 
 func setupTestServer(t *testing.T) (*httptest.Server, func()) {
@@ -121,6 +122,29 @@ func TestHealthEndpoint(t *testing.T) {
 
 	if result["status"] != "ok" {
 		t.Errorf("Expected status 'ok', got %q", result["status"])
+	}
+}
+
+func TestVersionEndpoint(t *testing.T) {
+	ts, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	resp, err := http.Get(ts.URL + "/version")
+	if err != nil {
+		t.Fatalf("Failed to get version: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	var result map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	info := version.Current()
+	if result["version"] != info.Version || result["commit"] != info.Commit || result["date"] != info.Date {
+		t.Fatalf("got %#v", result)
 	}
 }
 
