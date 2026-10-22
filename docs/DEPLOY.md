@@ -149,7 +149,10 @@ docker run --rm -p 8080:8080 ghcr.io/bravo68web/oauth-impl:1.2.3
 ```
 
 That container listens on port 8080 and stores SQLite in its working
-directory. Mount a config when you want Postgres or TLS:
+directory. With no config file, it uses the same built-in defaults as
+`just run`. Those defaults are for a local trial: HTTP only, issuer
+`http://localhost:8080`, PKCE not required, and plain PKCE allowed.
+Mount a config when you want Postgres, TLS, or stricter token rules:
 
 ```bash
 docker run --rm -p 8080:8080 \
