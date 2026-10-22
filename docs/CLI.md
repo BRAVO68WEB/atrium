@@ -15,6 +15,13 @@ just build-mobile
 
 Binaries land in `bin/`.
 
+## Version
+
+`oauth-server --version`, `oauth-cli --version`, and
+`oauth-mobile --version` print the build version. `--help` lists the
+flags. `GET /version` returns the same version as JSON. A local build
+reports `dev`. A release build adds the commit and the build time.
+
 ## Credentials
 
 Both tools share these flags:

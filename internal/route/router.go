@@ -21,6 +21,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/push"
 	"github.com/bravo68web/oauth-impl/internal/service"
 	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/oauth-impl/internal/version"
 )
 
 type Router struct {
@@ -120,6 +121,9 @@ func (r *Router) setupRoutes() {
 		writeJSON(w, http.StatusOK, map[string]string{
 			"status": "ok",
 		})
+	})
+	r.mux.Get("/version", func(w http.ResponseWriter, req *http.Request) {
+		writeJSON(w, http.StatusOK, version.Current())
 	})
 
 	r.mux.Route("/api", func(r2 chi.Router) {

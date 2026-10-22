@@ -1,30 +1,32 @@
 # justfile - Command runner for oauth-impl
 
+ldflags := '-s -w -X github.com/bravo68web/oauth-impl/internal/version.Version=dev -X github.com/bravo68web/oauth-impl/internal/version.Commit=$(git rev-parse --short=12 HEAD 2>/dev/null || true) -X github.com/bravo68web/oauth-impl/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+
 # Default recipe - show available commands
 default:
     @just --list
 
 # Build all binaries. Rebuild after editing internal/hashalgo/algo.go.
 build:
-    go build -o bin/oauth-server ./cmd/oauth-server
-    go build -o bin/oauth-cli ./cmd/oauth-cli
-    go build -o bin/oauth-mobile ./cmd/oauth-mobile
+    go build -trimpath -ldflags="{{ldflags}}" -o bin/oauth-server ./cmd/oauth-server
+    go build -trimpath -ldflags="{{ldflags}}" -o bin/oauth-cli ./cmd/oauth-cli
+    go build -trimpath -ldflags="{{ldflags}}" -o bin/oauth-mobile ./cmd/oauth-mobile
 
 # Build server only
 build-server:
-    go build -o bin/oauth-server ./cmd/oauth-server
+    go build -trimpath -ldflags="{{ldflags}}" -o bin/oauth-server ./cmd/oauth-server
 
 # Build CLI only
 build-cli:
-    go build -o bin/oauth-cli ./cmd/oauth-cli
+    go build -trimpath -ldflags="{{ldflags}}" -o bin/oauth-cli ./cmd/oauth-cli
 
 # Build mobile CLI only
 build-mobile:
-    go build -o bin/oauth-mobile ./cmd/oauth-mobile
+    go build -trimpath -ldflags="{{ldflags}}" -o bin/oauth-mobile ./cmd/oauth-mobile
 
 # Run the server from the project root. Loads config.yaml and recompiles algo.go.
 run:
-    go run cmd/oauth-server/main.go
+    go run -trimpath -ldflags="{{ldflags}}" cmd/oauth-server/main.go
 
 # Run the server with hot reload (requires air)
 dev:
