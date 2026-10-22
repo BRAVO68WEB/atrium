@@ -99,7 +99,17 @@ func TestResetAndLoginMail(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodPost, "/", nil)
 	req.RemoteAddr = "127.0.0.1:1234"
+	req.Header.Set("User-Agent", "visit https://evil.example\r\nBcc: eve@example.com")
 	account.Record(user, req, true, false)
+	signIn := ""
+	for _, msg := range mail.msgs {
+		if strings.Contains(msg, "New sign-in") {
+			signIn = msg
+		}
+	}
+	if signIn == "" || !strings.Contains(signIn, "127.0.0.1") || strings.Contains(signIn, "evil.example") || strings.Contains(signIn, "Bcc:") {
+		t.Fatalf("sign-in mail %q", signIn)
+	}
 	events, err := account.Activity(user.ID, 10)
 	if err != nil || len(events) != 1 || !events[0].Success {
 		t.Fatalf("events %#v %v", events, err)

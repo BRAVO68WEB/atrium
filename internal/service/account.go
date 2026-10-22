@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -405,8 +406,12 @@ func (a *AccountService) maybeLoginMail(user *models.User, ev *models.LoginEvent
 	if !a.markMail("login:"+user.ID, 10*time.Minute) {
 		return
 	}
+	ip, err := a.storedIP(user.ID)
+	if err != nil {
+		log.Printf("login mail ip: %v", err)
+	}
 	if err := a.sendMail(user, "new_sign_in", mailer.Data{
-		Time: ev.CreatedAt.Format(time.RFC3339), IP: ev.IP, Agent: ev.UserAgent,
+		Time: ev.CreatedAt.Format(time.RFC3339), IP: ip,
 	}); err != nil {
 		log.Printf("login mail: %v", err)
 	}
@@ -429,30 +434,48 @@ func (a *AccountService) maybeFailMail(user *models.User, ev *models.LoginEvent)
 	if !a.markMail("fail:"+user.ID, time.Hour) {
 		return
 	}
-	if err := a.sendMail(user, "login_failed", mailer.Data{Count: fmt.Sprintf("%d", n), IP: ev.IP}); err != nil {
+	ip, ipErr := a.storedIP(user.ID)
+	if ipErr != nil {
+		log.Printf("failed-login mail ip: %v", ipErr)
+	}
+	if err := a.sendMail(user, "login_failed", mailer.Data{Count: fmt.Sprintf("%d", n), IP: ip}); err != nil {
 		log.Printf("failed-login mail: %v", err)
 	}
 }
 
+func (a *AccountService) storedIP(userID string) (string, error) {
+	if a == nil || a.logins == nil || userID == "" {
+		return "", nil
+	}
+	return a.logins.LatestIP(userID)
+}
+
 func (a *AccountService) sendMail(user *models.User, name string, data mailer.Data) error {
-	if a == nil || a.mail == nil || user == nil || user.Email == "" {
+	if a == nil || a.mail == nil || user == nil || user.ID == "" || a.userRepo == nil {
 		return nil
 	}
-	data.Issuer = mailer.SanitizeText(a.issuer)
-	data.Username = mailer.SanitizeText(user.Username)
-	data.Email = mailer.SanitizeText(user.Email)
-	data.Link = mailer.SanitizeText(data.Link)
-	data.TTL = mailer.SanitizeText(data.TTL)
-	data.Time = mailer.SanitizeText(data.Time)
-	data.IP = mailer.SanitizeText(data.IP)
-	data.Agent = mailer.SanitizeText(data.Agent)
-	data.Count = mailer.SanitizeText(data.Count)
+	stored, err := a.userRepo.GetByID(user.ID)
+	if err != nil {
+		return err
+	}
+	if stored == nil || strings.TrimSpace(stored.Email) == "" {
+		return nil
+	}
+	data.Issuer = mailer.OneLine(a.issuer)
+	data.Username = mailer.OneLine(stored.Username)
+	data.Email = mailer.OneLine(stored.Email)
+	data.Link = mailer.OneLine(data.Link)
+	data.TTL = mailer.OneLine(data.TTL)
+	data.Time = mailer.OneLine(data.Time)
+	data.IP = mailer.OneLine(data.IP)
+	data.Agent = ""
+	data.Count = mailer.OneLine(data.Count)
 
 	subject, body, err := mailer.Render(a.templates, name, data)
 	if err != nil {
 		return err
 	}
-	return a.mail.Send(user.Email, subject, body)
+	return a.mail.Send(stored.Email, subject, body)
 }
 
 func (a *AccountService) markMail(key string, window time.Duration) bool {

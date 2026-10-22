@@ -32,7 +32,7 @@ var builtinMail = map[string]string{
 	"verify":           "Subject: Confirm your email\nConfirm your email:\n\n{{.Link}}\n",
 	"reset":            "Subject: Password reset\nReset your password:\n\n{{.Link}}\n\nThis link expires in {{.TTL}}.\n",
 	"password_changed": "Subject: Password changed\nThe password for {{.Username}} was changed.\n\nIf you did not do this, reset it from {{.Issuer}}/forgot\n",
-	"new_sign_in":      "Subject: New sign-in\nNew sign-in for {{.Username}}\n\nTime: {{.Time}}\nIP: {{.IP}}\nAgent: {{.Agent}}\n",
+	"new_sign_in":      "Subject: New sign-in\nNew sign-in for {{.Username}}\n\nTime: {{.Time}}\nIP: {{.IP}}\n",
 	"login_failed":     "Subject: Failed sign-in attempts\n{{.Count}} failed sign-in attempts for {{.Username}} in the last 15 minutes.\n\nLatest IP: {{.IP}}\n",
 }
 

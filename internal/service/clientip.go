@@ -20,15 +20,15 @@ func ClientIP(r *http.Request, trusted []string) string {
 	if r == nil {
 		return ""
 	}
-	peer := hostOnly(r.RemoteAddr)
+	peer := canonicalIP(r.RemoteAddr)
 	nets := trustedNets(trusted)
-	if !ipInNets(peer, nets) {
+	if peer != "" && !ipInNets(peer, nets) {
 		return peer
 	}
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		parts := strings.Split(xff, ",")
 		for i := len(parts) - 1; i >= 0; i-- {
-			ip := hostOnly(strings.TrimSpace(parts[i]))
+			ip := canonicalIP(parts[i])
 			if ip == "" {
 				continue
 			}
@@ -37,10 +37,21 @@ func ClientIP(r *http.Request, trusted []string) string {
 			}
 		}
 	}
-	if real := hostOnly(strings.TrimSpace(r.Header.Get("X-Real-IP"))); real != "" {
+	if real := canonicalIP(r.Header.Get("X-Real-IP")); real != "" {
 		return real
 	}
 	return peer
+}
+
+func canonicalIP(value string) string {
+	parsed := net.ParseIP(hostOnly(value))
+	if parsed == nil {
+		return ""
+	}
+	if v4 := parsed.To4(); v4 != nil {
+		return v4.String()
+	}
+	return parsed.String()
 }
 
 func trustedNets(values []string) []*net.IPNet {

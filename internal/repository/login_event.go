@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,6 +30,19 @@ func (r *LoginEventRepository) Insert(ev *models.LoginEvent) error {
 		ev.ID, ev.UserID, boolInt(ev.Success), boolInt(ev.MFA), ev.IP, ev.UserAgent, ev.CreatedAt,
 	)
 	return err
+}
+
+// LatestIP returns the newest stored address for userID.
+// Mail uses this row instead of the request header.
+func (r *LoginEventRepository) LatestIP(userID string) (string, error) {
+	var ip string
+	err := r.db.QueryRow(`SELECT COALESCE(ip, '') FROM login_events
+		WHERE user_id = ? AND COALESCE(ip, '') <> ''
+		ORDER BY created_at DESC LIMIT 1`, userID).Scan(&ip)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return ip, err
 }
 
 func (r *LoginEventRepository) ListByUser(userID string, limit int) ([]*models.LoginEvent, error) {
