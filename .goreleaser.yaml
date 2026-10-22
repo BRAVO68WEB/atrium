@@ -1,0 +1,88 @@
+version: 2
+
+project_name: oauth-impl
+
+builds:
+  - id: oauth-server
+    main: ./cmd/oauth-server
+    binary: oauth-server
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - "386"
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: "386"
+  - id: oauth-cli
+    main: ./cmd/oauth-cli
+    binary: oauth-cli
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - "386"
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: "386"
+  - id: oauth-mobile
+    main: ./cmd/oauth-mobile
+    binary: oauth-mobile
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - "386"
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: "386"
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - src: internal/hashalgo/algo.go
+        dst: internal/hashalgo
+        strip_parent: true
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+  sort: asc
+
+release:
+  prerelease: auto
