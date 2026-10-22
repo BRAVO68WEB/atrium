@@ -66,15 +66,15 @@ func parseArgs(args []string, out io.Writer) (serverOptions, error) {
 	fs.StringVar(&opt.dbPath, "db", "", "Database path (overrides config)")
 	fs.BoolVar(&showVersion, "version", false, "Print the version and exit")
 	fs.Usage = func() {
-		fmt.Fprintf(out, "Usage: oauth-server [flags]\n\n")
-		fmt.Fprintf(out, "oauth-server is the OAuth and OIDC server.\n\n")
+		_, _ = fmt.Fprintf(out, "Usage: oauth-server [flags]\n\n")
+		_, _ = fmt.Fprintf(out, "oauth-server is the OAuth and OIDC server.\n\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		return serverOptions{}, err
 	}
 	if showVersion {
-		fmt.Fprintf(out, "oauth-server %s\n", version.Line())
+		_, _ = fmt.Fprintf(out, "oauth-server %s\n", version.Line())
 		return serverOptions{}, errVersion
 	}
 	return opt, nil
