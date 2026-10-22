@@ -275,7 +275,9 @@ keeps the built-in text. A file that does not parse stops startup. An
 empty `templates_dir` keeps every built-in message.
 
 Templates can use `Issuer`, `Username`, `Email`, `Link`, `Code`, `TTL`,
-`IP`, `Time`, `Agent`, and `Count`.
+`IP`, `Time`, and `Count`. The server leaves `Agent` empty. A new
+sign-in message includes the stored IP and does not include the
+browser user agent.
 
 ## Organizations
 

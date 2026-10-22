@@ -22,6 +22,10 @@ func TestClientIPUsesForwardedHeaderFromTrustedProxy(t *testing.T) {
 	if got != "198.51.100.4" {
 		t.Fatalf("ip %q", got)
 	}
+	req.Header.Set("X-Forwarded-For", "click.evil.example, 198.51.100.4")
+	if got := ClientIP(req, []string{"10.0.0.0/8"}); got != "198.51.100.4" {
+		t.Fatalf("non-ip forwarded value %q", got)
+	}
 	if err := ValidateTrustedProxies([]string{"not-a-cidr"}); err == nil {
 		t.Fatal("expected invalid CIDR")
 	}

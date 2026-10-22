@@ -45,12 +45,20 @@ func New(cfg config.SMTPConfig) (Mailer, error) {
 func (m *smtpMailer) Enabled() bool { return true }
 
 func (m *smtpMailer) Send(to, subject, text string) error {
-	if err := validMailHeaders(to, m.cfg.From, subject); err != nil {
+	toAddr, err := mailbox(to)
+	if err != nil {
 		return err
+	}
+	fromAddr, err := mailbox(m.cfg.From)
+	if err != nil {
+		return err
+	}
+	subject = oneLine(subject)
+	if subject == "" {
+		return fmt.Errorf("mail subject is empty")
 	}
 	addr := net.JoinHostPort(m.cfg.Host, strconv.Itoa(m.cfg.Port))
 	var conn net.Conn
-	var err error
 	tlsConfig := &tls.Config{ServerName: m.cfg.Host}
 	if m.cfg.ImplicitTLS {
 		conn, err = tls.Dial("tcp", addr, tlsConfig)
@@ -77,10 +85,10 @@ func (m *smtpMailer) Send(to, subject, text string) error {
 			return err
 		}
 	}
-	if err := client.Mail(m.cfg.From); err != nil {
+	if err := client.Mail(fromAddr); err != nil {
 		return err
 	}
-	if err := client.Rcpt(to); err != nil {
+	if err := client.Rcpt(toAddr); err != nil {
 		return err
 	}
 	w, err := client.Data()
@@ -89,7 +97,7 @@ func (m *smtpMailer) Send(to, subject, text string) error {
 	}
 	safeText := sanitizeMailText(text)
 	msg := fmt.Sprintf("To: %s\r\nFrom: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
-		to, m.cfg.From, subject, safeText)
+		toAddr, fromAddr, subject, safeText)
 	if _, err := w.Write([]byte(msg)); err != nil {
 		return err
 	}
@@ -126,16 +134,30 @@ func SanitizeText(text string) string {
 	return sanitizeMailText(text)
 }
 
-// validMailHeaders rejects header values that could add extra SMTP headers.
-func validMailHeaders(to, from, subject string) error {
-	if strings.ContainsAny(to, "\r\n") || strings.ContainsAny(from, "\r\n") || strings.ContainsAny(subject, "\r\n") {
-		return fmt.Errorf("mail header contains a newline")
+// OneLine removes breaks and control characters from a single mail field.
+func OneLine(text string) string {
+	return oneLine(text)
+}
+
+func oneLine(text string) string {
+	text = sanitizeMailText(text)
+	text = strings.ReplaceAll(text, "\n", " ")
+	return strings.Join(strings.Fields(text), " ")
+}
+
+// mailbox returns the addr-spec. A display name or an extra header is rejected.
+func mailbox(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.ContainsAny(value, "\r\n") {
+		return "", fmt.Errorf("invalid mail address")
 	}
-	if _, err := mail.ParseAddress(to); err != nil {
-		return fmt.Errorf("invalid recipient")
+	addr, err := mail.ParseAddress(value)
+	if err != nil {
+		return "", fmt.Errorf("invalid mail address")
 	}
-	if _, err := mail.ParseAddress(from); err != nil {
-		return fmt.Errorf("invalid from address")
+	spec := strings.TrimSpace(addr.Address)
+	if spec == "" || strings.ContainsAny(spec, "\r\n") || strings.ContainsAny(spec, " \t") {
+		return "", fmt.Errorf("invalid mail address")
 	}
-	return nil
+	return spec, nil
 }
