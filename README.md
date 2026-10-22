@@ -45,6 +45,10 @@ just run
 With no `config.yaml`, the server listens on `http://localhost:8080`. When
 that file is present, `just run` uses its port and TLS settings.
 
+A `v*` tag publishes release archives and
+`ghcr.io/bravo68web/oauth-impl` for amd64, arm64, and arm/v7. See
+[Deploy](docs/DEPLOY.md).
+
 Postgres install:
 
 ```bash

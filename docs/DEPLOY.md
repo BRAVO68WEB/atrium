@@ -112,6 +112,57 @@ exports OTLP over HTTP to `telemetry.otlp_endpoint`. Enabling traces
 with an empty endpoint is a startup error. Spans omit tokens, codes,
 secrets, and `Authorization`.
 
+## Release
+
+Pushing a `v*` tag is the only publish step. A tag such as `v1.2.3`
+creates a GitHub Release and a container image. Pushes to `main` do not
+publish either one.
+
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+The release archive for each OS and architecture contains
+`oauth-server`, `oauth-cli`, and `oauth-mobile`, plus
+`internal/hashalgo/algo.go`. Linux and macOS archives are `.tar.gz`.
+Windows archives are `.zip`. The names look like
+`oauth-impl_1.2.3_linux_amd64.tar.gz` and
+`oauth-impl_1.2.3_windows_386.zip`.
+
+| OS | amd64 | 386 | arm64 |
+| --- | --- | --- | --- |
+| linux | yes | yes | yes |
+| windows | yes | yes | yes |
+| darwin | yes | no | yes |
+
+macOS has no 32-bit build. Extract an archive and run `./oauth-server`
+from that directory so startup can read the hasher file.
+
+The server image is `ghcr.io/bravo68web/oauth-impl`. One tag covers
+`linux/amd64`, `linux/arm64`, and `linux/arm/v7`. A stable tag also
+publishes `1.2.3`, `1.2`, `1`, and `latest`. A prerelease tag such as
+`v1.2.3-rc.1` publishes `1.2.3-rc.1` and leaves `latest` where it is.
+
+```bash
+docker run --rm -p 8080:8080 ghcr.io/bravo68web/oauth-impl:1.2.3
+```
+
+That container listens on port 8080 and stores SQLite in its working
+directory. Mount a config when you want Postgres or TLS:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -v "$PWD/config.yaml:/config/config.yaml:ro" \
+  ghcr.io/bravo68web/oauth-impl:1.2.3 \
+  -config /config/config.yaml
+```
+
+`deploy/compose.yaml` already passes that `-config` argument. The first
+push creates a private GHCR package. Open the package, link it to this
+repository, and set the visibility to public before other people can
+pull it.
+
 ## Related
 
 [Configuration](CONFIG.md) lists every key.
