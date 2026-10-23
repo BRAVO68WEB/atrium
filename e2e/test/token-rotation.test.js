@@ -66,6 +66,20 @@ describe("token rotation", function () {
     }, { id: passwordApp.id, secret: passwordApp.secret });
     assert.equal(family.status, 400);
     assert.equal(family.body.error, "invalid_grant");
+
+    const fresh = await tokenRequest(server.base, {
+      grant_type: "password",
+      username: user.username,
+      password: user.password,
+      scope: "openid",
+    }, passwordApp);
+    assert.equal(fresh.status, 200, JSON.stringify(fresh.body));
+    const other = await tokenRequest(server.base, {
+      grant_type: "refresh_token",
+      refresh_token: fresh.body.refresh_token,
+    }, web);
+    assert.equal(other.status, 401);
+    assert.equal(other.body.error, "invalid_client");
   });
 
   it("keeps a retired signing key in JWKS and still accepts its ID token", async function () {

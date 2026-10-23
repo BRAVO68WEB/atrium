@@ -86,4 +86,33 @@ describe("CIBA", function () {
     }, { id: client.id, secret: client.secret });
     assert.equal(issued.body.error, "access_denied");
   });
+
+  it("stays pending for an unknown account and rejects a scope the client lacks", async function () {
+    const unknown = await fetch(`${server.base}/oauth/bc-authorize`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${client.id}:${client.secret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ login_hint: "nobody-no-such-user", scope: "openid" }),
+    });
+    const request = await unknown.json();
+    assert.equal(unknown.status, 200, JSON.stringify(request));
+    const pending = await tokenRequest(server.base, {
+      grant_type: "urn:openid:params:grant-type:ciba",
+      auth_req_id: request.auth_req_id,
+    }, client);
+    assert.equal(pending.body.error, "invalid_grant");
+    const scope = await fetch(`${server.base}/oauth/bc-authorize`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${client.id}:${client.secret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ login_hint: user.username, scope: "openid not-a-scope" }),
+    });
+    const body = await scope.json();
+    assert.equal(scope.status, 400);
+    assert.equal(body.error, "invalid_scope");
+  });
 });

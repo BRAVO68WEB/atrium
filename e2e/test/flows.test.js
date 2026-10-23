@@ -81,6 +81,13 @@ describe("standard OAuth flows", function () {
     assert.match(discovery.body.authorization_endpoint, /\/oauth\/authorize$/);
     assert.match(discovery.body.token_endpoint, /\/oauth\/token$/);
     assert.match(discovery.body.jwks_uri, /\/oidc\/jwks$/);
+    assert.match(discovery.body.revocation_endpoint, /\/oauth\/revoke$/);
+    assert.match(discovery.body.introspection_endpoint, /\/oauth\/introspect$/);
+    assert.match(discovery.body.pushed_authorization_request_endpoint, /\/oauth\/par$/);
+    assert.match(discovery.body.device_authorization_endpoint, /\/oauth\/device$/);
+    assert.match(discovery.body.registration_endpoint, /\/oauth\/register$/);
+    assert.match(discovery.body.userinfo_endpoint, /\/oidc\/userinfo$/);
+    assert.deepEqual(discovery.body.backchannel_token_delivery_modes_supported, ["poll"]);
     const jwks = await readBody(await fetch(`${server.base}/oidc/jwks`));
     assert.equal(jwks.status, 200);
     assert.ok(jwks.body.keys.some((key) => key.alg === "RS256" && key.kid));
@@ -515,6 +522,162 @@ describe("standard OAuth flows", function () {
       code_verifier: inside.verifier,
     }, parApp);
     assert.equal(issued.status, 200, JSON.stringify(issued.body));
+    await page.context().close();
+  });
+
+  it("rejects a bad password, an unknown user, and a scope the client lacks", async function () {
+    const wrong = await tokenRequest(server.base, {
+      grant_type: "password",
+      username: user.username,
+      password: "not-the-password",
+    }, passwordApp);
+    assert.equal(wrong.body.error, "invalid_grant");
+    assert.match(wrong.body.error_description, /Invalid username or password/);
+    const missing = await tokenRequest(server.base, {
+      grant_type: "password",
+      username: "nobody-no-such-user",
+      password: user.password,
+    }, passwordApp);
+    assert.equal(missing.body.error, "invalid_grant");
+    assert.match(missing.body.error_description, /Invalid username or password/);
+    const scope = await tokenRequest(server.base, {
+      grant_type: "password",
+      username: user.username,
+      password: user.password,
+      scope: "openid not-a-scope",
+    }, passwordApp);
+    assert.equal(scope.status, 400);
+    assert.equal(scope.body.error, "invalid_scope");
+  });
+
+  it("rejects a bad client secret and a scope the service lacks", async function () {
+    const wrong = await tokenRequest(server.base, {
+      grant_type: "client_credentials",
+      scope: "openid",
+    }, { id: service.id, secret: "wrong-secret" });
+    assert.equal(wrong.status, 401);
+    assert.equal(wrong.body.error, "invalid_client");
+    const scope = await tokenRequest(server.base, {
+      grant_type: "client_credentials",
+      scope: "openid not-a-scope",
+    }, service);
+    assert.equal(scope.status, 400);
+    assert.equal(scope.body.error, "invalid_scope");
+  });
+
+  it("reads and updates the signed-in user at /api/me", async function () {
+    const issued = await tokenRequest(server.base, {
+      grant_type: "password",
+      username: user.username,
+      password: user.password,
+      scope: "openid",
+    }, passwordApp);
+    assert.equal(issued.status, 200, JSON.stringify(issued.body));
+    const me = await readBody(await fetch(`${server.base}/api/me`, {
+      headers: { Authorization: `Bearer ${issued.body.access_token}` },
+    }));
+    assert.equal(me.status, 200, JSON.stringify(me.body));
+    assert.equal(me.body.username, user.username);
+    const patched = await readBody(await fetch(`${server.base}/api/me`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${issued.body.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email: `${user.username}-next@example.com` }),
+    }));
+    assert.equal(patched.status, 200, JSON.stringify(patched.body));
+    assert.equal(patched.body.email, `${user.username}-next@example.com`);
+    const serviceToken = await tokenRequest(server.base, {
+      grant_type: "client_credentials",
+      scope: "openid",
+    }, service);
+    const denied = await readBody(await fetch(`${server.base}/api/me`, {
+      headers: { Authorization: `Bearer ${serviceToken.body.access_token}` },
+    }));
+    assert.equal(denied.status, 403);
+  });
+
+  it("denies a device code and rejects a code that was not issued", async function () {
+    const device = await readBody(await fetch(`${server.base}/oauth/device`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${deviceApp.id}:${deviceApp.secret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ scope: "openid" }),
+    }));
+    assert.equal(device.status, 200, JSON.stringify(device.body));
+    const early = await tokenRequest(server.base, {
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+      device_code: device.body.device_code,
+    }, deviceApp);
+    assert.equal(early.body.error, "authorization_pending");
+    const blocked = await readBody(await fetch(`${server.base}/oauth/device`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${deviceApp.id}:${deviceApp.secret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ scope: "openid not-a-scope" }),
+    }));
+    assert.equal(blocked.body.error, "invalid_scope");
+    const page = await newPage();
+    await page.goto(`${server.base}/login`);
+    await submitLogin(page, user.username, user.password);
+    await page.waitForURL(/oauth\/authorize/);
+    await page.goto(`${server.base}/device`);
+    await page.fill("#user_code", "ZZZZ-ZZZZ");
+    await page.click("button[type=submit]");
+    await page.waitForSelector("text=invalid or has expired");
+    await page.goto(`${server.base}/device?user_code=${encodeURIComponent(device.body.user_code)}`);
+    await page.click("button[value=deny]");
+    await page.waitForSelector("text=Request denied");
+    const issued = await tokenRequest(server.base, {
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+      device_code: device.body.device_code,
+    }, deviceApp);
+    assert.equal(issued.body.error, "access_denied");
+    await page.context().close();
+  });
+
+  it("keeps the browser session when the hint belongs to another client", async function () {
+    const pkce = pkcePair();
+    const url = new URL(`${server.base}/oauth/authorize`);
+    url.searchParams.set("client_id", web.id);
+    url.searchParams.set("redirect_uri", redirectURI);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "openid");
+    url.searchParams.set("nonce", "logout-nonce");
+    url.searchParams.set("code_challenge", pkce.challenge);
+    url.searchParams.set("code_challenge_method", pkce.method);
+    const page = await newPage();
+    const callback = await authorize(page, url.toString(), user);
+    const browserToken = await tokenRequest(server.base, {
+      grant_type: "authorization_code",
+      code: callback.searchParams.get("code"),
+      redirect_uri: redirectURI,
+      code_verifier: pkce.verifier,
+    }, web);
+    const other = await tokenRequest(server.base, {
+      grant_type: "password",
+      username: user.username,
+      password: user.password,
+      scope: "openid",
+    }, passwordApp);
+    await page.goto(`${server.base}/oauth/logout?id_token_hint=${encodeURIComponent(other.body.id_token)}`);
+    const still = new URL(`${server.base}/oauth/authorize`);
+    still.searchParams.set("client_id", web.id);
+    still.searchParams.set("redirect_uri", redirectURI);
+    still.searchParams.set("response_type", "code");
+    still.searchParams.set("scope", "openid");
+    still.searchParams.set("code_challenge", pkcePair().challenge);
+    still.searchParams.set("code_challenge_method", "S256");
+    await page.goto(still.toString());
+    assert.equal(page.url().includes("/login"), false);
+    await page.goto(`${server.base}/oauth/logout?id_token_hint=${encodeURIComponent(browserToken.body.id_token)}`);
+    await page.goto(still.toString());
+    await page.waitForSelector("#username");
     await page.context().close();
   });
 });

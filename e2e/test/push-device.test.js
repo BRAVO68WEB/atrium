@@ -189,6 +189,120 @@ describe("push authenticator enrollment", function () {
     assert.ok(issued.body.access_token);
     await page.context().close();
   });
+
+  it("denies the sign-in from the approve page", async function () {
+    const page = await openEnroll(server, user);
+    await registerDevice(server.base, await registrationToken(page), (await deviceKey()).jwk);
+    const client = await cibaClient(server, "Deny");
+    const pending = await backchannel(server, client, user.username, { binding_message: "42" });
+    await page.goto(`${server.base}/push/approve`);
+    await page.locator("button[value=deny]").click();
+    await page.waitForSelector("text=Nothing is waiting");
+    const issued = await tokenRequest(server.base, {
+      grant_type: "urn:openid:params:grant-type:ciba",
+      auth_req_id: pending.auth_req_id,
+    }, client);
+    assert.equal(issued.body.error, "access_denied");
+    await page.context().close();
+  });
+
+  it("rejects a number that was not offered", async function () {
+    const page = await openEnroll(server, user);
+    await registerDevice(server.base, await registrationToken(page), (await deviceKey()).jwk);
+    const client = await cibaClient(server, "Wrong number");
+    const pending = await backchannel(server, client, user.username, {
+      interaction_type: "number_choose",
+      binding_message: "42",
+    });
+    await page.goto(`${server.base}/push/approve`);
+    const buttons = page.locator("button[name=proof]");
+    const count = await buttons.count();
+    let wrong = "";
+    for (let i = 0; i < count; i += 1) {
+      const value = await buttons.nth(i).getAttribute("value");
+      if (value !== "42") {
+        wrong = value;
+        break;
+      }
+    }
+    assert.notEqual(wrong, "");
+    await page.locator(`button[name=proof][value="${wrong}"]`).click();
+    await page.waitForSelector("text=confirmation does not match");
+    const issued = await tokenRequest(server.base, {
+      grant_type: "urn:openid:params:grant-type:ciba",
+      auth_req_id: pending.auth_req_id,
+    }, client);
+    assert.equal(issued.body.error, "authorization_pending");
+    await page.context().close();
+  });
+
+  it("rejects an interaction type the device did not register", async function () {
+    const solo = await createUser(server, { username: shortID("limited"), password: "correct-horse" });
+    const page = await openEnroll(server, solo);
+    await registerDevice(server.base, await registrationToken(page), (await deviceKey()).jwk, "", ["boolean"]);
+    const client = await cibaClient(server, "Limited");
+    const started = await fetch(`${server.base}/oauth/bc-authorize`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        authorization: `Basic ${Buffer.from(`${client.id}:${client.secret}`).toString("base64")}`,
+      },
+      body: new URLSearchParams({
+        login_hint: solo.username,
+        scope: "openid",
+        interaction_type: "input_manual",
+        binding_message: "abcd",
+      }),
+    });
+    const body = await started.json();
+    assert.equal(started.status, 400, JSON.stringify(body));
+    assert.match(body.error_description, /does not support the interaction type/);
+    await page.context().close();
+  });
+
+  it("rejects a different DPoP key and a reused nonce", async function () {
+    const solo = await createUser(server, { username: shortID("dpop"), password: "correct-horse" });
+    const page = await openEnroll(server, solo);
+    const key = await deviceKey();
+    const registered = await registerDevice(server.base, await registrationToken(page), key.jwk, "", ["boolean"]);
+    const listed = await deviceFetch(server.base, key, "GET", `/push/pending?device_id=${registered.device_id}`, registered.device_credential);
+    assert.equal(listed.status, 200, listed.text);
+    const other = await deviceKey();
+    const mismatched = await deviceFetch(server.base, other, "GET", `/push/pending?device_id=${registered.device_id}`, registered.device_credential, listed.nonce);
+    assert.equal(mismatched.status, 401);
+    const again = await deviceFetch(server.base, key, "GET", `/push/pending?device_id=${registered.device_id}`, registered.device_credential, listed.nonce);
+    assert.equal(again.status, 400, again.text);
+    assert.match(again.text, /nonce_replayed/);
+    await page.context().close();
+  });
+
+  it("revokes the device and advertises poll only", async function () {
+    const discovered = await fetch(`${server.base}/.well-known/oauth-push-notification`);
+    const doc = await discovered.json();
+    assert.deepEqual(doc.delivery_modes_supported, ["poll"]);
+    assert.equal(doc.push_relay_endpoint, undefined);
+    const solo = await createUser(server, { username: shortID("revoked"), password: "correct-horse" });
+    const page = await openEnroll(server, solo);
+    const key = await deviceKey();
+    const registered = await registerDevice(server.base, await registrationToken(page), key.jwk, "", ["boolean"]);
+    const revoked = await deviceFetch(server.base, key, "POST", "/push/revoke", registered.device_credential, "", {
+      "content-type": "application/x-www-form-urlencoded",
+    }, `device_id=${encodeURIComponent(registered.device_id)}`);
+    assert.equal(revoked.status, 204, revoked.text);
+    const client = await cibaClient(server, "Revoked");
+    const started = await fetch(`${server.base}/oauth/bc-authorize`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        authorization: `Basic ${Buffer.from(`${client.id}:${client.secret}`).toString("base64")}`,
+      },
+      body: new URLSearchParams({ login_hint: solo.username, scope: "openid" }),
+    });
+    const body = await started.json();
+    assert.equal(started.status, 400, JSON.stringify(body));
+    assert.equal(body.error, "device_revoked");
+    await page.context().close();
+  });
 });
 
 describe("push device HTTP", function () {
@@ -335,14 +449,14 @@ async function deviceKey() {
   };
 }
 
-async function registerDevice(base, token, jwk, pushAddress) {
+async function registerDevice(base, token, jwk, pushAddress, types) {
   const response = await fetch(`${base}/push/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       registration_token: token,
       public_key: jwk,
-      interaction_types: ["boolean", "number_choose", "input_manual"],
+      interaction_types: types || ["boolean", "number_choose", "input_manual"],
       platform: "browser",
       push_address: pushAddress || "",
     }),

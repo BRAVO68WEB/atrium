@@ -76,8 +76,14 @@ func (h *Handler) HandleDeviceAuthorization(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	scope := r.Form.Get("scope")
-	scopes := crypto.NormalizeScopes(scope)
+	scopes, err := service.AllowedScopes(r.Form.Get("scope"), client.Scopes)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error":             "invalid_scope",
+			"error_description": err.Error(),
+		})
+		return
+	}
 
 	deviceCode, err := crypto.GenerateDeviceCode()
 	if err != nil {

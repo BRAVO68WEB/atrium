@@ -9,6 +9,7 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/oidc"
+	"github.com/bravo68web/oauth-impl/internal/service"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
@@ -78,10 +79,10 @@ func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 		h.logins.Record(user, r, true, false)
 	}
 
-	scope := r.Form.Get("scope")
-	scopes := crypto.NormalizeScopes(scope)
-	if len(scopes) == 0 {
-		scopes = client.Scopes
+	scopes, err := service.AllowedScopes(r.Form.Get("scope"), client.Scopes)
+	if err != nil {
+		writeTokenError(w, http.StatusBadRequest, "invalid_scope", err.Error())
+		return
 	}
 
 	orgID, orgSlug, orgCode, orgDesc := h.applyOrg(client, user, r.Form.Get("organization"))

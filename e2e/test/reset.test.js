@@ -107,4 +107,15 @@ describe("password reset", function () {
     await page.waitForSelector("text=Your account");
     await page.context().close();
   });
+
+  it("does not send mail for an unknown account", async function () {
+    const before = smtp.messages.length;
+    const page = await newPage();
+    await page.goto(`${server.base}/forgot`);
+    await page.fill("#username", "nobody-no-such-user");
+    await page.click("button[type=submit]");
+    await page.waitForSelector("text=reset link is on its way");
+    assert.equal(smtp.messages.length, before);
+    await page.context().close();
+  });
 });

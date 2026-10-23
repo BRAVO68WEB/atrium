@@ -62,7 +62,9 @@ refresh and signing-key rotation, webhooks, brute-force detection,
 password rules, PKCE, closed registration, MFA enrollment, DPoP, client
 ID metadata documents, JWT access tokens, out-of-band codes, the
 combined-code helper, on-behalf-of delegation, login identifier, pairwise
-subjects, organizations, encrypted ID tokens and AAuth discovery. Default access tokens
+subjects, organizations, encrypted ID tokens and AAuth discovery. Account
+pages, push approval, and the failure beside each grant are covered
+too. Default access tokens
 in these tests stay opaque unless a case sets
 `security.access_token_format` to `jwt`.
 
