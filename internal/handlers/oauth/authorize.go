@@ -208,6 +208,10 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "Only S256 and plain code_challenge_method are supported", state)
 			return
 		}
+		if codeChallengeMethod == "plain" && (h.cfg == nil || !h.cfg.Security.AllowPlainPKCE) {
+			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "plain PKCE is disabled", state)
+			return
+		}
 	}
 	if needsCode && h.cfg != nil && h.cfg.Security.RequirePKCE && codeChallenge == "" {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "code_challenge is required", state)

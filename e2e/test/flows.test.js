@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const http = require("node:http");
 const { startServer } = require("../support/server");
 const { pkcePair, shortID } = require("../support/pkce");
 const {
@@ -15,6 +16,7 @@ describe("standard OAuth flows", function () {
   let passwordApp;
   let deviceApp;
   let parApp;
+  let implicitApp;
   let redirectURI;
 
   before(async function () {
@@ -55,6 +57,12 @@ describe("standard OAuth flows", function () {
       name: "PAR",
       redirect_uris: redirect,
       grant_types: ["authorization_code", "refresh_token"],
+      scopes: ["openid", "profile"],
+    });
+    implicitApp = await createClient(server, {
+      name: "Implicit",
+      redirect_uris: redirect,
+      grant_types: ["implicit", "authorization_code"],
       scopes: ["openid", "profile"],
     });
   });
@@ -307,4 +315,233 @@ describe("standard OAuth flows", function () {
     }, { id: registered.body.client_id, secret: registered.body.client_secret });
     assert.equal(issued.status, 200, JSON.stringify(issued.body));
   });
+
+  it("rejects an unregistered redirect", async function () {
+    const url = new URL(`${server.base}/oauth/authorize`);
+    url.searchParams.set("client_id", web.id);
+    url.searchParams.set("redirect_uri", "https://evil.example/cb");
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "openid");
+    const response = await fetch(url, { redirect: "manual" });
+    const body = await response.json();
+    assert.equal(response.status, 400);
+    assert.equal(body.error, "invalid_request");
+    assert.equal(response.headers.get("location"), null);
+  });
+
+  it("rejects a reused code and a wrong verifier", async function () {
+    const pkce = pkcePair();
+    const url = new URL(`${server.base}/oauth/authorize`);
+    url.searchParams.set("client_id", web.id);
+    url.searchParams.set("redirect_uri", redirectURI);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "openid");
+    url.searchParams.set("code_challenge", pkce.challenge);
+    url.searchParams.set("code_challenge_method", pkce.method);
+    const page = await newPage();
+    const callback = await authorize(page, url.toString(), user);
+    const code = callback.searchParams.get("code");
+    const issued = await tokenRequest(server.base, {
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectURI,
+      code_verifier: pkce.verifier,
+    }, web);
+    assert.equal(issued.status, 200, JSON.stringify(issued.body));
+    const again = await tokenRequest(server.base, {
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectURI,
+      code_verifier: pkce.verifier,
+    }, web);
+    assert.equal(again.body.error, "invalid_grant");
+
+    const other = pkcePair();
+    url.searchParams.set("code_challenge", other.challenge);
+    const second = await authorize(page, url.toString(), user);
+    const wrong = await tokenRequest(server.base, {
+      grant_type: "authorization_code",
+      code: second.searchParams.get("code"),
+      redirect_uri: redirectURI,
+      code_verifier: pkce.verifier,
+    }, web);
+    assert.equal(wrong.body.error, "invalid_grant");
+    await page.context().close();
+  });
+
+  it("returns login_required when prompt=none has no session", async function () {
+    const pkce = pkcePair();
+    const url = new URL(`${server.base}/oauth/authorize`);
+    url.searchParams.set("client_id", web.id);
+    url.searchParams.set("redirect_uri", redirectURI);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "openid");
+    url.searchParams.set("prompt", "none");
+    url.searchParams.set("code_challenge", pkce.challenge);
+    url.searchParams.set("code_challenge_method", pkce.method);
+    const response = await fetch(url, { redirect: "manual" });
+    const body = await response.json();
+    assert.equal(response.status, 302);
+    assert.equal(body.error, "login_required");
+    assert.doesNotMatch(JSON.stringify(body), /<form/);
+  });
+
+  it("returns implicit and hybrid tokens in the fragment", async function () {
+    const page = await newPage();
+    const tokenURL = new URL(`${server.base}/oauth/authorize`);
+    tokenURL.searchParams.set("client_id", implicitApp.id);
+    tokenURL.searchParams.set("redirect_uri", redirectURI);
+    tokenURL.searchParams.set("response_type", "token");
+    tokenURL.searchParams.set("scope", "openid");
+    tokenURL.searchParams.set("state", "implicit-state");
+    const tokenCallback = await authorize(page, tokenURL.toString(), user);
+    const tokenFragment = new URLSearchParams(tokenCallback.hash.slice(1));
+    assert.ok(tokenFragment.get("access_token"));
+    assert.equal(tokenFragment.get("state"), "implicit-state");
+    assert.equal(tokenCallback.search, "");
+
+    const hybrid = pkcePair();
+    const hybridURL = new URL(`${server.base}/oauth/authorize`);
+    hybridURL.searchParams.set("client_id", implicitApp.id);
+    hybridURL.searchParams.set("redirect_uri", redirectURI);
+    hybridURL.searchParams.set("response_type", "code id_token");
+    hybridURL.searchParams.set("scope", "openid");
+    hybridURL.searchParams.set("nonce", "hybrid-nonce");
+    hybridURL.searchParams.set("state", "hybrid-state");
+    hybridURL.searchParams.set("code_challenge", hybrid.challenge);
+    hybridURL.searchParams.set("code_challenge_method", hybrid.method);
+    const hybridCallback = await authorize(page, hybridURL.toString(), user);
+    const hybridFragment = new URLSearchParams(hybridCallback.hash.slice(1));
+    assert.ok(hybridFragment.get("code"));
+    assert.equal(decodeJwt(hybridFragment.get("id_token")).nonce, "hybrid-nonce");
+    assert.equal(hybridCallback.search, "");
+    await page.context().close();
+  });
+
+  it("rejects the implicit response type for a code client", async function () {
+    const url = new URL(`${server.base}/oauth/authorize`);
+    url.searchParams.set("client_id", web.id);
+    url.searchParams.set("redirect_uri", redirectURI);
+    url.searchParams.set("response_type", "token");
+    url.searchParams.set("scope", "openid");
+    const response = await fetch(url);
+    const body = await response.json();
+    assert.equal(response.status, 400);
+    assert.equal(body.error, "unauthorized_client");
+  });
+
+  it("posts the code when response_mode is form_post", async function () {
+    const sink = await postedCallback();
+    const client = await createClient(server, {
+      name: "Form post",
+      redirect_uris: [sink.url],
+      grant_types: ["authorization_code"],
+      scopes: ["openid"],
+    });
+    const pkce = pkcePair();
+    const url = new URL(`${server.base}/oauth/authorize`);
+    url.searchParams.set("client_id", client.id);
+    url.searchParams.set("redirect_uri", sink.url);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("response_mode", "form_post");
+    url.searchParams.set("scope", "openid");
+    url.searchParams.set("state", "form-state");
+    url.searchParams.set("code_challenge", pkce.challenge);
+    url.searchParams.set("code_challenge_method", pkce.method);
+    const page = await newPage();
+    await authorize(page, url.toString(), user);
+    assert.equal(sink.hits.length, 1);
+    assert.equal(sink.hits[0].method, "POST");
+    assert.equal(sink.hits[0].url, "/cb");
+    const posted = new URLSearchParams(sink.hits[0].body);
+    assert.ok(posted.get("code"));
+    assert.equal(posted.get("state"), "form-state");
+    await sink.close();
+    await page.context().close();
+  });
+
+  it("keeps the code challenge stored by PAR", async function () {
+    const inside = pkcePair();
+    const outside = pkcePair();
+    const pushed = await readBody(await fetch(`${server.base}/oauth/par`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${parApp.id}:${parApp.secret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        response_type: "code",
+        redirect_uri: redirectURI,
+        scope: "openid",
+        code_challenge: inside.challenge,
+        code_challenge_method: inside.method,
+      }),
+    }));
+    assert.equal(pushed.status, 201, JSON.stringify(pushed.body));
+    const url = new URL(`${server.base}/oauth/authorize`);
+    url.searchParams.set("client_id", parApp.id);
+    url.searchParams.set("request_uri", pushed.body.request_uri);
+    url.searchParams.set("code_challenge", outside.challenge);
+    url.searchParams.set("code_challenge_method", "S256");
+    const page = await newPage();
+    const callback = await authorize(page, url.toString(), user);
+    const rejected = await tokenRequest(server.base, {
+      grant_type: "authorization_code",
+      code: callback.searchParams.get("code"),
+      redirect_uri: redirectURI,
+      code_verifier: outside.verifier,
+    }, parApp);
+    assert.equal(rejected.body.error, "invalid_grant");
+    const again = await readBody(await fetch(`${server.base}/oauth/par`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${parApp.id}:${parApp.secret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        response_type: "code",
+        redirect_uri: redirectURI,
+        scope: "openid",
+        code_challenge: inside.challenge,
+        code_challenge_method: inside.method,
+      }),
+    }));
+    url.searchParams.set("request_uri", again.body.request_uri);
+    const second = await authorize(page, url.toString(), user);
+    const issued = await tokenRequest(server.base, {
+      grant_type: "authorization_code",
+      code: second.searchParams.get("code"),
+      redirect_uri: redirectURI,
+      code_verifier: inside.verifier,
+    }, parApp);
+    assert.equal(issued.status, 200, JSON.stringify(issued.body));
+    await page.context().close();
+  });
 });
+
+function postedCallback() {
+  const hits = [];
+  const receiver = http.createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      hits.push({
+        method: request.method,
+        url: request.url,
+        body: Buffer.concat(chunks).toString(),
+      });
+      response.writeHead(200, { "content-type": "text/html" });
+      response.end("<h1>callback</h1>");
+    });
+  });
+  return new Promise((resolve) => {
+    receiver.listen(0, "127.0.0.1", () => {
+      const { port } = receiver.address();
+      resolve({
+        url: `http://localhost:${port}/cb`,
+        hits,
+        close: () => new Promise((done) => receiver.close(done)),
+      });
+    });
+  });
+}
