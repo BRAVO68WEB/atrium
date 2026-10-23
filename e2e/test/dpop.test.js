@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const { startServer } = require("../support/server");
 const { shortID } = require("../support/pkce");
 const { createUser, createClient, tokenRequest, userInfo } = require("../support/oauth");
-const { dpopProof } = require("../support/dpop");
+const { dpopKey, dpopProof } = require("../support/dpop");
 
 describe("forced DPoP", function () {
   let server;
@@ -39,7 +39,8 @@ describe("forced DPoP", function () {
     assert.equal(missing.body.error, "invalid_dpop_proof");
 
     const tokenURL = `${server.base}/oauth/token`;
-    const proof = await dpopProof("POST", tokenURL);
+    const key = await dpopKey();
+    const proof = await dpopProof("POST", tokenURL, undefined, { key });
     const issued = await tokenRequest(server.base, params, { id: client.id, secret: client.secret }, { DPoP: proof });
     assert.equal(issued.status, 200, JSON.stringify(issued.body));
     assert.equal(issued.body.token_type, "DPoP");
@@ -48,8 +49,8 @@ describe("forced DPoP", function () {
     assert.equal(bearer.status, 401);
 
     const infoURL = `${server.base}/oidc/userinfo`;
-    const infoProof = await dpopProof("GET", infoURL, issued.body.access_token);
-    const bareProof = await dpopProof("GET", infoURL, issued.body.access_token, { ath: false });
+    const infoProof = await dpopProof("GET", infoURL, issued.body.access_token, { key });
+    const bareProof = await dpopProof("GET", infoURL, issued.body.access_token, { ath: false, key });
     const bare = await fetch(infoURL, {
       headers: {
         Authorization: `DPoP ${issued.body.access_token}`,
