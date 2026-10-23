@@ -48,6 +48,7 @@ function renderConfig(port, dsn, overrides) {
     `  require_pkce: ${yamlValue(Boolean(security.require_pkce))}`,
     `  oob_helper: ${yamlValue(Boolean(security.oob_helper))}`,
     `  disable_registration: ${yamlValue(Boolean(security.disable_registration))}`,
+    `  disable_social_registration: ${yamlValue(Boolean(security.disable_social_registration))}`,
     `  allow_insecure_fetch: ${yamlValue(Boolean(security.allow_insecure_fetch))}`,
     "  fetch_allow_ips:",
   ];
