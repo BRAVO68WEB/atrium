@@ -1,12 +1,14 @@
 package oauth
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/oidc"
+	"github.com/bravo68web/oauth-impl/internal/repository"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
@@ -110,6 +112,15 @@ func (h *Handler) handleAuthorizationCodeToken(w http.ResponseWriter, r *http.Re
 	}
 
 	if err := h.authCodeRepo.MarkUsed(code); err != nil {
+		if errors.Is(err, repository.ErrCodeUsed) {
+			if authCode.FamilyID != "" {
+				_ = h.tokenRepo.RevokeFamily(authCode.FamilyID)
+			} else {
+				_ = h.tokenRepo.RevokeAllForClient(authCode.ClientID, authCode.UserID)
+			}
+			writeTokenError(w, http.StatusBadRequest, "invalid_grant", "Authorization code already used")
+			return
+		}
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to mark authorization code as used")
 		return
 	}

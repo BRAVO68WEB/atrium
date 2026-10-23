@@ -3,7 +3,6 @@ package oauth
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -130,6 +129,13 @@ func (h *Handler) HandlePAR(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	if !clientAllowsResponseType(client.GrantTypes, responseType) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error":             "unauthorized_client",
+			"error_description": "Client is not allowed this response_type",
+		})
+		return
+	}
 
 	scope := r.Form.Get("scope")
 	state := r.Form.Get("state")
@@ -137,7 +143,7 @@ func (h *Handler) HandlePAR(w http.ResponseWriter, r *http.Request) {
 	codeChallengeMethod := r.Form.Get("code_challenge_method")
 
 	// PKCE validation (optional for conformance testing)
-	needsCode := strings.Contains(responseType, "code")
+	needsCode := responseHas(responseType, "code")
 	if needsCode && codeChallenge != "" {
 		if codeChallengeMethod == "" {
 			codeChallengeMethod = "S256"

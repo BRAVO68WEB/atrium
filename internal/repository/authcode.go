@@ -3,10 +3,14 @@ package repository
 import (
 	"database/sql"
 	"encoding/json"
-	"github.com/bravo68web/oauth-impl/internal/database"
+	"errors"
 
+	"github.com/bravo68web/oauth-impl/internal/database"
 	"github.com/bravo68web/oauth-impl/internal/models"
 )
+
+// ErrCodeUsed is returned when an authorization code was already consumed.
+var ErrCodeUsed = errors.New("authorization code already used")
 
 type AuthCodeRepository struct {
 	db database.SQL
@@ -76,6 +80,16 @@ func (r *AuthCodeRepository) Get(code string) (*models.AuthorizationCode, error)
 }
 
 func (r *AuthCodeRepository) MarkUsed(code string) error {
-	_, err := r.db.Exec("UPDATE authorization_codes SET used = 1 WHERE code = ?", code)
-	return err
+	res, err := r.db.Exec("UPDATE authorization_codes SET used = 1 WHERE code = ? AND used = 0", code)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrCodeUsed
+	}
+	return nil
 }

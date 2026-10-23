@@ -167,9 +167,15 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 	logoutSvc.SetFetchConfig(cfg)
 	accountSvc.SetWebhooks(hooks)
 	logoutSvc.SetWebhooks(hooks)
-	oidcHandler.SetDPoPCheck(func(header, method, uri, accessToken string) error {
-		_, err := dpopSvc.ValidateDPoPProof(header, method, uri, accessToken)
-		return err
+	oidcHandler.SetDPoPCheck(func(header, method, uri, accessToken string) (string, error) {
+		proof, err := dpopSvc.ValidateDPoPProof(header, method, uri, accessToken)
+		if err != nil || proof == nil {
+			if err == nil {
+				err = fmt.Errorf("DPoP proof required")
+			}
+			return "", err
+		}
+		return proof.JKT, nil
 	})
 	oidc.StartRotation(oidcHandler.GetKeySet(), cfg.OIDC.KeyRotationInterval, cfg.OIDC.KeyRetain)
 

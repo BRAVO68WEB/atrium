@@ -8,6 +8,8 @@ import (
 
 	"errors"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/push"
 	"github.com/bravo68web/oauth-impl/internal/queue"
@@ -316,9 +318,36 @@ func (h *Handler) HandleCIBAStatus(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) HandleCIBAListPending(w http.ResponseWriter, r *http.Request) {
 	_ = r
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"pending_requests": []interface{}{},
-	})
+	requests, err := h.cibaRepo.GetPending()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
+		return
+	}
+	if requests == nil {
+		requests = []*models.CIBARequest{}
+	}
+	for _, item := range requests {
+		item.ClientNotificationToken = ""
+	}
+	writeJSON(w, http.StatusOK, requests)
+}
+
+func cibaID(r *http.Request) string {
+	if id := r.URL.Query().Get("auth_req_id"); id != "" {
+		return id
+	}
+	return chi.URLParam(r, "authReqID")
+}
+
+func requestValue(r *http.Request, queryName, jsonName string) string {
+	if value := strings.TrimSpace(r.URL.Query().Get(queryName)); value != "" {
+		return value
+	}
+	var raw map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(raw[jsonName])
 }
 
 // CompleteCIBA records the device owner's decision for a pending request.
@@ -339,8 +368,8 @@ func (h *Handler) CompleteCIBA(authReqID, userID string, approve bool) error {
 }
 
 func (h *Handler) HandleCIBAApprove(w http.ResponseWriter, r *http.Request) {
-	authReqID := r.URL.Query().Get("auth_req_id")
-	userID := r.URL.Query().Get("user_id")
+	authReqID := cibaID(r)
+	userID := requestValue(r, "user_id", "user_id")
 
 	if authReqID == "" || userID == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
@@ -376,8 +405,8 @@ func (h *Handler) HandleCIBAApprove(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleCIBADeny(w http.ResponseWriter, r *http.Request) {
-	authReqID := r.URL.Query().Get("auth_req_id")
-	reason := r.URL.Query().Get("reason")
+	authReqID := cibaID(r)
+	reason := requestValue(r, "reason", "reason")
 
 	if authReqID == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{

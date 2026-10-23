@@ -52,11 +52,18 @@ func (h *Handler) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dpopJKT, ok := h.enforceClientDPoP(w, r, client)
+	boundJKT := ""
+	if old, err := h.tokenRepo.GetAccessToken(refreshToken.AccessToken); err == nil {
+		boundJKT = old.DPoPJKT
+	}
+	dpopJKT, ok := h.boundRefreshDPoP(w, r, client, boundJKT)
 	if !ok {
 		return
 	}
 	tokenType := boundTokenType(client)
+	if dpopJKT != "" {
+		tokenType = "DPoP"
+	}
 	orgSlug := h.orgSlug(refreshToken.OrgID)
 
 	newAccessToken, err := h.issueAccessTokenFor(refreshToken.ClientID, refreshToken.UserID, strings.Join(refreshToken.Scopes, " "), tokenType, refreshToken.OrgID, orgSlug, refreshToken.Resource, refreshToken.Act)
