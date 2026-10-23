@@ -28,8 +28,15 @@ func TestCIBAPollApproveAndDeny(t *testing.T) {
 		t.Fatalf("pending poll %d %v", pendingStatus, pendingBody)
 	}
 
-	listed := apiObject(t, http.MethodGet, ts.URL+"/ciba/pending", mgmt, nil)
-	if _, ok := listed["pending_requests"].([]any); !ok {
+	listed := apiList(t, http.MethodGet, ts.URL+"/ciba/pending", mgmt, nil)
+	found := false
+	for _, item := range listed {
+		row, _ := item.(map[string]any)
+		if row["auth_req_id"] == approved {
+			found = true
+		}
+	}
+	if !found {
 		t.Fatalf("pending %v", listed)
 	}
 	status := apiObject(t, http.MethodGet, ts.URL+"/ciba/status?auth_req_id="+url.QueryEscape(approved), mgmt, nil)
@@ -37,7 +44,9 @@ func TestCIBAPollApproveAndDeny(t *testing.T) {
 		t.Fatalf("status %v", status)
 	}
 
-	ok := apiObject(t, http.MethodPost, ts.URL+"/ciba/approve?auth_req_id="+url.QueryEscape(approved)+"&user_id="+url.QueryEscape(user["id"].(string)), mgmt, nil)
+	ok := apiObject(t, http.MethodPost, ts.URL+"/api/ciba/"+url.PathEscape(approved)+"/approve", mgmt, map[string]string{
+		"user_id": user["id"].(string),
+	})
 	if ok["status"] != "approved" {
 		t.Fatalf("approve %v", ok)
 	}

@@ -76,6 +76,33 @@ func TestAuthorizePromptNoneAndBadPKCE(t *testing.T) {
 	}
 }
 
+func TestAuthorizeRejectsAnUnregisteredRedirect(t *testing.T) {
+	ts, cleanup := setupTestServer(t)
+	defer cleanup()
+	mgmt := managementToken(t, ts.URL)
+	client := createAPIClient(t, ts.URL, mgmt, map[string]any{
+		"name":                       "Machine",
+		"grant_types":                []string{"client_credentials"},
+		"token_endpoint_auth_method": "client_secret_basic",
+	})
+	query := url.Values{}
+	query.Set("response_type", "code")
+	query.Set("client_id", client["id"].(string))
+	query.Set("redirect_uri", "https://evil.example/cb")
+	query.Set("state", "stolen")
+	noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := noFollow.Get(ts.URL + "/oauth/authorize?" + query.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := readBody(t, resp)
+	if resp.StatusCode != http.StatusBadRequest || strings.Contains(resp.Header.Get("Location"), "evil.example") {
+		t.Fatalf("authorize %d %s %s", resp.StatusCode, resp.Header.Get("Location"), body)
+	}
+}
+
 func TestMFAEnrollPageAcceptsAValidCode(t *testing.T) {
 	ts := setupConfigured(t, func(cfg *config.Config) {
 		cfg.Security.MFA.Required = true

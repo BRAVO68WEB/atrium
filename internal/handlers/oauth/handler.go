@@ -583,8 +583,8 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func isValidRedirectURI(uri string, allowedURIs []string) bool {
-	if len(allowedURIs) == 0 {
-		return isValidURI(uri)
+	if uri == "" {
+		return false
 	}
 	for _, allowed := range allowedURIs {
 		if allowed == uri {
@@ -592,6 +592,48 @@ func isValidRedirectURI(uri string, allowedURIs []string) bool {
 		}
 	}
 	return false
+}
+
+// responseHas reports whether responseType contains part as a whole token.
+// "id_token" does not contain the access-token response type "token".
+func responseHas(responseType, part string) bool {
+	for _, item := range strings.Fields(responseType) {
+		if item == part {
+			return true
+		}
+	}
+	return false
+}
+
+// clientAllowsResponseType reports whether the client's grant list permits
+// responseType. An empty grant list still permits every response type so
+// clients created before grant_types was stored keep working.
+func clientAllowsResponseType(grants []string, responseType string) bool {
+	if len(grants) == 0 {
+		return true
+	}
+	needCode := responseHas(responseType, "code")
+	needImplicit := responseHas(responseType, "token") || responseHas(responseType, "id_token")
+	if responseType == "none" {
+		return true
+	}
+	hasCode := false
+	hasImplicit := false
+	for _, grant := range grants {
+		switch grant {
+		case "authorization_code":
+			hasCode = true
+		case "implicit":
+			hasImplicit = true
+		}
+	}
+	if needCode && !hasCode {
+		return false
+	}
+	if needImplicit && !hasImplicit {
+		return false
+	}
+	return needCode || needImplicit
 }
 
 func isValidURI(uri string) bool {

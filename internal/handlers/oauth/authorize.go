@@ -179,6 +179,10 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		writeOAuthError(w, http.StatusBadRequest, "unsupported_response_type", "Unsupported response_type: "+responseType, state)
 		return
 	}
+	if !clientAllowsResponseType(client.GrantTypes, responseType) {
+		writeOAuthError(w, http.StatusBadRequest, "unauthorized_client", "Client is not allowed this response_type", state)
+		return
+	}
 
 	// RFC 6749: redirect_uri is required if multiple URIs are registered
 	if redirectURI == "" && len(client.RedirectURIs) > 1 {
@@ -197,7 +201,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// PKCE validation (optional for conformance testing)
-	needsCode := strings.Contains(responseType, "code")
+	needsCode := responseHas(responseType, "code")
 	if needsCode && codeChallenge != "" {
 		// Default to S256 if not specified
 		if codeChallengeMethod == "" {
@@ -239,8 +243,8 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Nonce is required for implicit/hybrid flows (response_type contains id_token)
-	needsIDToken := strings.Contains(responseType, "id_token")
+	// Nonce is required when the response type includes id_token.
+	needsIDToken := responseHas(responseType, "id_token")
 	if needsIDToken && nonce == "" {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "nonce is required for implicit/hybrid flows", state)
 		return
@@ -362,9 +366,9 @@ func (h *Handler) issueAuthorizationResponse(w http.ResponseWriter, r *http.Requ
 	var idToken string
 	var err error
 
-	needsCode := strings.Contains(responseType, "code")
-	needsToken := strings.Contains(responseType, "token")
-	needsIDToken := strings.Contains(responseType, "id_token")
+	needsCode := responseHas(responseType, "code")
+	needsToken := responseHas(responseType, "token")
+	needsIDToken := responseHas(responseType, "id_token")
 
 	if needsCode {
 		code, err = crypto.GenerateAuthorizationCode()
@@ -474,6 +478,9 @@ func (h *Handler) issueAuthorizationResponse(w http.ResponseWriter, r *http.Requ
 	if state != "" {
 		params.Set("state", state)
 	}
+	if h.cfg != nil && h.cfg.Security.Issuer != "" {
+		params.Set("iss", h.cfg.Security.Issuer)
+	}
 
 	if IsOutOfBandRedirect(redirectURI) {
 		h.RenderOutOfBand(w, client.ID, code, state, "", "")
@@ -501,15 +508,15 @@ func (h *Handler) issueAuthorizationResponse(w http.ResponseWriter, r *http.Requ
 
 	// Default: fragment response for implicit/hybrid, query for code
 	if responseType == "none" {
+		redirectTo := redirectURI
 		if len(params) > 0 {
-			redirectTo := redirectURI
 			if strings.Contains(redirectTo, "?") {
 				redirectTo += "&" + params.Encode()
 			} else {
 				redirectTo += "?" + params.Encode()
 			}
-			http.Redirect(w, r, redirectTo, http.StatusFound)
 		}
+		http.Redirect(w, r, redirectTo, http.StatusFound)
 		return
 	}
 
