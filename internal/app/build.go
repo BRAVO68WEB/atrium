@@ -237,6 +237,9 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 		})
 		webCtrl.SetPush(pushHandler)
 		oauthHandler.SetDeviceLogin(pushSvc)
+		pushHandler.SetComplete(func(authReqID, userID string, approve bool) error {
+			return oauthHandler.CompleteCIBA(authReqID, userID, approve)
+		})
 	}
 
 	var aauthHandler *aauth.Handler

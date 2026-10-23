@@ -12,11 +12,12 @@ import (
 
 // Handler is the HTTP surface for push-device registration.
 type Handler struct {
-	svc     *Service
-	clients *repository.ClientRepository
-	sign    func(jwt.MapClaims) (string, error)
-	keyfunc jwt.Keyfunc
-	session func(r *http.Request) (userID string, ok bool)
+	svc      *Service
+	clients  *repository.ClientRepository
+	sign     func(jwt.MapClaims) (string, error)
+	keyfunc  jwt.Keyfunc
+	session  func(r *http.Request) (userID string, ok bool)
+	complete func(authReqID, userID string, approve bool) error
 }
 
 func NewHandler(svc *Service, clients *repository.ClientRepository, sign func(jwt.MapClaims) (string, error), keyfunc jwt.Keyfunc, session func(*http.Request) (string, bool)) *Handler {
@@ -24,6 +25,13 @@ func NewHandler(svc *Service, clients *repository.ClientRepository, sign func(jw
 }
 
 func (h *Handler) Service() *Service { return h.svc }
+
+// SetComplete records the CIBA decision after the device poll succeeds.
+func (h *Handler) SetComplete(fn func(authReqID, userID string, approve bool) error) {
+	if h != nil {
+		h.complete = fn
+	}
+}
 
 func (h *Handler) Discovery(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -88,6 +96,49 @@ func (h *Handler) Revoke(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, err)
 		return
+	}
+	w.Header().Set("Replay-Nonce", nonce)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) Pending(w http.ResponseWriter, r *http.Request) {
+	deviceID := r.URL.Query().Get("device_id")
+	list, nonce, err := h.svc.PollPending(r, deviceID, bearerOrForm(r))
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Replay-Nonce", nonce)
+	_ = json.NewEncoder(w).Encode(map[string]any{"pending": list})
+}
+
+func (h *Handler) Decide(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	var req struct {
+		DeviceID  string `json:"device_id"`
+		AuthReqID string `json:"auth_req_id"`
+		Action    string `json:"action"`
+		Proof     string `json:"proof"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeProblem(w, problem(http.StatusBadRequest, "invalid_request", "decision body is invalid"))
+		return
+	}
+	userID, nonce, err := h.svc.PollDecide(r, req.DeviceID, bearerOrForm(r), req.AuthReqID, req.Action, req.Proof)
+	if err != nil {
+		if nonce != "" {
+			w.Header().Set("Replay-Nonce", nonce)
+		}
+		writeErr(w, err)
+		return
+	}
+	if h.complete != nil {
+		if err := h.complete(req.AuthReqID, userID, req.Action != "deny"); err != nil {
+			writeErr(w, err)
+			return
+		}
 	}
 	w.Header().Set("Replay-Nonce", nonce)
 	w.WriteHeader(http.StatusNoContent)
