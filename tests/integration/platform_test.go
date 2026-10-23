@@ -268,6 +268,27 @@ func TestForcedDPoP(t *testing.T) {
 	if userinfo.StatusCode != http.StatusOK || !strings.Contains(string(infoBody), "ada") {
 		t.Fatalf("dpop userinfo %d %s", userinfo.StatusCode, infoBody)
 	}
+
+	other, err := dpop.GenerateKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stolen, err := dpop.CreateDPoPProof(other, http.MethodGet, ts.URL+"/oidc/userinfo", access)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrong, _ := http.NewRequest(http.MethodGet, ts.URL+"/oidc/userinfo", nil)
+	wrong.Header.Set("Authorization", "DPoP "+access)
+	wrong.Header.Set("DPoP", stolen)
+	rejected, err := http.DefaultClient.Do(wrong)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rejectedBody, _ := io.ReadAll(rejected.Body)
+	_ = rejected.Body.Close()
+	if rejected.StatusCode != http.StatusUnauthorized || !strings.Contains(string(rejectedBody), "does not match") {
+		t.Fatalf("wrong dpop key %d %s", rejected.StatusCode, rejectedBody)
+	}
 }
 
 func TestOpenAPICoversRouter(t *testing.T) {

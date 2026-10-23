@@ -51,7 +51,7 @@ func (m *Middleware) RequireManagement(next http.Handler) http.Handler {
 			return
 		}
 		if tok.TokenType == "DPoP" {
-			if err := m.checkDPoP(r, tok.Token); err != nil {
+			if err := m.checkDPoP(r, tok); err != nil {
 				writeAuthError(w, http.StatusUnauthorized, "invalid_token", err.Error())
 				return
 			}
@@ -77,7 +77,7 @@ func (m *Middleware) RequireUser(next http.Handler) http.Handler {
 			return
 		}
 		if tok.TokenType == "DPoP" {
-			if err := m.checkDPoP(r, tok.Token); err != nil {
+			if err := m.checkDPoP(r, tok); err != nil {
 				writeAuthError(w, http.StatusUnauthorized, "invalid_token", err.Error())
 				return
 			}
@@ -99,7 +99,7 @@ func (m *Middleware) load(r *http.Request, userCall bool) (*models.AccessToken, 
 	return tok, 0, "", ""
 }
 
-func (m *Middleware) checkDPoP(r *http.Request, accessToken string) error {
+func (m *Middleware) checkDPoP(r *http.Request, tok *models.AccessToken) error {
 	header := r.Header.Get("DPoP")
 	if header == "" {
 		return fmt.Errorf("DPoP header required")
@@ -109,8 +109,14 @@ func (m *Middleware) checkDPoP(r *http.Request, accessToken string) error {
 		scheme = "https"
 	}
 	fullURI := fmt.Sprintf("%s://%s%s", scheme, r.Host, r.URL.Path)
-	_, err := m.dpop.ValidateDPoPProof(header, r.Method, fullURI, accessToken)
-	return err
+	proof, err := m.dpop.ValidateDPoPProof(header, r.Method, fullURI, tok.Token)
+	if err != nil {
+		return err
+	}
+	if tok.DPoPJKT != "" && (proof == nil || proof.JKT != tok.DPoPJKT) {
+		return fmt.Errorf("DPoP key does not match the token")
+	}
+	return nil
 }
 
 func bearer(r *http.Request) string {

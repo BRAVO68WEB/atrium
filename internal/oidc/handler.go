@@ -30,12 +30,12 @@ type Handler struct {
 	users       *repository.UserRepository
 	tokens      *repository.TokenRepository
 	orgs        *repository.OrgRepository
-	checkDPoP   func(header, method, uri, accessToken string) error
+	checkDPoP   func(header, method, uri, accessToken string) (string, error)
 	fetchSector func(ctx context.Context, rawURL string) ([]byte, error)
 	sectorCache cache.Cache
 }
 
-func (h *Handler) SetDPoPCheck(fn func(header, method, uri, accessToken string) error) {
+func (h *Handler) SetDPoPCheck(fn func(header, method, uri, accessToken string) (string, error)) {
 	if h != nil {
 		h.checkDPoP = fn
 	}
@@ -451,8 +451,13 @@ func (h *Handler) userInfoDPoP(w http.ResponseWriter, r *http.Request, at *model
 			proofScheme = "https"
 		}
 		uri := fmt.Sprintf("%s://%s%s", proofScheme, r.Host, r.URL.Path)
-		if err := h.checkDPoP(r.Header.Get("DPoP"), r.Method, uri, at.Token); err != nil {
+		jkt, err := h.checkDPoP(r.Header.Get("DPoP"), r.Method, uri, at.Token)
+		if err != nil {
 			writeOIDCError(w, http.StatusUnauthorized, "invalid_token", err.Error())
+			return false
+		}
+		if at.DPoPJKT != "" && jkt != at.DPoPJKT {
+			writeOIDCError(w, http.StatusUnauthorized, "invalid_token", "DPoP key does not match the token")
 			return false
 		}
 		return true

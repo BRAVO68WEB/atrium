@@ -30,23 +30,53 @@ func (h *Handler) enforceClientDPoP(w http.ResponseWriter, r *http.Request, clie
 func (h *Handler) revokeDPoP(w http.ResponseWriter, r *http.Request, client *models.Client, token string) bool {
 	needs := client != nil && client.DPoPBoundAccessTokens
 	proofToken := ""
+	var boundJKT string
 	if at, err := h.tokenRepo.GetAccessToken(token); err == nil && (at.TokenType == "DPoP" || at.DPoPJKT != "") {
 		needs = true
 		proofToken = at.Token
+		boundJKT = at.DPoPJKT
 	} else if rt, err := h.tokenRepo.GetRefreshToken(token); err == nil && rt.AccessToken != "" {
 		if at, err := h.tokenRepo.GetAccessToken(rt.AccessToken); err == nil && (at.TokenType == "DPoP" || at.DPoPJKT != "") {
 			needs = true
 			proofToken = at.Token
+			boundJKT = at.DPoPJKT
 		}
 	}
 	if !needs {
 		return true
 	}
-	if _, err := h.ValidateDPoPProof(r, proofToken); err != nil {
+	proof, err := h.ValidateDPoPProof(r, proofToken)
+	if err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_token", err.Error())
 		return false
 	}
+	if boundJKT != "" && (proof == nil || proof.JKT != boundJKT) {
+		writeTokenError(w, http.StatusBadRequest, "invalid_token", "DPoP key does not match the token")
+		return false
+	}
 	return true
+}
+
+// boundRefreshDPoP keeps a refreshed token on the key that issued it.
+// A client that requires DPoP still needs a proof when the old token had none.
+func (h *Handler) boundRefreshDPoP(w http.ResponseWriter, r *http.Request, client *models.Client, boundJKT string) (string, bool) {
+	if (client == nil || !client.DPoPBoundAccessTokens) && boundJKT == "" {
+		return "", true
+	}
+	proof, err := h.ValidateDPoPProof(r, "")
+	if err != nil || proof == nil || proof.JKT == "" {
+		desc := "Failed to get JKT"
+		if err != nil {
+			desc = err.Error()
+		}
+		writeTokenError(w, http.StatusBadRequest, "invalid_dpop_proof", desc)
+		return "", false
+	}
+	if boundJKT != "" && proof.JKT != boundJKT {
+		writeTokenError(w, http.StatusBadRequest, "invalid_dpop_proof", "DPoP key does not match the token")
+		return "", false
+	}
+	return proof.JKT, true
 }
 
 func boundTokenType(client *models.Client) string {
