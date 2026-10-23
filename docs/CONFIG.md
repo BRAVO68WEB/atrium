@@ -188,6 +188,9 @@ push:
   max_devices_per_user: 5
   client_attestation_required: false
   grace_period_seconds: 300
+  ping_enabled: false
+  push_enabled: false
+  relay_endpoint: ""
 
 aauth:
   enabled: false
@@ -293,7 +296,9 @@ user is not in returns `access_denied`.
 `push.enabled` defaults to false. It registers authenticator devices
 for a later wake signal. It does not change `/oauth/device`.
 `grace_period_seconds` is how long the previous device key still
-verifies after rotation. The default is 300. See
+verifies after rotation. The default is 300. `ping_enabled` and
+`push_enabled` send an HTTP wake. Both default to false.
+`relay_endpoint` is the HTTPS URL that receives a push wake. See
 [Push devices](PUSH.md).
 
 `debug.ui` defaults to false. Set it to true to serve `/preview`, a

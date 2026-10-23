@@ -48,6 +48,9 @@ type PushConfig struct {
 	MaxDevicesPerUser      int    `yaml:"max_devices_per_user"`
 	ClientAttestation      bool   `yaml:"client_attestation_required"`
 	GracePeriodSeconds     int    `yaml:"grace_period_seconds"`
+	PingEnabled            bool   `yaml:"ping_enabled"`
+	PushEnabled            bool   `yaml:"push_enabled"`
+	RelayEndpoint          string `yaml:"relay_endpoint"`
 }
 
 // AAuthConfig is the agent authorization protocol. Enabled stays false

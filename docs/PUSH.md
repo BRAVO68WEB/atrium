@@ -2,8 +2,9 @@
 
 This is authenticator registration from
 [draft-bandyopadhayaya-oauth-push-device-00](https://datatracker.ietf.org/doc/draft-bandyopadhayaya-oauth-push-device/).
-It is not the device-code grant on `/oauth/device`. Nothing here wakes
-a phone. CIBA stays poll-only. Configuration is in
+It is not the device-code grant on `/oauth/device`. A wake is an HTTP
+POST. This server does not call APNs or FCM. CIBA token delivery to
+the relying party stays poll-only. Configuration is in
 [Configuration](CONFIG.md).
 
 `push.enabled` defaults to false. While it is false,
@@ -24,7 +25,7 @@ repeated. Rotation keeps the previous key for
 `push.grace_period_seconds` (300 seconds unless you set it). A later
 call with the new key drops the previous key. Send `reason` as
 `compromised` to drop it immediately. Discovery advertises `poll`
-only. There is no push relay. An `attestation` value is stored.
+until you enable a wake. An `attestation` value is stored.
 When `client_attestation_required` is true, an empty value is
 rejected. The value is not verified.
 
@@ -54,4 +55,19 @@ Deny does not need the check. `/push/approve` is the browser page.
 `GET /push/pending` and `POST /push/pending` are the same decision for
 the device credential. Send `device_id`, `Authorization: Bearer`, and
 a DPoP proof. After the first call, send the `Replay-Nonce` from the
-previous response. `ping` and `push` delivery are not sent yet.
+previous response. `Accept: application/jose` returns that same
+JSON as a JWE (`ECDH-ES+A256KW` and `A256GCM`) for the device key.
+Any other Accept value stays plaintext JSON. `delivery_mode` on the
+decision is `push` or `poll`. A poll report while `push_enabled` is
+on is logged.
+
+`ping_enabled` and `push_enabled` default to false. With ping on, a
+new sign-in and a revoke POST `{"wake_reason","ref_id"}` to the
+device `push_address`. `ref_id` is the `auth_req_id` or the device id.
+The body has no `binding_message`. With push on, that same POST goes
+to `relay_endpoint` when you set it, and the body adds `push_address`
+for routing. Otherwise it goes to `push_address`. Push is tried
+first, then ping. A failed POST does not fail the sign-in or the
+revoke. The device can still poll. `push_relay_endpoint` appears in
+discovery only when push is on and `relay_endpoint` is set. The
+client waits `push_wait_timeout_seconds` (10) before it polls.

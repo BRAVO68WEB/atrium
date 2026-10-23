@@ -74,14 +74,15 @@ func (s *Service) issuer() string {
 
 func (s *Service) Discovery() map[string]any {
 	base := s.issuer()
-	return map[string]any{
+	modes := deliveryModes(s.cfg)
+	doc := map[string]any{
 		"registration_endpoint":        base + "/push/register",
-		"delivery_modes_supported":     []string{"poll"},
+		"delivery_modes_supported":     modes,
 		"interaction_type_supported":   []string{"boolean", "number_choose", "input_manual"},
 		"minimum_interaction_type":     s.cfg.Push.MinimumInteractionType,
 		"registration_token_ttl":       s.cfg.Push.RegistrationTokenTTL,
 		"signing_alg_values_supported": []string{"ES256"},
-		"fallback_order":               []string{"poll"},
+		"fallback_order":               modes,
 		"client_attestation_required":  s.cfg.Push.ClientAttestation,
 		"revocation_endpoint":          base + "/push/revoke",
 		"key_rotation_endpoint":        base + "/push/rotate-key",
@@ -90,6 +91,12 @@ func (s *Service) Discovery() map[string]any {
 		"push_wait_timeout_seconds":    10,
 		"error_response_format":        "application/problem+json",
 	}
+	if s.cfg.Push.PushEnabled {
+		if relay := strings.TrimSpace(s.cfg.Push.RelayEndpoint); relay != "" {
+			doc["push_relay_endpoint"] = relay
+		}
+	}
+	return doc
 }
 
 // Enrollment is what the browser page shows. The token sits in the URL fragment.
@@ -230,6 +237,7 @@ func (s *Service) Register(ip string, body []byte, keyfunc jwt.Keyfunc) (Registe
 			return Registered{}, err
 		}
 		s.cascadeRevoke(req.ReplacesDeviceID)
+		s.notify(req.ReplacesDeviceID, "device_revoked", req.ReplacesDeviceID)
 	}
 	return Registered{DeviceID: id, Credential: credential, Ref: "urn:push-reg:" + id, ExpiresIn: s.cfg.Push.RegistrationTokenTTL}, nil
 }
@@ -335,6 +343,7 @@ func (s *Service) Revoke(r *http.Request, deviceID, credential string) (string, 
 			return "", err
 		}
 		s.cascadeRevoke(deviceID)
+		s.notify(deviceID, "device_revoked", deviceID)
 	}
 	return s.issueNonce(deviceID), nil
 }
@@ -363,6 +372,7 @@ func (s *Service) RevokeUser(userID string) (int, error) {
 			return 0, err
 		}
 		s.cascadeRevoke(id)
+		s.notify(id, "device_revoked", id)
 	}
 	return len(ids), nil
 }
