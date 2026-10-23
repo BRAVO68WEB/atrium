@@ -119,6 +119,13 @@ func (h *Handler) HandleBCAuthorize(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+		if errors.Is(prepErr, push.ErrCeremonyUnsupported) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error":             "invalid_request",
+				"error_description": "device does not support the interaction type",
+			})
+			return
+		}
 		if prepErr != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{
 				"error":             "server_error",
@@ -173,11 +180,15 @@ func (h *Handler) HandleBCAuthorize(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	response := map[string]interface{}{
 		"auth_req_id": authReqID,
 		"expires_in":  expiresIn,
 		"interval":    interval,
-	})
+	}
+	if bindingMessage != "" {
+		response["binding_message"] = bindingMessage
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func (h *Handler) HandleCIBAToken(w http.ResponseWriter, r *http.Request) {

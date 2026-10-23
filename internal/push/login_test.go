@@ -108,16 +108,155 @@ func createPushClient(t *testing.T, base, token string) map[string]any {
 	return client
 }
 
+func TestNumberChoiceAndTypedCode(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Push.Enabled = true
+	cfg.Management.ClientID = "test-mgmt"
+	cfg.Management.ClientSecret = "test-mgmt-secret"
+	ts := newServer(t, cfg)
+	token := managementToken(t, ts.URL)
+	createUser(t, ts.URL, token)
+	browser := signIn(t, ts.URL)
+	dpop := service.NewDPoPService()
+	key, err := dpop.GenerateKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	registerDevice(t, ts, browser, dpop, key, []string{"boolean", "number_choose"})
+	client := createPushClient(t, ts.URL, token)
+	rejected := pushCIBAInteraction(t, ts.URL, client, "ada", "input_manual", "secret")
+	if rejected.Status != http.StatusBadRequest || !strings.Contains(rejected.Body, "does not support") {
+		t.Fatalf("unsupported ceremony %d %s", rejected.Status, rejected.Body)
+	}
+
+	authReqID := pushCIBAInteractionOK(t, ts.URL, client, "ada", "number_choose", "42")
+	page, err := browser.Get(ts.URL + "/push/approve")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pageBody, _ := io.ReadAll(page.Body)
+	_ = page.Body.Close()
+	text := string(pageBody)
+	if strings.Contains(text, "binding-message") || !strings.Contains(text, `value="42"`) {
+		t.Fatalf("choices %s", text)
+	}
+	wrong := url.Values{}
+	wrong.Set("csrf_token", attr(t, text, "csrf_token"))
+	wrong.Set("auth_req_id", authReqID)
+	wrong.Set("proof", "11")
+	bad, err := browser.PostForm(ts.URL+"/push/approve", wrong)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = bad.Body.Close()
+	if bad.StatusCode != http.StatusBadRequest {
+		t.Fatalf("wrong number %d", bad.StatusCode)
+	}
+	right := url.Values{}
+	right.Set("csrf_token", attr(t, text, "csrf_token"))
+	right.Set("auth_req_id", authReqID)
+	right.Set("proof", "42")
+	ok, err := browser.PostForm(ts.URL+"/push/approve", right)
+	if err != nil {
+		t.Fatal(err)
+	}
+	okBody, _ := io.ReadAll(ok.Body)
+	_ = ok.Body.Close()
+	if ok.StatusCode != http.StatusOK || !strings.Contains(string(okBody), "push-approved") {
+		t.Fatalf("right number %d %s", ok.StatusCode, okBody)
+	}
+}
+
+func TestDevicePollUsesTheRegisteredKey(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Push.Enabled = true
+	cfg.Management.ClientID = "test-mgmt"
+	cfg.Management.ClientSecret = "test-mgmt-secret"
+	ts := newServer(t, cfg)
+	token := managementToken(t, ts.URL)
+	createUser(t, ts.URL, token)
+	browser := signIn(t, ts.URL)
+	dpop := service.NewDPoPService()
+	key, err := dpop.GenerateKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	registered := registerDevice(t, ts, browser, dpop, key, []string{"boolean", "input_manual"})
+	if registered.Status != http.StatusCreated || registered.DeviceID == "" {
+		t.Fatalf("register %d %s", registered.Status, registered.Body)
+	}
+	client := createPushClient(t, ts.URL, token)
+	authReqID := pushCIBAInteractionOK(t, ts.URL, client, "ada", "input_manual", "abcd")
+
+	listURL := ts.URL + "/push/pending?device_id=" + registered.DeviceID
+	proof, err := dpop.CreateDPoPProof(key, http.MethodGet, listURL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, _ := http.NewRequest(http.MethodGet, listURL, nil)
+	req.Header.Set("Authorization", "Bearer "+registered.Credential)
+	req.Header.Set("DPoP", proof)
+	listed := do(t, req)
+	if listed.Status != http.StatusOK || !strings.Contains(listed.Body, authReqID) || !strings.Contains(listed.Body, "abcd") {
+		t.Fatalf("pending %d %s", listed.Status, listed.Body)
+	}
+
+	decide := func(value, nonce string) httpResult {
+		t.Helper()
+		payload, _ := json.Marshal(map[string]string{
+			"device_id":   registered.DeviceID,
+			"auth_req_id": authReqID,
+			"action":      "approve",
+			"proof":       value,
+		})
+		bodyProof, err := dpop.CreateDPoPProof(key, http.MethodPost, ts.URL+"/push/pending", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		post, _ := http.NewRequest(http.MethodPost, ts.URL+"/push/pending", strings.NewReader(string(payload)))
+		post.Header.Set("Content-Type", "application/json")
+		post.Header.Set("Authorization", "Bearer "+registered.Credential)
+		post.Header.Set("DPoP", bodyProof)
+		post.Header.Set("Replay-Nonce", nonce)
+		return do(t, post)
+	}
+	miss := decide("nope", listed.Header.Get("Replay-Nonce"))
+	if miss.Status != http.StatusBadRequest || !strings.Contains(miss.Body, "does not match") {
+		t.Fatalf("wrong code %d %s", miss.Status, miss.Body)
+	}
+	hit := decide("abcd", miss.Header.Get("Replay-Nonce"))
+	if hit.Status != http.StatusNoContent {
+		t.Fatalf("decide %d %s", hit.Status, hit.Body)
+	}
+	granted := pushPoll(t, ts.URL, client, authReqID)
+	if granted.Status != http.StatusOK || !strings.Contains(granted.Body, "access_token") {
+		t.Fatalf("poll %d %s", granted.Status, granted.Body)
+	}
+}
+
 func pushCIBA(t *testing.T, base string, client map[string]any, loginHint, binding string) string {
+	t.Helper()
+	return pushCIBAInteractionOK(t, base, client, loginHint, "", binding)
+}
+
+func pushCIBAInteraction(t *testing.T, base string, client map[string]any, loginHint, interaction, binding string) httpResult {
 	t.Helper()
 	form := url.Values{}
 	form.Set("login_hint", loginHint)
 	form.Set("scope", "openid")
 	form.Set("binding_message", binding)
+	if interaction != "" {
+		form.Set("interaction_type", interaction)
+	}
 	req, _ := http.NewRequest(http.MethodPost, base+"/oauth/bc-authorize", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.SetBasicAuth(client["id"].(string), client["secret"].(string))
-	res := do(t, req)
+	return do(t, req)
+}
+
+func pushCIBAInteractionOK(t *testing.T, base string, client map[string]any, loginHint, interaction, binding string) string {
+	t.Helper()
+	res := pushCIBAInteraction(t, base, client, loginHint, interaction, binding)
 	if res.Status != http.StatusOK {
 		t.Fatalf("bc-authorize %d %s", res.Status, res.Body)
 	}

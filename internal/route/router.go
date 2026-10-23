@@ -172,6 +172,8 @@ func (r *Router) setupRoutes() {
 		r.mux.Get("/push/enroll", r.webCtrl.HandlePushEnroll)
 		r.mux.Get("/push/approve", r.webCtrl.HandlePushApprove)
 		r.mux.Post("/push/approve", r.webCtrl.HandlePushApprove)
+		r.mux.Get("/push/pending", r.pushHandler.Pending)
+		r.mux.Post("/push/pending", r.pushHandler.Decide)
 		r.mux.Post("/push/register", r.pushHandler.Register)
 		r.mux.Post("/push/revoke", r.pushHandler.Revoke)
 		r.mux.Post("/push/rotate-key", r.pushHandler.Rotate)

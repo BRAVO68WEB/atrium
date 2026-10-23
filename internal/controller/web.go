@@ -370,8 +370,8 @@ func (c *WebController) HandlePushApprove(w http.ResponseWriter, r *http.Request
 		if approve {
 			status = "approved"
 		}
-		if err := c.push.Service().FinishLogin(session.UserID, r.Form.Get("auth_req_id"), status); err != nil {
-			http.Error(w, "sign-in request is not pending", http.StatusBadRequest)
+		if err := c.push.Service().FinishLogin(session.UserID, r.Form.Get("auth_req_id"), status, r.Form.Get("proof")); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		if err := c.oauthHandler.CompleteCIBA(r.Form.Get("auth_req_id"), session.UserID, approve); err != nil {
@@ -392,11 +392,19 @@ func (c *WebController) HandlePushApprove(w http.ResponseWriter, r *http.Request
 		return
 	}
 	item := pending[0]
-	c.renderPage(w, r, "push_approve.html", "Sign-in", "Approve sign-in", map[string]string{}, map[string]any{
-		"Pending":        true,
-		"AuthReqID":      item.AuthReqID,
-		"BindingMessage": item.BindingMessage,
-	})
+	extra := map[string]any{
+		"Pending":         true,
+		"AuthReqID":       item.AuthReqID,
+		"InteractionType": item.InteractionType,
+	}
+	switch item.InteractionType {
+	case "number_choose":
+		extra["Choices"] = push.NumberChoices(item.BindingMessage)
+	case "input_manual":
+	default:
+		extra["BindingMessage"] = item.BindingMessage
+	}
+	c.renderPage(w, r, "push_approve.html", "Sign-in", "Approve sign-in", map[string]string{}, extra)
 }
 
 func (c *WebController) HandleLoginPage(w http.ResponseWriter, r *http.Request) {

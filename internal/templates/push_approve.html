@@ -8,14 +8,36 @@
         <p class="lede">There is no sign-in to approve.</p>
     {{else}}
         <h1>Approve this sign-in</h1>
-        {{if .BindingMessage}}<p id="binding-message" class="who">Confirm <strong>{{.BindingMessage}}</strong></p>{{else}}<p class="who">Your authenticator is asking to continue.</p>{{end}}
+        {{if eq .InteractionType "number_choose"}}
+        <p class="who">Choose the number shown by the application.</p>
+        {{else if eq .InteractionType "input_manual"}}
+        <p class="who">Type the code shown by the application.</p>
+        {{else if .BindingMessage}}
+        <p id="binding-message" class="who">Confirm <strong>{{.BindingMessage}}</strong></p>
+        {{else}}
+        <p class="who">Your authenticator is asking to continue.</p>
+        {{end}}
         <form method="POST" action="/push/approve">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
             <input type="hidden" name="auth_req_id" value="{{.AuthReqID}}">
+            {{if eq .InteractionType "number_choose"}}
+            <div class="buttons">
+                {{range .Choices}}<button type="submit" name="proof" value="{{.}}" class="btn-approve">{{.}}</button>{{end}}
+                <button type="submit" name="action" value="deny" class="btn-deny">Deny</button>
+            </div>
+            {{else if eq .InteractionType "input_manual"}}
+            <label for="push-proof">Code</label>
+            <input id="push-proof" name="proof" type="text" autocomplete="off">
             <div class="buttons">
                 <button type="submit" name="action" value="deny" class="btn-deny">Deny</button>
                 <button type="submit" name="action" value="approve" class="btn-approve">Approve sign-in</button>
             </div>
+            {{else}}
+            <div class="buttons">
+                <button type="submit" name="action" value="deny" class="btn-deny">Deny</button>
+                <button type="submit" name="action" value="approve" class="btn-approve">Approve sign-in</button>
+            </div>
+            {{end}}
         </form>
     {{end}}
     </div>

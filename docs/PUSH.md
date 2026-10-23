@@ -22,7 +22,17 @@ registered key. Discovery advertises `poll` only. There is no push
 relay, and attestation is not checked.
 
 A CIBA request for a user with an active device waits on that device.
-`/push/approve` shows the sign-in and records the decision. The client
-then polls `/oauth/token` as usual. A revoked device makes that poll
-return `device_revoked`. An `interaction_type` below
-`push.minimum_interaction_type` is `invalid_request`.
+`/bc-authorize` returns `binding_message` when one is stored. The
+client then polls `/oauth/token` as usual. A revoked device makes that
+poll return `device_revoked`. An `interaction_type` below
+`push.minimum_interaction_type`, or one the device did not register,
+is `invalid_request`.
+
+`boolean` is approve or deny. `number_choose` is three numbers, and
+approve counts only when the posted number matches. `input_manual` is
+a typed code, and approve counts only when the posted code matches.
+Deny does not need the check. `/push/approve` is the browser page.
+`GET /push/pending` and `POST /push/pending` are the same decision for
+the device credential. Send `device_id`, `Authorization: Bearer`, and
+a DPoP proof. After the first call, send the `Replay-Nonce` from the
+previous response. `ping` and `push` delivery are not sent yet.

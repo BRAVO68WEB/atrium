@@ -92,4 +92,54 @@ describe("push authenticator enrollment", function () {
     assert.ok(issued.body.access_token);
     await page.context().close();
   });
+
+  it("approves number_choose only for the shown number", async function () {
+    const page = await newPage();
+    await page.goto(`${server.base}/push/enroll`);
+    if (page.url().includes("/login")) {
+      await submitLogin(page, user.username, user.password);
+      await page.waitForURL((current) => new URL(current).pathname === "/push/enroll", { timeout: 20000 });
+    }
+    const registrationToken = (await page.locator("#registration-token").innerText()).trim();
+    const { publicKey } = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const jwk = publicKey.export({ format: "jwk" });
+    const registered = await fetch(`${server.base}/push/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        registration_token: registrationToken,
+        public_key: { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y },
+        interaction_types: ["boolean", "number_choose", "input_manual"],
+        platform: "browser",
+      }),
+    });
+    assert.equal(registered.status, 201, await registered.text());
+
+    const client = await createClient(server, {
+      name: "Counter",
+      grant_types: ["urn:openid:params:grant-type:ciba"],
+      scopes: ["openid"],
+    });
+    const started = await fetch(`${server.base}/oauth/bc-authorize`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        authorization: `Basic ${Buffer.from(`${client.id}:${client.secret}`).toString("base64")}`,
+      },
+      body: new URLSearchParams({
+        login_hint: user.username,
+        scope: "openid",
+        interaction_type: "number_choose",
+        binding_message: "42",
+      }),
+    });
+    const pending = await started.json();
+    assert.equal(started.status, 200, JSON.stringify(pending));
+    assert.equal(pending.binding_message, "42");
+
+    await page.goto(`${server.base}/push/approve`);
+    await page.locator("button[name=proof][value='42']").click();
+    await page.locator("#push-approved").waitFor({ timeout: 20000 });
+    await page.context().close();
+  });
 });
