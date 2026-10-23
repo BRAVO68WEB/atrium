@@ -109,13 +109,6 @@ func (h *Handler) HandlePAR(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if !clientAllowsResponseType(client.GrantTypes, responseType) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error":             "unauthorized_client",
-			"error_description": "Client is not allowed this response_type",
-		})
-		return
-	}
 
 	redirectURI := r.Form.Get("redirect_uri")
 	if redirectURI == "" && len(client.RedirectURIs) > 1 {
@@ -133,6 +126,13 @@ func (h *Handler) HandlePAR(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error":             "invalid_request",
 			"error_description": "Invalid redirect_uri",
+		})
+		return
+	}
+	if !clientAllowsResponseType(client.GrantTypes, responseType) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error":             "unauthorized_client",
+			"error_description": "Client is not allowed this response_type",
 		})
 		return
 	}

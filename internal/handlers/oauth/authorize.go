@@ -179,10 +179,6 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		writeOAuthError(w, http.StatusBadRequest, "unsupported_response_type", "Unsupported response_type: "+responseType, state)
 		return
 	}
-	if !clientAllowsResponseType(client.GrantTypes, responseType) {
-		writeOAuthError(w, http.StatusBadRequest, "unauthorized_client", "Client is not allowed this response_type", state)
-		return
-	}
 
 	// RFC 6749: redirect_uri is required if multiple URIs are registered
 	if redirectURI == "" && len(client.RedirectURIs) > 1 {
@@ -241,6 +237,10 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "requested_actor is not recognized", state)
 			return
 		}
+	}
+	if !clientAllowsResponseType(client.GrantTypes, responseType) {
+		writeOAuthError(w, http.StatusBadRequest, "unauthorized_client", "Client is not allowed this response_type", state)
+		return
 	}
 
 	// Nonce is required when the response type includes id_token.
