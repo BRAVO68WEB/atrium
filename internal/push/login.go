@@ -31,7 +31,7 @@ type LoginNotice struct {
 // without an authenticator stays on its existing path.
 func (s *Service) PrepareLogin(userID, authReqID, interaction, binding string) (string, string, error) {
 	var deviceID, typesText string
-	err := s.db.QueryRow(`SELECT id, COALESCE(interaction_types, '[]') FROM push_devices WHERE user_id = ? AND status = 'active' ORDER BY COALESCE(last_used_at, created_at) DESC LIMIT 1`, userID).Scan(&deviceID, &typesText)
+	err := s.db.QueryRow(`SELECT id, COALESCE(interaction_types, '[]') FROM push_devices WHERE user_id = ? AND status = 'active' ORDER BY is_primary DESC, COALESCE(last_used_at, created_at) DESC LIMIT 1`, userID).Scan(&deviceID, &typesText)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return "", "", err

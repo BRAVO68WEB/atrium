@@ -15,11 +15,30 @@ authenticator posts that token and a P-256 public key to
 `/push/register`. The response is an opaque device credential. The
 credential is not an OAuth access token.
 
-The signed-in user lists devices at `GET /push/devices`. The device
+The signed-in user lists devices at `GET /push/devices`. Each row
+includes `attestation_status`. The value is `not_checked`. The device
 revokes itself at `POST /push/revoke` and rotates its key at
 `POST /push/rotate-key`. Both calls require a DPoP proof for the
-registered key. Discovery advertises `poll` only. There is no push
-relay, and attestation is not checked.
+registered key. Revoke keeps the credential, so the same call can be
+repeated. Rotation keeps the previous key for
+`push.grace_period_seconds` (300 seconds unless you set it). A later
+call with the new key drops the previous key. Send `reason` as
+`compromised` to drop it immediately. Discovery advertises `poll`
+only. There is no push relay. An `attestation` value is stored.
+When `client_attestation_required` is true, an empty value is
+rejected. The value is not verified.
+
+`POST /push/register` accepts `replaces_device_id`. The new device is
+stored, and then the named device is revoked. You can replace a device
+when the account is already at `max_devices_per_user`.
+
+`POST /push/devices` with `device_id` marks that device primary. A
+sign-in uses the primary device when it is still active. Otherwise it
+uses the latest active device.
+
+Management calls `POST /api/users/{id}/push/revoke` to revoke every
+device for that user, and `POST /api/users/{id}/push/enroll` to issue a
+registration token and an enroll URL.
 
 A CIBA request for a user with an active device waits on that device.
 `/bc-authorize` returns `binding_message` when one is stored. The

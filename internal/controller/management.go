@@ -11,6 +11,7 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/oidc"
+	"github.com/bravo68web/oauth-impl/internal/push"
 	"github.com/bravo68web/oauth-impl/internal/repository"
 	"github.com/bravo68web/oauth-impl/internal/service"
 )
@@ -32,6 +33,13 @@ type ManagementController struct {
 	keyRetain    time.Duration
 	orgs         *service.OrgService
 	grants       *service.GrantService
+	push         *push.Handler
+}
+
+func (c *ManagementController) SetPush(h *push.Handler) {
+	if c != nil {
+		c.push = h
+	}
 }
 
 func (c *ManagementController) SetGrants(g *service.GrantService) {
@@ -957,6 +965,47 @@ func (c *ManagementController) HandleRotateKeys(w http.ResponseWriter, r *http.R
 	}
 	c.writeAudit(r, "key.rotate", "signing_key", "", map[string]any{"kids": kids})
 	writeJSON(w, http.StatusOK, map[string]any{"status": "rotated", "kids": kids})
+}
+
+func (c *ManagementController) HandleRevokeUserDevices(w http.ResponseWriter, r *http.Request) {
+	if c.push == nil {
+		writeError(w, http.StatusNotFound, "not_found", "Push devices are disabled")
+		return
+	}
+	userID := chi.URLParam(r, "userID")
+	if _, err := c.userSvc.GetUser(userID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "User not found")
+		return
+	}
+	n, err := c.push.Service().RevokeUser(userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "server_error", "Failed to revoke devices")
+		return
+	}
+	c.writeAudit(r, "push.revoke", "user", userID, map[string]any{"devices": n})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "revoked", "devices": n})
+}
+
+func (c *ManagementController) HandleEnrollUserDevice(w http.ResponseWriter, r *http.Request) {
+	if c.push == nil {
+		writeError(w, http.StatusNotFound, "not_found", "Push devices are disabled")
+		return
+	}
+	userID := chi.URLParam(r, "userID")
+	if _, err := c.userSvc.GetUser(userID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "User not found")
+		return
+	}
+	item, err := c.push.EnrollUser(userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "server_error", "Failed to issue an enrollment token")
+		return
+	}
+	c.writeAudit(r, "push.enroll", "user", userID, map[string]any{})
+	writeJSON(w, http.StatusCreated, map[string]string{
+		"registration_token": item.Token,
+		"enroll_url":         item.URL,
+	})
 }
 
 type webhookBody struct {

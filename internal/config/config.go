@@ -47,6 +47,7 @@ type PushConfig struct {
 	MinimumInteractionType string `yaml:"minimum_interaction_type"`
 	MaxDevicesPerUser      int    `yaml:"max_devices_per_user"`
 	ClientAttestation      bool   `yaml:"client_attestation_required"`
+	GracePeriodSeconds     int    `yaml:"grace_period_seconds"`
 }
 
 // AAuthConfig is the agent authorization protocol. Enabled stays false
@@ -390,6 +391,7 @@ func DefaultConfig() *Config {
 			MinimumInteractionType: "boolean",
 			MaxDevicesPerUser:      5,
 			ClientAttestation:      false,
+			GracePeriodSeconds:     300,
 		},
 		AAuth: AAuthConfig{
 			Enabled:      false,
@@ -500,6 +502,9 @@ func (c *Config) Normalize() {
 	c.Push.MinimumInteractionType = strings.ToLower(strings.TrimSpace(c.Push.MinimumInteractionType))
 	if c.Push.MinimumInteractionType == "" {
 		c.Push.MinimumInteractionType = "boolean"
+	}
+	if c.Push.GracePeriodSeconds <= 0 {
+		c.Push.GracePeriodSeconds = 300
 	}
 
 	fallback := strings.TrimRight(strings.TrimSpace(c.Security.Issuer), "/")

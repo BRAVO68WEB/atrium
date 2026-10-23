@@ -187,6 +187,7 @@ push:
   minimum_interaction_type: boolean
   max_devices_per_user: 5
   client_attestation_required: false
+  grace_period_seconds: 300
 
 aauth:
   enabled: false
@@ -290,7 +291,9 @@ a member. It does not create a membership. Naming an organization the
 user is not in returns `access_denied`.
 
 `push.enabled` defaults to false. It registers authenticator devices
-for a later wake signal. It does not change `/oauth/device`. See
+for a later wake signal. It does not change `/oauth/device`.
+`grace_period_seconds` is how long the previous device key still
+verifies after rotation. The default is 300. See
 [Push devices](PUSH.md).
 
 `debug.ui` defaults to false. Set it to true to serve `/preview`, a

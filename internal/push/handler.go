@@ -87,6 +87,36 @@ func (h *Handler) Devices(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"devices": list})
 }
 
+// Primary marks the signed-in user's chosen device.
+func (h *Handler) Primary(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.session(r)
+	if !ok {
+		writeProblem(w, problem(http.StatusUnauthorized, "login_required", "sign in to choose a device"))
+		return
+	}
+	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	var req struct {
+		DeviceID string `json:"device_id"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil || strings.TrimSpace(req.DeviceID) == "" {
+		writeProblem(w, problem(http.StatusBadRequest, "invalid_request", "device_id is required"))
+		return
+	}
+	if err := h.svc.MakePrimary(userID, req.DeviceID); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// EnrollUser issues a registration token for an admin recovery.
+func (h *Handler) EnrollUser(userID string) (Enrollment, error) {
+	if h == nil || h.svc == nil {
+		return Enrollment{}, problem(http.StatusNotFound, "not_found", "push is disabled")
+	}
+	return h.svc.IssueEnrollment(userID, "", h.sign)
+}
+
 func (h *Handler) Revoke(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		writeProblem(w, problem(http.StatusBadRequest, "invalid_request", "form is invalid"))

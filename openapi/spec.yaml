@@ -2497,6 +2497,34 @@ paths:
         "200":
           description: MFA disabled
 
+  /api/users/{userID}/push/revoke:
+    post:
+      tags: [Management]
+      summary: Revoke every authenticator for a user
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Devices revoked
+
+  /api/users/{userID}/push/enroll:
+    post:
+      tags: [Management]
+      summary: Issue a push enrollment token for a user
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Enrollment token
+
   /api/webhooks/{id}:
     get:
       tags: [Management]
