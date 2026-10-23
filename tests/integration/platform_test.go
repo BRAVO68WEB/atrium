@@ -289,6 +289,102 @@ func TestForcedDPoP(t *testing.T) {
 	if rejected.StatusCode != http.StatusUnauthorized || !strings.Contains(string(rejectedBody), "does not match") {
 		t.Fatalf("wrong dpop key %d %s", rejected.StatusCode, rejectedBody)
 	}
+
+	meURL := ts.URL + "/api/me"
+	meProof, err := dpop.CreateDPoPProof(key, http.MethodGet, meURL, access)
+	if err != nil {
+		t.Fatal(err)
+	}
+	me, _ := http.NewRequest(http.MethodGet, meURL, nil)
+	me.Header.Set("Authorization", "DPoP "+access)
+	me.Header.Set("DPoP", meProof)
+	meResp, err := http.DefaultClient.Do(me)
+	if err != nil {
+		t.Fatal(err)
+	}
+	meBody, _ := io.ReadAll(meResp.Body)
+	_ = meResp.Body.Close()
+	if meResp.StatusCode != http.StatusOK || !strings.Contains(string(meBody), "ada") {
+		t.Fatalf("dpop profile %d %s", meResp.StatusCode, meBody)
+	}
+	meWrong, err := dpop.CreateDPoPProof(other, http.MethodGet, meURL, access)
+	if err != nil {
+		t.Fatal(err)
+	}
+	meBad, _ := http.NewRequest(http.MethodGet, meURL, nil)
+	meBad.Header.Set("Authorization", "DPoP "+access)
+	meBad.Header.Set("DPoP", meWrong)
+	meBadResp, err := http.DefaultClient.Do(meBad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	meBadBody, _ := io.ReadAll(meBadResp.Body)
+	_ = meBadResp.Body.Close()
+	if meBadResp.StatusCode != http.StatusUnauthorized || !strings.Contains(string(meBadBody), "does not match") {
+		t.Fatalf("profile wrong key %d %s", meBadResp.StatusCode, meBadBody)
+	}
+
+	refreshToken, _ := token["refresh_token"].(string)
+	tokenURL := ts.URL + "/oauth/token"
+	refreshForm := url.Values{}
+	refreshForm.Set("grant_type", "refresh_token")
+	refreshForm.Set("refresh_token", refreshToken)
+	badRefreshProof, err := dpop.CreateDPoPProof(other, http.MethodPost, tokenURL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	badRefresh, _ := http.NewRequest(http.MethodPost, tokenURL, strings.NewReader(refreshForm.Encode()))
+	badRefresh.SetBasicAuth(client.ID, client.Secret)
+	badRefresh.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	badRefresh.Header.Set("DPoP", badRefreshProof)
+	badRefreshResp, err := http.DefaultClient.Do(badRefresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badRefreshBody, _ := io.ReadAll(badRefreshResp.Body)
+	_ = badRefreshResp.Body.Close()
+	if badRefreshResp.StatusCode != http.StatusBadRequest || !strings.Contains(string(badRefreshBody), "does not match") {
+		t.Fatalf("refresh wrong key %d %s", badRefreshResp.StatusCode, badRefreshBody)
+	}
+
+	goodRefreshProof, err := dpop.CreateDPoPProof(key, http.MethodPost, tokenURL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	goodRefresh, _ := http.NewRequest(http.MethodPost, tokenURL, strings.NewReader(refreshForm.Encode()))
+	goodRefresh.SetBasicAuth(client.ID, client.Secret)
+	goodRefresh.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	goodRefresh.Header.Set("DPoP", goodRefreshProof)
+	goodRefreshResp, err := http.DefaultClient.Do(goodRefresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var refreshed map[string]any
+	_ = json.NewDecoder(goodRefreshResp.Body).Decode(&refreshed)
+	_ = goodRefreshResp.Body.Close()
+	if goodRefreshResp.StatusCode != http.StatusOK {
+		t.Fatalf("refresh %d %+v", goodRefreshResp.StatusCode, refreshed)
+	}
+	newAccess, _ := refreshed["access_token"].(string)
+	revokeForm := url.Values{}
+	revokeForm.Set("token", newAccess)
+	badRevokeProof, err := dpop.CreateDPoPProof(other, http.MethodPost, ts.URL+"/oauth/revoke", newAccess)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badRevoke, _ := http.NewRequest(http.MethodPost, ts.URL+"/oauth/revoke", strings.NewReader(revokeForm.Encode()))
+	badRevoke.SetBasicAuth(client.ID, client.Secret)
+	badRevoke.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	badRevoke.Header.Set("DPoP", badRevokeProof)
+	badRevokeResp, err := http.DefaultClient.Do(badRevoke)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badRevokeBody, _ := io.ReadAll(badRevokeResp.Body)
+	_ = badRevokeResp.Body.Close()
+	if badRevokeResp.StatusCode != http.StatusBadRequest || !strings.Contains(string(badRevokeBody), "does not match") {
+		t.Fatalf("revoke wrong key %d %s", badRevokeResp.StatusCode, badRevokeBody)
+	}
 }
 
 func TestOpenAPICoversRouter(t *testing.T) {
