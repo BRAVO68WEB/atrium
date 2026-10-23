@@ -110,6 +110,41 @@ describe("social login", function () {
     const body = await page.textContent("body");
     assert.match(body, /ada-social/);
     assert.match(body, /ada-social@fieldnotes.example/);
+    await page.goto(`${server.base}/login/social/local?next=/profile`);
+    await page.waitForSelector("text=Your account");
+    const again = await page.textContent("body");
+    assert.match(again, /ada-social@fieldnotes.example/);
+    await page.context().close();
+  });
+});
+
+describe("social registration switched off", function () {
+  let idp;
+  let server;
+
+  before(async function () {
+    this.timeout(60000);
+    idp = await startIdentityProvider();
+    server = await startServer({
+      social: { issuer: idp.base },
+      security: { disable_social_registration: true },
+    });
+  });
+
+  after(async function () {
+    await closeBrowser();
+    if (server) {
+      await server.stop();
+    }
+    if (idp) {
+      await idp.close();
+    }
+  });
+
+  it("does not create an account from the identity provider", async function () {
+    const page = await newPage();
+    await page.goto(`${server.base}/login/social/local?next=/profile`);
+    await page.waitForSelector("text=Social registration is disabled");
     await page.context().close();
   });
 });

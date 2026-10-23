@@ -13,6 +13,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/push"
 	"github.com/bravo68web/oauth-impl/internal/queue"
+	"github.com/bravo68web/oauth-impl/internal/service"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
@@ -76,11 +77,14 @@ func (h *Handler) HandleBCAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scope := r.Form.Get("scope")
-	if scope == "" {
-		scope = "openid"
+	scopes, err := service.AllowedScopes(r.Form.Get("scope"), client.Scopes)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error":             "invalid_scope",
+			"error_description": err.Error(),
+		})
+		return
 	}
-	scopes := crypto.NormalizeScopes(scope)
 
 	bindingMessage := r.Form.Get("binding_message")
 	interaction := r.Form.Get("interaction_type")

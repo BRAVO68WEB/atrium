@@ -13,7 +13,7 @@ func TestTokenExchangeStaysWithTheIssuingClient(t *testing.T) {
 	owner := createAPIClient(t, ts.URL, token, map[string]any{
 		"name":        "Field Notes",
 		"grant_types": []string{"password", "urn:ietf:params:oauth:grant-type:token-exchange"},
-		"scopes":      []string{"openid"},
+		"scopes":      []string{"openid", "email"},
 	})
 	other := createAPIClient(t, ts.URL, token, map[string]any{
 		"name":        "Other App",

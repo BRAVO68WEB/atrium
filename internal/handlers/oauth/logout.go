@@ -57,35 +57,52 @@ func (h *Handler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie("session_id"); err == nil {
 		cookieSID = cookie.Value
 	}
-	if hintSID != "" {
+	endSession := func(sid string) {
+		if sid == "" {
+			return
+		}
 		if h.logout != nil {
-			h.logout.End(hintSID)
+			h.logout.End(sid)
 		} else if h.sessions != nil {
-			_ = h.sessions.Revoke(hintSID)
+			_ = h.sessions.Revoke(sid)
 		}
 	}
-	if cookieSID != "" && cookieSID != hintSID {
-		if h.logout != nil {
-			h.logout.End(cookieSID)
-		} else if h.sessions != nil {
-			_ = h.sessions.Revoke(cookieSID)
-		}
+	if validHint && hintSID != "" {
+		endSession(hintSID)
 	}
-	if hintSID == "" && cookieSID == "" && hintSub != "" && h.sessions != nil {
+	// A hint for another client names a different session. Leave this browser signed in.
+	endCookie := !validHint && confirmed
+	if validHint && hintSID != "" && cookieSID == hintSID {
+		endCookie = true
+	}
+	if validHint && hintSID == "" && confirmed {
+		endCookie = true
+	}
+	if endCookie && cookieSID != "" && cookieSID != hintSID {
+		endSession(cookieSID)
+	}
+	if validHint && hintSID == "" && cookieSID == "" && hintSub != "" && h.sessions != nil {
 		if ids, err := h.sessions.RevokeAllExcept(hintSub, ""); err == nil && h.logout != nil {
 			for _, id := range ids {
 				h.logout.Notify(id, hintSub)
 			}
 		}
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_id",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   h.cfg.Server.TLS.Enabled,
-		MaxAge:   -1,
-	})
+	if endCookie {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session_id",
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   h.cfg.Server.TLS.Enabled,
+			MaxAge:   -1,
+		})
+	}
+
+	if !endCookie && hintSID == "" {
+		h.renderLogout(w, r, values, "")
+		return
+	}
 
 	if redirectURI != "" {
 		if clientID == "" {

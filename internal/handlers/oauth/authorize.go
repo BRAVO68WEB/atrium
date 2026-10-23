@@ -60,7 +60,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-				// Merge JWT claims with query params (query params take precedence)
+				// Query values fill blanks. The request object keeps its code challenge.
 				if v, ok := claims["client_id"]; ok && clientID == "" {
 					clientID = v
 				}
@@ -79,10 +79,10 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 				if v, ok := claims["nonce"]; ok && nonce == "" {
 					nonce = v
 				}
-				if v, ok := claims["code_challenge"]; ok && codeChallenge == "" {
+				if v, ok := claims["code_challenge"]; ok && v != "" {
 					codeChallenge = v
 				}
-				if v, ok := claims["code_challenge_method"]; ok && codeChallengeMethod == "" {
+				if v, ok := claims["code_challenge_method"]; ok && v != "" {
 					codeChallengeMethod = v
 				}
 				if v, ok := claims["prompt"]; ok && prompt == "" {
@@ -141,10 +141,10 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		if v, ok := params["nonce"]; ok && nonce == "" {
 			nonce = v
 		}
-		if v, ok := params["code_challenge"]; ok && codeChallenge == "" {
+		if v, ok := params["code_challenge"]; ok && v != "" {
 			codeChallenge = v
 		}
-		if v, ok := params["code_challenge_method"]; ok && codeChallengeMethod == "" {
+		if v, ok := params["code_challenge_method"]; ok && v != "" {
 			codeChallengeMethod = v
 		}
 		if v, ok := params["prompt"]; ok && prompt == "" {
@@ -206,6 +206,10 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		// Allow S256 and plain
 		if codeChallengeMethod != "S256" && codeChallengeMethod != "plain" {
 			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "Only S256 and plain code_challenge_method are supported", state)
+			return
+		}
+		if codeChallengeMethod == "plain" && (h.cfg == nil || !h.cfg.Security.AllowPlainPKCE) {
+			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "plain PKCE is disabled", state)
 			return
 		}
 	}
@@ -328,6 +332,30 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.issueAuthorizationResponse(w, r, client, session, responseType, responseMode, redirectURI, scope, state, nonce, codeChallenge, codeChallengeMethod, resource, organization, requestedActor)
+}
+
+// ApplyRequestObject fills empty authorize fields from a signed request.
+// The code challenge in that request wins over a query value.
+func (h *Handler) ApplyRequestObject(params map[string]string) {
+	if h == nil || h.jarSvc == nil || strings.TrimSpace(params["request"]) == "" {
+		return
+	}
+	client, _, _ := h.resolveClient(params["client_id"], params["redirect_uri"])
+	if client == nil {
+		return
+	}
+	claims, err := h.jarSvc.ValidateRequestObject(params["request"], client)
+	if err != nil {
+		return
+	}
+	for key, value := range claims {
+		if value == "" {
+			continue
+		}
+		if key == "code_challenge" || key == "code_challenge_method" || params[key] == "" {
+			params[key] = value
+		}
+	}
 }
 
 func (h *Handler) issueAuthorizationResponse(w http.ResponseWriter, r *http.Request, client *models.Client, session *Session, responseType, responseMode, redirectURI, scope, state, nonce, codeChallenge, codeChallengeMethod, resource, organization, requestedActor string) {

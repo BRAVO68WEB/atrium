@@ -639,10 +639,16 @@ func (c *WebController) HandleMFAEnrollVerify(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := c.totpSvc.ConfirmMFA(session.UserID, code); err != nil {
-		result, _ := c.totpSvc.EnableMFA(session.UserID, session.Username)
+		result, enrollErr := c.totpSvc.EnableMFA(session.UserID, session.Username)
+		shown := secret
+		qr := ""
+		if enrollErr == nil && result != nil {
+			shown = result.Secret
+			qr = result.QRBase64
+		}
 		c.renderPage(w, r, "mfa_enroll.html", "Setup Two-Factor Authentication", "Setup Two-Factor Authentication", params, map[string]any{
-			"QRCodeBase64": result.QRBase64,
-			"Secret":       secret,
+			"QRCodeBase64": qr,
+			"Secret":       shown,
 			"Issuer":       c.cfg.Security.MFA.Issuer,
 			"Username":     session.Username,
 			"Error":        "Invalid code. Please try again.",
@@ -846,6 +852,9 @@ func (c *WebController) HandleConsentPage(w http.ResponseWriter, r *http.Request
 	}
 
 	params := extractOAuthParams(r)
+	if c.oauthHandler != nil {
+		c.oauthHandler.ApplyRequestObject(params)
+	}
 
 	// If PAR, fetch stored params and merge (scope, redirect_uri, etc. are in PAR, not URL)
 	if requestURI := params["request_uri"]; requestURI != "" {
@@ -877,6 +886,9 @@ func (c *WebController) HandleConsent(w http.ResponseWriter, r *http.Request) {
 	}
 	action := r.FormValue("action")
 	params := extractOAuthParamsFromForm(r)
+	if c.oauthHandler != nil {
+		c.oauthHandler.ApplyRequestObject(params)
+	}
 
 	session := c.getSession(r)
 	if session == nil || !session.Authenticated {

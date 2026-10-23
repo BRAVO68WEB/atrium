@@ -91,11 +91,31 @@ describe("password reset", function () {
     await page.fill("#password", "correct-horse-2");
     await page.click("button[type=submit]");
     await page.waitForSelector("text=password has been updated");
+    await page.goto(link[0].replace(/[>\s].*$/, ""));
+    await page.fill("#password", "correct-horse-3");
+    await page.click("button[type=submit]");
+    await page.waitForSelector("text=already been used");
+    await page.goto(`${server.base}/login?next=/profile`);
+    await page.fill("#username", user.username);
+    await page.fill("#password", user.password);
+    await page.click("button[type=submit]");
+    await page.waitForSelector("text=Invalid credentials");
     await page.goto(`${server.base}/login?next=/profile`);
     await page.fill("#username", user.username);
     await page.fill("#password", "correct-horse-2");
     await page.click("button[type=submit]");
     await page.waitForSelector("text=Your account");
+    await page.context().close();
+  });
+
+  it("does not send mail for an unknown account", async function () {
+    const before = smtp.messages.length;
+    const page = await newPage();
+    await page.goto(`${server.base}/forgot`);
+    await page.fill("#username", "nobody-no-such-user");
+    await page.click("button[type=submit]");
+    await page.waitForSelector("text=reset link is on its way");
+    assert.equal(smtp.messages.length, before);
     await page.context().close();
   });
 });

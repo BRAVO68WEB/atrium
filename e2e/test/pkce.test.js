@@ -12,7 +12,7 @@ describe("PKCE required", function () {
 
   before(async function () {
     this.timeout(60000);
-    server = await startServer({ security: { require_pkce: true } });
+    server = await startServer({ security: { require_pkce: true, allow_plain_pkce: false } });
     user = await createUser(server, { username: shortID("pkce") });
     redirectURI = await callbackURL();
     client = await createClient(server, {
@@ -60,6 +60,68 @@ describe("PKCE required", function () {
       redirect_uri: redirectURI,
       code_verifier: pkce.verifier,
     }, { id: client.id, secret: client.secret });
+    assert.equal(issued.status, 200, JSON.stringify(issued.body));
+    await page.context().close();
+  });
+
+  it("rejects the plain code challenge method", async function () {
+    const url = new URL(`${server.base}/oauth/authorize`);
+    url.searchParams.set("client_id", client.id);
+    url.searchParams.set("redirect_uri", redirectURI);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "openid");
+    url.searchParams.set("code_challenge", "plain-verifier");
+    url.searchParams.set("code_challenge_method", "plain");
+    const response = await fetch(url);
+    const body = await response.json();
+    assert.equal(response.status, 400);
+    assert.match(body.error_description, /plain PKCE is disabled/);
+  });
+});
+
+describe("plain PKCE allowed", function () {
+  let server;
+  let user;
+  let client;
+  let redirectURI;
+
+  before(async function () {
+    this.timeout(60000);
+    server = await startServer({ security: { allow_plain_pkce: true } });
+    user = await createUser(server, { username: shortID("plain") });
+    redirectURI = await callbackURL();
+    client = await createClient(server, {
+      name: "Plain PKCE",
+      redirect_uris: [redirectURI],
+      grant_types: ["authorization_code"],
+      scopes: ["openid"],
+    });
+  });
+
+  after(async function () {
+    await closeBrowser();
+    if (server) {
+      await server.stop();
+    }
+  });
+
+  it("exchanges a plain verifier", async function () {
+    const verifier = "plain-verifier-value";
+    const url = new URL(`${server.base}/oauth/authorize`);
+    url.searchParams.set("client_id", client.id);
+    url.searchParams.set("redirect_uri", redirectURI);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "openid");
+    url.searchParams.set("code_challenge", verifier);
+    url.searchParams.set("code_challenge_method", "plain");
+    const page = await newPage();
+    const callback = await authorize(page, url.toString(), user);
+    const issued = await tokenRequest(server.base, {
+      grant_type: "authorization_code",
+      code: callback.searchParams.get("code"),
+      redirect_uri: redirectURI,
+      code_verifier: verifier,
+    }, client);
     assert.equal(issued.status, 200, JSON.stringify(issued.body));
     await page.context().close();
   });

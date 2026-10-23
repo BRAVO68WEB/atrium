@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const http = require("node:http");
 const { startServer } = require("../support/server");
 const { pkcePair, shortID } = require("../support/pkce");
-const { createUser, createClient } = require("../support/oauth");
+const { createUser, createClient, decodeJwt } = require("../support/oauth");
 const { newPage, authorize, closeBrowser, callbackURL } = require("../support/browser");
 
 function startSink() {
@@ -73,6 +73,17 @@ describe("back-channel logout", function () {
     url.searchParams.set("code_challenge", pkce.challenge);
     url.searchParams.set("code_challenge_method", pkce.method);
     await authorize(page, url.toString(), user);
+    const cookies = await page.context().cookies();
+    const sid = cookies.find((cookie) => cookie.name === "session_id");
+    assert.ok(sid);
+    const quiet = await startSink();
+    await createClient(server, {
+      name: "Quiet",
+      redirect_uris: [redirectURI],
+      grant_types: ["authorization_code"],
+      scopes: ["openid"],
+      backchannel_logout_uri: quiet.url,
+    });
     await page.goto(`${server.base}/oauth/logout`);
     await page.click("button[type=submit]");
     await page.waitForSelector("text=session has ended");
@@ -82,7 +93,12 @@ describe("back-channel logout", function () {
     }
     assert.equal(sink.bodies.length > 0, true, "logout token was not delivered");
     const params = new URLSearchParams(sink.bodies[0]);
-    assert.equal(params.get("logout_token").split(".").length, 3);
+    const claims = decodeJwt(params.get("logout_token"));
+    assert.ok(claims.events["http://schemas.openid.net/event/backchannel-logout"]);
+    assert.equal(claims.sid, sid.value);
+    assert.equal(claims.aud, client.id);
+    assert.equal(quiet.bodies.length, 0);
+    await quiet.close();
     await page.context().close();
   });
 });
