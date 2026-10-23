@@ -13,7 +13,7 @@ func TestRevokeDoesNotRevealAnotherClientsToken(t *testing.T) {
 	owner := createAPIClient(t, ts.URL, mgmt, map[string]any{
 		"name":          "Field Notes",
 		"grant_types":   []string{"password"},
-		"scopes":        []string{"openid"},
+		"scopes":        []string{"openid", "email"},
 		"redirect_uris": []string{"http://localhost:8080/field", "http://localhost:8080/other"},
 	})
 	other := createAPIClient(t, ts.URL, mgmt, map[string]any{
