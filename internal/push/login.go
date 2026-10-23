@@ -31,7 +31,7 @@ type LoginNotice struct {
 // without an authenticator stays on its existing path.
 func (s *Service) PrepareLogin(userID, authReqID, interaction, binding string) (string, string, error) {
 	var deviceID, typesText string
-	err := s.db.QueryRow(`SELECT id, COALESCE(interaction_types, '[]') FROM push_devices WHERE user_id = ? AND status = 'active' ORDER BY COALESCE(last_used_at, created_at) DESC LIMIT 1`, userID).Scan(&deviceID, &typesText)
+	err := s.db.QueryRow(`SELECT id, COALESCE(interaction_types, '[]') FROM push_devices WHERE user_id = ? AND status = 'active' ORDER BY is_primary DESC, COALESCE(last_used_at, created_at) DESC LIMIT 1`, userID).Scan(&deviceID, &typesText)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return "", "", err
@@ -75,6 +75,7 @@ func (s *Service) PrepareLogin(userID, authReqID, interaction, binding string) (
 		return "", "", err
 	}
 	_, _ = s.db.Exec(`UPDATE push_devices SET last_used_at = ? WHERE id = ?`, s.now().UTC().Format("2006-01-02T15:04:05Z"), deviceID)
+	s.notify(deviceID, "auth_request", authReqID)
 	return interaction, binding, nil
 }
 
@@ -192,7 +193,7 @@ func (s *Service) PollPending(r *http.Request, deviceID, credential string) ([]L
 }
 
 // PollDecide authenticates the device and records its decision.
-func (s *Service) PollDecide(r *http.Request, deviceID, credential, authReqID, action, proof string) (string, string, error) {
+func (s *Service) PollDecide(r *http.Request, deviceID, credential, authReqID, action, proof, mode string) (string, string, error) {
 	row, err := s.authenticate(r, deviceID, credential)
 	if err != nil {
 		return "", "", err
@@ -204,6 +205,7 @@ func (s *Service) PollDecide(r *http.Request, deviceID, credential, authReqID, a
 	if err := s.FinishLogin(row.userID, authReqID, status, proof); err != nil {
 		return "", s.issueNonce(row.id), err
 	}
+	s.noteDelivery(row.id, authReqID, mode)
 	return row.userID, s.issueNonce(row.id), nil
 }
 

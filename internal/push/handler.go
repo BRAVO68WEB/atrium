@@ -87,6 +87,36 @@ func (h *Handler) Devices(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"devices": list})
 }
 
+// Primary marks the signed-in user's chosen device.
+func (h *Handler) Primary(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.session(r)
+	if !ok {
+		writeProblem(w, problem(http.StatusUnauthorized, "login_required", "sign in to choose a device"))
+		return
+	}
+	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	var req struct {
+		DeviceID string `json:"device_id"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil || strings.TrimSpace(req.DeviceID) == "" {
+		writeProblem(w, problem(http.StatusBadRequest, "invalid_request", "device_id is required"))
+		return
+	}
+	if err := h.svc.MakePrimary(userID, req.DeviceID); err != nil {
+		writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// EnrollUser issues a registration token for an admin recovery.
+func (h *Handler) EnrollUser(userID string) (Enrollment, error) {
+	if h == nil || h.svc == nil {
+		return Enrollment{}, problem(http.StatusNotFound, "not_found", "push is disabled")
+	}
+	return h.svc.IssueEnrollment(userID, "", h.sign)
+}
+
 func (h *Handler) Revoke(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		writeProblem(w, problem(http.StatusBadRequest, "invalid_request", "form is invalid"))
@@ -108,25 +138,56 @@ func (h *Handler) Pending(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	payload, err := json.Marshal(map[string]any{"pending": list})
+	if err != nil {
+		w.Header().Set("Replay-Nonce", nonce)
+		writeErr(w, err)
+		return
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Replay-Nonce", nonce)
-	_ = json.NewEncoder(w).Encode(map[string]any{"pending": list})
+	if wantsJose(r) {
+		sealed, err := h.svc.SealPending(deviceID, payload)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/jose")
+		_, _ = w.Write([]byte(sealed))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(payload)
+}
+
+func wantsJose(r *http.Request) bool {
+	for _, part := range strings.Split(r.Header.Get("Accept"), ",") {
+		media := strings.TrimSpace(strings.Split(part, ";")[0])
+		if media == "application/jose" {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) Decide(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
 	var req struct {
-		DeviceID  string `json:"device_id"`
-		AuthReqID string `json:"auth_req_id"`
-		Action    string `json:"action"`
-		Proof     string `json:"proof"`
+		DeviceID     string `json:"device_id"`
+		AuthReqID    string `json:"auth_req_id"`
+		Action       string `json:"action"`
+		Proof        string `json:"proof"`
+		DeliveryMode string `json:"delivery_mode"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		writeProblem(w, problem(http.StatusBadRequest, "invalid_request", "decision body is invalid"))
 		return
 	}
-	userID, nonce, err := h.svc.PollDecide(r, req.DeviceID, bearerOrForm(r), req.AuthReqID, req.Action, req.Proof)
+	if req.DeliveryMode != "" && req.DeliveryMode != "push" && req.DeliveryMode != "poll" {
+		writeProblem(w, problem(http.StatusBadRequest, "invalid_request", "delivery_mode must be push or poll"))
+		return
+	}
+	userID, nonce, err := h.svc.PollDecide(r, req.DeviceID, bearerOrForm(r), req.AuthReqID, req.Action, req.Proof, req.DeliveryMode)
 	if err != nil {
 		if nonce != "" {
 			w.Header().Set("Replay-Nonce", nonce)

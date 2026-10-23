@@ -78,7 +78,7 @@ func TestPushRegistrationLifecycle(t *testing.T) {
 	}
 
 	list := getAuth(t, browser, ts.URL+"/push/devices")
-	if list.Status != http.StatusOK || strings.Contains(list.Body, first.Credential) || !strings.Contains(list.Body, first.DeviceID) {
+	if list.Status != http.StatusOK || strings.Contains(list.Body, first.Credential) || !strings.Contains(list.Body, first.DeviceID) || !strings.Contains(list.Body, "not_checked") {
 		t.Fatalf("list %d %s", list.Status, list.Body)
 	}
 
@@ -86,14 +86,14 @@ func TestPushRegistrationLifecycle(t *testing.T) {
 	if revoked.Status != http.StatusNoContent || revoked.Header.Get("Replay-Nonce") == "" {
 		t.Fatalf("revoke %d nonce %q %s", revoked.Status, revoked.Header.Get("Replay-Nonce"), revoked.Body)
 	}
-	again := revokeDevice(t, ts.URL, dpop, key, first.DeviceID, first.Credential, "")
-	if again.Status != http.StatusUnauthorized {
+	again := revokeDevice(t, ts.URL, dpop, key, first.DeviceID, first.Credential, revoked.Header.Get("Replay-Nonce"))
+	if again.Status != http.StatusNoContent {
 		t.Fatalf("second revoke %d %s", again.Status, again.Body)
 	}
 
 	secondKey, _ := dpop.GenerateKeyPair()
 	second := registerDevice(t, ts, browser, dpop, secondKey, []string{"boolean", "number_choose"})
-	rotated, nonce := rotateDevice(t, ts.URL, dpop, secondKey, second)
+	rotated, nonce, _ := rotateDevice(t, ts.URL, dpop, secondKey, second)
 	if rotated.Status != http.StatusOK || nonce == "" {
 		t.Fatalf("rotate %d nonce %q %s", rotated.Status, nonce, rotated.Body)
 	}
@@ -140,6 +140,219 @@ func TestPushExpiredTokenAndDeviceLimit(t *testing.T) {
 	if limited.Status != http.StatusForbidden || !strings.Contains(limited.Body, "device_limit") {
 		t.Fatalf("limit %d %s", limited.Status, limited.Body)
 	}
+	swapped := registerPayload(t, fresh.URL, enroll(t, browser, fresh.URL).Token, dpop.ExportPublicKeyAsJWK(&key2.PublicKey), map[string]any{
+		"replaces_device_id": ok.DeviceID,
+	})
+	if swapped.Status != http.StatusCreated || !strings.Contains(swapped.Body, "device_id") {
+		t.Fatalf("replace %d %s", swapped.Status, swapped.Body)
+	}
+	after := getAuth(t, browser, fresh.URL+"/push/devices")
+	if !strings.Contains(after.Body, `"status":"revoked"`) || !strings.Contains(after.Body, ok.DeviceID) {
+		t.Fatalf("replaced list %s", after.Body)
+	}
+}
+
+func TestRotationKeepsThePreviousKey(t *testing.T) {
+	cfg := pushTestConfig()
+	ts := newServer(t, cfg)
+	token := managementToken(t, ts.URL)
+	createUser(t, ts.URL, token)
+	browser := signIn(t, ts.URL)
+	dpop := service.NewDPoPService()
+	key, _ := dpop.GenerateKeyPair()
+	registered := registerDevice(t, ts, browser, dpop, key, []string{"boolean"})
+	if registered.Status != http.StatusCreated {
+		t.Fatalf("register %d %s", registered.Status, registered.Body)
+	}
+	rotated, nonce, newKey := rotateDevice(t, ts.URL, dpop, key, registered)
+	if rotated.Status != http.StatusOK {
+		t.Fatalf("rotate %d %s", rotated.Status, rotated.Body)
+	}
+	var body map[string]any
+	_ = json.Unmarshal([]byte(rotated.Body), &body)
+	credential := str(body["device_credential"])
+	oldKey := pollPending(t, ts.URL, dpop, key, registered.DeviceID, credential, nonce)
+	if oldKey.Status != http.StatusOK {
+		t.Fatalf("grace %d %s", oldKey.Status, oldKey.Body)
+	}
+	cleared := pollPending(t, ts.URL, dpop, newKey, registered.DeviceID, credential, oldKey.Header.Get("Replay-Nonce"))
+	if cleared.Status != http.StatusOK {
+		t.Fatalf("new key %d %s", cleared.Status, cleared.Body)
+	}
+	dropped := pollPending(t, ts.URL, dpop, key, registered.DeviceID, credential, cleared.Header.Get("Replay-Nonce"))
+	if dropped.Status != http.StatusUnauthorized {
+		t.Fatalf("old key after use %d %s", dropped.Status, dropped.Body)
+	}
+
+	secondKey, _ := dpop.GenerateKeyPair()
+	second := registerDevice(t, ts, browser, dpop, secondKey, []string{"boolean"})
+	compromised, compromisedNonce, compromisedKey := rotateDeviceReason(t, ts.URL, dpop, secondKey, second, "compromised")
+	if compromised.Status != http.StatusOK {
+		t.Fatalf("compromised %d %s", compromised.Status, compromised.Body)
+	}
+	var compromisedBody map[string]any
+	_ = json.Unmarshal([]byte(compromised.Body), &compromisedBody)
+	stillNew := pollPending(t, ts.URL, dpop, compromisedKey, second.DeviceID, str(compromisedBody["device_credential"]), compromisedNonce)
+	if stillNew.Status != http.StatusOK {
+		t.Fatalf("compromised new key %d %s", stillNew.Status, stillNew.Body)
+	}
+	rejected := pollPending(t, ts.URL, dpop, secondKey, second.DeviceID, str(compromisedBody["device_credential"]), stillNew.Header.Get("Replay-Nonce"))
+	if rejected.Status != http.StatusUnauthorized {
+		t.Fatalf("compromised old key %d %s", rejected.Status, rejected.Body)
+	}
+}
+
+func TestRotationGraceExpires(t *testing.T) {
+	cfg := pushTestConfig()
+	cfg.Push.GracePeriodSeconds = 1
+	ts := newServer(t, cfg)
+	token := managementToken(t, ts.URL)
+	createUser(t, ts.URL, token)
+	browser := signIn(t, ts.URL)
+	dpop := service.NewDPoPService()
+	key, _ := dpop.GenerateKeyPair()
+	registered := registerDevice(t, ts, browser, dpop, key, []string{"boolean"})
+	rotated, nonce, _ := rotateDevice(t, ts.URL, dpop, key, registered)
+	if rotated.Status != http.StatusOK {
+		t.Fatalf("rotate %d %s", rotated.Status, rotated.Body)
+	}
+	var body map[string]any
+	_ = json.Unmarshal([]byte(rotated.Body), &body)
+	time.Sleep(1500 * time.Millisecond)
+	expired := pollPending(t, ts.URL, dpop, key, registered.DeviceID, str(body["device_credential"]), nonce)
+	if expired.Status != http.StatusUnauthorized {
+		t.Fatalf("expired grace %d %s", expired.Status, expired.Body)
+	}
+}
+
+func TestPrimaryDeviceReceivesTheSignIn(t *testing.T) {
+	cfg := pushTestConfig()
+	ts := newServer(t, cfg)
+	token := managementToken(t, ts.URL)
+	createUser(t, ts.URL, token)
+	browser := signIn(t, ts.URL)
+	dpop := service.NewDPoPService()
+	olderKey, _ := dpop.GenerateKeyPair()
+	older := registerDevice(t, ts, browser, dpop, olderKey, []string{"boolean"})
+	newerKey, _ := dpop.GenerateKeyPair()
+	newer := registerDevice(t, ts, browser, dpop, newerKey, []string{"boolean"})
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/push/devices", strings.NewReader(`{"device_id":"`+older.DeviceID+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	chosen, err := browser.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = chosen.Body.Close()
+	if chosen.StatusCode != http.StatusNoContent {
+		t.Fatalf("primary %d", chosen.StatusCode)
+	}
+	client := createPushClient(t, ts.URL, token)
+	authReqID := pushCIBAInteractionOK(t, ts.URL, client, "ada", "", "42")
+	onOlder := pollPending(t, ts.URL, dpop, olderKey, older.DeviceID, older.Credential, "")
+	onNewer := pollPending(t, ts.URL, dpop, newerKey, newer.DeviceID, newer.Credential, "")
+	if onOlder.Status != http.StatusOK || !strings.Contains(onOlder.Body, authReqID) || strings.Contains(onNewer.Body, authReqID) {
+		t.Fatalf("primary pending older %d %s newer %d %s", onOlder.Status, onOlder.Body, onNewer.Status, onNewer.Body)
+	}
+}
+
+func TestAttestationCanBeRequired(t *testing.T) {
+	cfg := pushTestConfig()
+	cfg.Push.ClientAttestation = true
+	ts := newServer(t, cfg)
+	token := managementToken(t, ts.URL)
+	createUser(t, ts.URL, token)
+	browser := signIn(t, ts.URL)
+	dpop := service.NewDPoPService()
+	key, _ := dpop.GenerateKeyPair()
+	page := enroll(t, browser, ts.URL)
+	missing := registerRaw(t, ts.URL, page.Token, dpop.ExportPublicKeyAsJWK(&key.PublicKey), []string{"boolean"})
+	if missing.Status != http.StatusBadRequest || !strings.Contains(missing.Body, "attestation_missing") {
+		t.Fatalf("missing %d %s", missing.Status, missing.Body)
+	}
+	accepted := registerPayload(t, ts.URL, enroll(t, browser, ts.URL).Token, dpop.ExportPublicKeyAsJWK(&key.PublicKey), map[string]any{
+		"attestation": "device-attest",
+	})
+	if accepted.Status != http.StatusCreated {
+		t.Fatalf("accepted %d %s", accepted.Status, accepted.Body)
+	}
+}
+
+func TestAdminCanResetPushDevices(t *testing.T) {
+	cfg := pushTestConfig()
+	ts := newServer(t, cfg)
+	token := managementToken(t, ts.URL)
+	created := postJSON(t, ts.URL+"/api/users", `{"username":"ada","password":"correct horse","email":"ada@example.com","email_verified":true}`, token)
+	if created.Status != http.StatusCreated {
+		t.Fatalf("user %d %s", created.Status, created.Body)
+	}
+	var user map[string]any
+	_ = json.Unmarshal([]byte(created.Body), &user)
+	userID := str(user["id"])
+	browser := signIn(t, ts.URL)
+	dpop := service.NewDPoPService()
+	key, _ := dpop.GenerateKeyPair()
+	registered := registerDevice(t, ts, browser, dpop, key, []string{"boolean"})
+	client := createPushClient(t, ts.URL, token)
+	revoked := postJSON(t, ts.URL+"/api/users/"+userID+"/push/revoke", `{}`, token)
+	if revoked.Status != http.StatusOK || !strings.Contains(revoked.Body, `"devices":1`) {
+		t.Fatalf("admin revoke %d %s", revoked.Status, revoked.Body)
+	}
+	blocked := pushCIBAInteraction(t, ts.URL, client, "ada", "", "42")
+	if blocked.Status != http.StatusBadRequest || !strings.Contains(blocked.Body, "device_revoked") {
+		t.Fatalf("ciba %d %s", blocked.Status, blocked.Body)
+	}
+	enrolled := postJSON(t, ts.URL+"/api/users/"+userID+"/push/enroll", `{}`, token)
+	if enrolled.Status != http.StatusCreated || !strings.Contains(enrolled.Body, "/push/enroll#") {
+		t.Fatalf("enroll %d %s", enrolled.Status, enrolled.Body)
+	}
+	var issued map[string]any
+	_ = json.Unmarshal([]byte(enrolled.Body), &issued)
+	again := registerRaw(t, ts.URL, str(issued["registration_token"]), dpop.ExportPublicKeyAsJWK(&key.PublicKey), []string{"boolean"})
+	if again.Status != http.StatusCreated {
+		t.Fatalf("reregister %d %s", again.Status, again.Body)
+	}
+	if registered.DeviceID == "" {
+		t.Fatal("missing device")
+	}
+}
+
+func pushTestConfig() *config.Config {
+	cfg := config.DefaultConfig()
+	cfg.Push.Enabled = true
+	cfg.Management.ClientID = "test-mgmt"
+	cfg.Management.ClientSecret = "test-mgmt-secret"
+	return cfg
+}
+
+func pollPending(t *testing.T, base string, dpop *service.DPoPService, key *ecdsa.PrivateKey, id, credential, nonce string) httpResult {
+	t.Helper()
+	rawURL := base + "/push/pending?device_id=" + url.QueryEscape(id)
+	proof, err := dpop.CreateDPoPProof(key, http.MethodGet, rawURL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, _ := http.NewRequest(http.MethodGet, rawURL, nil)
+	req.Header.Set("Authorization", "Bearer "+credential)
+	req.Header.Set("DPoP", proof)
+	if nonce != "" {
+		req.Header.Set("Replay-Nonce", nonce)
+	}
+	return do(t, req)
+}
+
+func registerPayload(t *testing.T, base, token string, jwk map[string]any, extra map[string]any) httpResult {
+	t.Helper()
+	body := map[string]any{
+		"registration_token": token,
+		"public_key":         jwk,
+		"interaction_types":  []string{"boolean"},
+		"platform":           "test",
+	}
+	for key, value := range extra {
+		body[key] = value
+	}
+	payload, _ := json.Marshal(body)
+	return postJSON(t, base+"/push/register", string(payload), "")
 }
 
 type enrolled struct {
@@ -283,7 +496,12 @@ func revokeDevice(t *testing.T, base string, dpop *service.DPoPService, key *ecd
 	return do(t, req)
 }
 
-func rotateDevice(t *testing.T, base string, dpop *service.DPoPService, old *ecdsa.PrivateKey, current enrolled) (httpResult, string) {
+func rotateDevice(t *testing.T, base string, dpop *service.DPoPService, old *ecdsa.PrivateKey, current enrolled) (httpResult, string, *ecdsa.PrivateKey) {
+	t.Helper()
+	return rotateDeviceReason(t, base, dpop, old, current, "")
+}
+
+func rotateDeviceReason(t *testing.T, base string, dpop *service.DPoPService, old *ecdsa.PrivateKey, current enrolled, reason string) (httpResult, string, *ecdsa.PrivateKey) {
 	t.Helper()
 	next, err := dpop.GenerateKeyPair()
 	if err != nil {
@@ -298,11 +516,15 @@ func rotateDevice(t *testing.T, base string, dpop *service.DPoPService, old *ecd
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, _ := json.Marshal(map[string]any{
+	body := map[string]any{
 		"device_id":           current.DeviceID,
 		"new_public_key":      dpop.ExportPublicKeyAsJWK(&next.PublicKey),
 		"proof_of_possession": proof,
-	})
+	}
+	if reason != "" {
+		body["reason"] = reason
+	}
+	payload, _ := json.Marshal(body)
 	dpopProof, err := dpop.CreateDPoPProof(old, http.MethodPost, base+"/push/rotate-key", "")
 	if err != nil {
 		t.Fatal(err)
@@ -312,8 +534,7 @@ func rotateDevice(t *testing.T, base string, dpop *service.DPoPService, old *ecd
 	req.Header.Set("Authorization", "Bearer "+current.Credential)
 	req.Header.Set("DPoP", dpopProof)
 	res := do(t, req)
-	current.NewKey = next
-	return res, res.Header.Get("Replay-Nonce")
+	return res, res.Header.Get("Replay-Nonce"), next
 }
 
 func rotateAgain(t *testing.T, base string, dpop *service.DPoPService, key *ecdsa.PrivateKey, id, credential, nonce string) httpResult {

@@ -74,14 +74,15 @@ func (s *Service) issuer() string {
 
 func (s *Service) Discovery() map[string]any {
 	base := s.issuer()
-	return map[string]any{
+	modes := deliveryModes(s.cfg)
+	doc := map[string]any{
 		"registration_endpoint":        base + "/push/register",
-		"delivery_modes_supported":     []string{"poll"},
+		"delivery_modes_supported":     modes,
 		"interaction_type_supported":   []string{"boolean", "number_choose", "input_manual"},
 		"minimum_interaction_type":     s.cfg.Push.MinimumInteractionType,
 		"registration_token_ttl":       s.cfg.Push.RegistrationTokenTTL,
 		"signing_alg_values_supported": []string{"ES256"},
-		"fallback_order":               []string{"poll"},
+		"fallback_order":               modes,
 		"client_attestation_required":  s.cfg.Push.ClientAttestation,
 		"revocation_endpoint":          base + "/push/revoke",
 		"key_rotation_endpoint":        base + "/push/rotate-key",
@@ -90,6 +91,12 @@ func (s *Service) Discovery() map[string]any {
 		"push_wait_timeout_seconds":    10,
 		"error_response_format":        "application/problem+json",
 	}
+	if s.cfg.Push.PushEnabled {
+		if relay := strings.TrimSpace(s.cfg.Push.RelayEndpoint); relay != "" {
+			doc["push_relay_endpoint"] = relay
+		}
+	}
+	return doc
 }
 
 // Enrollment is what the browser page shows. The token sits in the URL fragment.
@@ -136,6 +143,7 @@ type registerRequest struct {
 	PushAddress       string         `json:"push_address"`
 	Platform          string         `json:"platform"`
 	Attestation       string         `json:"attestation"`
+	ReplacesDeviceID  string         `json:"replaces_device_id"`
 }
 
 type Registered struct {
@@ -186,17 +194,30 @@ func (s *Service) Register(ip string, body []byte, keyfunc jwt.Keyfunc) (Registe
 	if !contains(req.InteractionTypes, s.cfg.Push.MinimumInteractionType) {
 		return Registered{}, problem(http.StatusBadRequest, "interaction_type_unsupported", "device does not support the minimum interaction type")
 	}
+	if s.cfg.Push.ClientAttestation && strings.TrimSpace(req.Attestation) == "" {
+		return Registered{}, problem(http.StatusBadRequest, "attestation_missing", "attestation is required")
+	}
 	pub, jkt, jwkText, err := canonicalKey(req.PublicKey, s.dpop)
 	if err != nil || pub == nil {
 		return Registered{}, problem(http.StatusBadRequest, "invalid_public_key", "public key must be P-256")
+	}
+	replacing := false
+	if strings.TrimSpace(req.ReplacesDeviceID) != "" {
+		var owner, replacedStatus string
+		err = s.db.QueryRow(`SELECT user_id, status FROM push_devices WHERE id = ?`, req.ReplacesDeviceID).Scan(&owner, &replacedStatus)
+		if err != nil || owner != userID || replacedStatus != "active" {
+			return Registered{}, problem(http.StatusBadRequest, "unknown_device", "replaced device is not active")
+		}
+		replacing = true
 	}
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM push_devices WHERE user_id = ? AND status = 'active'`, userID).Scan(&n); err != nil {
 		return Registered{}, err
 	}
-	if n >= s.cfg.Push.MaxDevicesPerUser {
+	if n >= s.cfg.Push.MaxDevicesPerUser && !replacing {
 		return Registered{}, problem(http.StatusForbidden, "device_limit", "device limit reached")
 	}
+	_, _ = s.db.Exec(`DELETE FROM push_registration_tokens WHERE expires_at < ?`, s.now().UTC().Format(time.RFC3339))
 	credential, err := crypto.GenerateToken()
 	if err != nil {
 		return Registered{}, err
@@ -211,21 +232,30 @@ func (s *Service) Register(ip string, body []byte, keyfunc jwt.Keyfunc) (Registe
 		id, userID, clientID, jwkText, jkt, hashCredential(credential), req.Platform, req.PushAddress, string(types), req.Attestation, now, now); err != nil {
 		return Registered{}, err
 	}
+	if replacing {
+		if _, err := s.db.Exec(`UPDATE push_devices SET status = 'revoked', last_used_at = ? WHERE id = ? AND user_id = ? AND status = 'active'`, now, req.ReplacesDeviceID, userID); err != nil {
+			return Registered{}, err
+		}
+		s.cascadeRevoke(req.ReplacesDeviceID)
+		s.notify(req.ReplacesDeviceID, "device_revoked", req.ReplacesDeviceID)
+	}
 	return Registered{DeviceID: id, Credential: credential, Ref: "urn:push-reg:" + id, ExpiresIn: s.cfg.Push.RegistrationTokenTTL}, nil
 }
 
 // Device is a row safe to show the signed-in user.
 type Device struct {
-	ID               string   `json:"device_id"`
-	Platform         string   `json:"platform"`
-	CreatedAt        string   `json:"created_at"`
-	LastUsedAt       string   `json:"last_used_at,omitempty"`
-	InteractionTypes []string `json:"interaction_types"`
-	Status           string   `json:"status"`
+	ID                string   `json:"device_id"`
+	Platform          string   `json:"platform"`
+	CreatedAt         string   `json:"created_at"`
+	LastUsedAt        string   `json:"last_used_at,omitempty"`
+	InteractionTypes  []string `json:"interaction_types"`
+	Status            string   `json:"status"`
+	IsPrimary         bool     `json:"is_primary"`
+	AttestationStatus string   `json:"attestation_status"`
 }
 
 func (s *Service) List(userID string) ([]Device, error) {
-	rows, err := s.db.Query(`SELECT id, COALESCE(platform, ''), created_at, COALESCE(last_used_at, ''), interaction_types, status FROM push_devices WHERE user_id = ? ORDER BY created_at`, userID)
+	rows, err := s.db.Query(`SELECT id, COALESCE(platform, ''), created_at, COALESCE(last_used_at, ''), interaction_types, status, COALESCE(is_primary, 0) FROM push_devices WHERE user_id = ? ORDER BY created_at`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -234,9 +264,12 @@ func (s *Service) List(userID string) ([]Device, error) {
 	for rows.Next() {
 		var item Device
 		var raw string
-		if err := rows.Scan(&item.ID, &item.Platform, &item.CreatedAt, &item.LastUsedAt, &raw, &item.Status); err != nil {
+		var primary int
+		if err := rows.Scan(&item.ID, &item.Platform, &item.CreatedAt, &item.LastUsedAt, &raw, &item.Status, &primary); err != nil {
 			return nil, err
 		}
+		item.IsPrimary = primary != 0
+		item.AttestationStatus = "not_checked"
 		_ = json.Unmarshal([]byte(raw), &item.InteractionTypes)
 		out = append(out, item)
 	}
@@ -247,18 +280,27 @@ func (s *Service) List(userID string) ([]Device, error) {
 }
 
 type deviceRow struct {
-	id     string
-	userID string
-	jwk    string
-	jkt    string
-	hash   string
-	status string
+	id          string
+	userID      string
+	jwk         string
+	jkt         string
+	hash        string
+	status      string
+	previousJWK string
+	previousJKT string
+	graceUntil  string
 }
 
 func (s *Service) authenticate(r *http.Request, deviceID, credential string) (deviceRow, error) {
+	return s.finishAuth(r, deviceID, credential, false)
+}
+
+func (s *Service) finishAuth(r *http.Request, deviceID, credential string, allowRevoked bool) (deviceRow, error) {
 	var row deviceRow
-	err := s.db.QueryRow(`SELECT id, user_id, jwk, jkt, credential_hash, status FROM push_devices WHERE id = ?`, deviceID).Scan(&row.id, &row.userID, &row.jwk, &row.jkt, &row.hash, &row.status)
-	if err != nil || row.status != "active" || subtle.ConstantTimeCompare([]byte(row.hash), []byte(hashCredential(credential))) != 1 {
+	err := s.db.QueryRow(`SELECT id, user_id, jwk, jkt, credential_hash, status, COALESCE(previous_jwk, ''), COALESCE(previous_jkt, ''), COALESCE(grace_until, '') FROM push_devices WHERE id = ?`, deviceID).Scan(
+		&row.id, &row.userID, &row.jwk, &row.jkt, &row.hash, &row.status, &row.previousJWK, &row.previousJKT, &row.graceUntil)
+	active := row.status == "active" || (allowRevoked && row.status == "revoked")
+	if err != nil || !active || subtle.ConstantTimeCompare([]byte(row.hash), []byte(hashCredential(credential))) != 1 {
 		return deviceRow{}, problem(http.StatusUnauthorized, "invalid_device_credential", "device credential is not valid")
 	}
 	if err := s.checkNonce(r, deviceID); err != nil {
@@ -268,33 +310,103 @@ func (s *Service) authenticate(r *http.Request, deviceID, credential string) (de
 		return deviceRow{}, problem(http.StatusUnauthorized, "dpop_required", "DPoP proof is required")
 	}
 	proof, err := s.dpop.ValidateDPoPProof(r.Header.Get("DPoP"), r.Method, requestURI(r), "")
-	if err != nil || proof.JKT != row.jkt {
+	if err != nil || !s.acceptThumbprint(row, proof.JKT) {
 		return deviceRow{}, problem(http.StatusUnauthorized, "dpop_required", "DPoP proof does not match the device key")
 	}
 	return row, nil
 }
 
+func (s *Service) acceptThumbprint(row deviceRow, jkt string) bool {
+	if jkt == row.jkt {
+		if row.previousJKT != "" {
+			_, _ = s.db.Exec(`UPDATE push_devices SET previous_jwk = '', previous_jkt = '', grace_until = '' WHERE id = ?`, row.id)
+		}
+		return true
+	}
+	if row.previousJKT == "" || jkt != row.previousJKT || row.graceUntil == "" {
+		return false
+	}
+	until, err := time.Parse(time.RFC3339, row.graceUntil)
+	return err == nil && s.now().Before(until)
+}
+
 func (s *Service) Revoke(r *http.Request, deviceID, credential string) (string, error) {
-	if _, err := s.authenticate(r, deviceID, credential); err != nil {
+	if s.deviceLimited(deviceID) {
+		return "", problem(http.StatusTooManyRequests, "rate_limited", "too many requests for this device")
+	}
+	row, err := s.finishAuth(r, deviceID, credential, true)
+	if err != nil {
 		return "", err
 	}
-	if _, err := s.db.Exec(`UPDATE push_devices SET status = 'revoked', credential_hash = '', last_used_at = ? WHERE id = ?`, s.now().UTC().Format(time.RFC3339), deviceID); err != nil {
-		return "", err
+	if row.status == "active" {
+		if _, err := s.db.Exec(`UPDATE push_devices SET status = 'revoked', last_used_at = ? WHERE id = ?`, s.now().UTC().Format(time.RFC3339), deviceID); err != nil {
+			return "", err
+		}
+		s.cascadeRevoke(deviceID)
+		s.notify(deviceID, "device_revoked", deviceID)
 	}
-	s.cascadeRevoke(deviceID)
 	return s.issueNonce(deviceID), nil
+}
+
+// RevokeUser revokes every active device for an admin recovery.
+func (s *Service) RevokeUser(userID string) (int, error) {
+	rows, err := s.db.Query(`SELECT id FROM push_devices WHERE user_id = ? AND status = 'active'`, userID)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rows.Close() }()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	now := s.now().UTC().Format(time.RFC3339)
+	for _, id := range ids {
+		if _, err := s.db.Exec(`UPDATE push_devices SET status = 'revoked', last_used_at = ? WHERE id = ? AND status = 'active'`, now, id); err != nil {
+			return 0, err
+		}
+		s.cascadeRevoke(id)
+		s.notify(id, "device_revoked", id)
+	}
+	return len(ids), nil
+}
+
+// MakePrimary marks one active device and clears the flag on the others.
+func (s *Service) MakePrimary(userID, deviceID string) error {
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM push_devices WHERE id = ? AND user_id = ? AND status = 'active'`, deviceID, userID).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		return problem(http.StatusNotFound, "unknown_device", "device is not active")
+	}
+	if _, err := s.db.Exec(`UPDATE push_devices SET is_primary = 0 WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(`UPDATE push_devices SET is_primary = 1 WHERE id = ? AND user_id = ?`, deviceID, userID)
+	return err
 }
 
 type rotateRequest struct {
 	DeviceID     string         `json:"device_id"`
 	NewPublicKey map[string]any `json:"new_public_key"`
 	Proof        string         `json:"proof_of_possession"`
+	Reason       string         `json:"reason"`
 }
 
 func (s *Service) Rotate(r *http.Request, body []byte, credential string) (Registered, string, error) {
 	var req rotateRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		return Registered{}, "", problem(http.StatusBadRequest, "invalid_public_key", "rotation body is invalid")
+	}
+	if s.deviceLimited(req.DeviceID) {
+		return Registered{}, "", problem(http.StatusTooManyRequests, "rate_limited", "too many requests for this device")
 	}
 	row, err := s.authenticate(r, req.DeviceID, credential)
 	if err != nil {
@@ -322,11 +434,33 @@ func (s *Service) Rotate(r *http.Request, body []byte, credential string) (Regis
 	if err != nil {
 		return Registered{}, "", err
 	}
-	if _, err := s.db.Exec(`UPDATE push_devices SET jwk = ?, jkt = ?, credential_hash = ?, last_used_at = ? WHERE id = ?`,
-		newText, newJKT, hashCredential(credentialNew), s.now().UTC().Format(time.RFC3339), row.id); err != nil {
+	now := s.now().UTC()
+	previousJWK, previousJKT, graceUntil := "", "", ""
+	if req.Reason != "compromised" {
+		previousJWK = row.jwk
+		previousJKT = row.jkt
+		graceUntil = now.Add(s.grace()).Format(time.RFC3339)
+	}
+	if _, err := s.db.Exec(`UPDATE push_devices SET jwk = ?, jkt = ?, credential_hash = ?, previous_jwk = ?, previous_jkt = ?, grace_until = ?, last_used_at = ? WHERE id = ?`,
+		newText, newJKT, hashCredential(credentialNew), previousJWK, previousJKT, graceUntil, now.Format(time.RFC3339), row.id); err != nil {
 		return Registered{}, "", err
 	}
 	return Registered{DeviceID: row.id, Credential: credentialNew, Ref: "urn:push-reg:" + row.id, ExpiresIn: s.cfg.Push.RegistrationTokenTTL}, s.issueNonce(row.id), nil
+}
+
+func (s *Service) grace() time.Duration {
+	seconds := 300
+	if s.cfg != nil && s.cfg.Push.GracePeriodSeconds > 0 {
+		seconds = s.cfg.Push.GracePeriodSeconds
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func (s *Service) deviceLimited(deviceID string) bool {
+	if strings.TrimSpace(deviceID) == "" {
+		return false
+	}
+	return s.limited("device:" + deviceID)
 }
 
 func (s *Service) checkNonce(r *http.Request, deviceID string) error {

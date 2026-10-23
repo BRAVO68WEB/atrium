@@ -92,6 +92,9 @@ function renderConfig(port, dsn, overrides) {
   lines.push(`  minimum_interaction_type: ${yamlValue(push.minimum_interaction_type || "boolean")}`);
   lines.push(`  max_devices_per_user: ${yamlValue(push.max_devices_per_user || 5)}`);
   lines.push(`  client_attestation_required: ${yamlValue(Boolean(push.client_attestation_required))}`);
+  lines.push(`  ping_enabled: ${yamlValue(Boolean(push.ping_enabled))}`);
+  lines.push(`  push_enabled: ${yamlValue(Boolean(push.push_enabled))}`);
+  lines.push(`  relay_endpoint: ${yamlValue(push.relay_endpoint || "")}`);
   const aauth = overrides.aauth || {};
   const base = `http://127.0.0.1:${port}`;
   let asIssuer = aauth.as_issuer || "";

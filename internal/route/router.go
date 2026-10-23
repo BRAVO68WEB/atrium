@@ -178,6 +178,7 @@ func (r *Router) setupRoutes() {
 		r.mux.Post("/push/revoke", r.pushHandler.Revoke)
 		r.mux.Post("/push/rotate-key", r.pushHandler.Rotate)
 		r.mux.Get("/push/devices", r.pushHandler.Devices)
+		r.mux.Post("/push/devices", r.pushHandler.Primary)
 	}
 
 	if r.aauthHandler != nil {

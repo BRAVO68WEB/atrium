@@ -35,6 +35,8 @@ func MountAccountAPI(api chi.Router, account *controller.AccountController, user
 func MountManagementExtras(api chi.Router, mgmt *controller.ManagementController) {
 	api.Patch("/users/{userID}", mgmt.HandlePatchUser)
 	api.Post("/users/{userID}/password", mgmt.HandleSetPassword)
+	api.Post("/users/{userID}/push/revoke", mgmt.HandleRevokeUserDevices)
+	api.Post("/users/{userID}/push/enroll", mgmt.HandleEnrollUserDevice)
 	api.Get("/users/{userID}/sessions", mgmt.HandleListUserSessions)
 	api.Delete("/users/{userID}/sessions/{sid}", mgmt.HandleRevokeUserSession)
 	api.Get("/users/{userID}/activity", mgmt.HandleUserActivity)

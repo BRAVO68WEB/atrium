@@ -236,6 +236,7 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 			return session.UserID, true
 		})
 		webCtrl.SetPush(pushHandler)
+		mgmtCtrl.SetPush(pushHandler)
 		oauthHandler.SetDeviceLogin(pushSvc)
 		pushHandler.SetComplete(func(authReqID, userID string, approve bool) error {
 			return oauthHandler.CompleteCIBA(authReqID, userID, approve)
