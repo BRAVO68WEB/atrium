@@ -195,6 +195,44 @@ func (ks *KeySet) publicByKid(kid string) (any, bool) {
 	return nil, false
 }
 
+// Reload replaces the in-memory keys with the rows in signing_keys.
+// Restore calls this after it commits, so /oidc/jwks matches the file
+// without a process restart.
+func (ks *KeySet) Reload() error {
+	defer telemetry.Step("oidc.KeySet.Reload")()
+	if ks == nil || ks.db == nil {
+		return nil
+	}
+	rows, err := ks.db.Query(`SELECT kid, alg, status, private_pem, COALESCE(retire_at, '') FROM signing_keys`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	var next []storedKey
+	for rows.Next() {
+		var kid, alg, status, pemText, retire string
+		if err := rows.Scan(&kid, &alg, &status, &pemText, &retire); err != nil {
+			return err
+		}
+		key, err := parsePrivatePEM(alg, pemText)
+		if err != nil {
+			return err
+		}
+		item := storedKey{Kid: kid, Alg: alg, Status: status, RSA: key.RSA, EC: key.EC}
+		if retire != "" {
+			item.RetireAt, _ = time.Parse(time.RFC3339, retire)
+		}
+		next = append(next, item)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	ks.mu.Lock()
+	ks.keys = next
+	ks.mu.Unlock()
+	return nil
+}
+
 func (ks *KeySet) ToJWKS() JWKS {
 	defer telemetry.Step("oidc.KeySet.ToJWKS")()
 	ks.mu.RLock()

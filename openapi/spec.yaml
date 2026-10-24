@@ -1320,6 +1320,41 @@ paths:
   # Management API Endpoints
   # ──────────────────────────────────────────────
 
+  /api/backup:
+    get:
+      tags: [Management]
+      summary: Download a backup
+      description: Returns users, clients, organizations, consents, and signing keys. The document includes secrets.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Backup document
+
+  /api/restore:
+    post:
+      tags: [Management]
+      summary: Restore a backup
+      description: Refuses when the server already has users or clients unless force is true. dry_run writes nothing.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: dry_run
+          in: query
+          schema: { type: boolean }
+        - name: force
+          in: query
+          schema: { type: boolean }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Counts of rows written or counted
+        "409":
+          description: The server already has users or clients
+
   /api/clients:
     get:
       tags: [Management]

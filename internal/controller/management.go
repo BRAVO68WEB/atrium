@@ -35,6 +35,7 @@ type ManagementController struct {
 	orgs         *service.OrgService
 	grants       *service.GrantService
 	push         *push.Handler
+	backup       *service.Backup
 }
 
 func (c *ManagementController) SetPush(h *push.Handler) {

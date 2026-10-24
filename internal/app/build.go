@@ -193,6 +193,7 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue, shared *redis.Cli
 	mgmtCtrl.SetWebhooks(hooks)
 	mgmtCtrl.SetAudit(auditLog)
 	mgmtCtrl.SetKeys(oidcHandler.GetKeySet(), cfg.OIDC.KeyRetain)
+	mgmtCtrl.SetBackup(service.NewBackup(conn, userRepo, clientRepo, repository.NewOrgRepository(conn), scopeRepo, resourceRepo, repository.NewWebhookRepository(conn), cfg.Management.ClientID, oidcHandler.GetKeySet()))
 	oauthHandler.SetAudit(auditLog)
 
 	webCtrl, err := controller.NewWebController(userSvc, totpSvc, accountSvc, cfg, root.TemplateFS, oauthHandler)

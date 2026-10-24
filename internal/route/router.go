@@ -250,6 +250,9 @@ func (r *Router) setupRoutes() {
 }
 
 func mountManagement(mgmt chi.Router, r *Router) {
+	mgmt.Get("/backup", r.managementCtrl.HandleBackup)
+	mgmt.Post("/restore", r.managementCtrl.HandleRestore)
+
 	mgmt.Route("/clients", func(r3 chi.Router) {
 		r3.Get("/", r.managementCtrl.HandleListClients)
 		r3.Post("/", r.managementCtrl.HandleCreateClient)

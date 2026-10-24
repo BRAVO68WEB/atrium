@@ -26,6 +26,18 @@ routes. Dynamic registration drops the `management` scope. A
 client-credentials request can only receive scopes already stored on
 the client.
 
+`GET /api/backup` and `POST /api/restore` move the durable directory.
+The document version is `1`. It includes users (with ids and password
+hashes), clients (with secrets), organizations, consents, scopes,
+resources, webhooks, social identities, push devices, pairwise
+subjects, and signing keys. It does not include sessions, access
+tokens, refresh tokens, or authorization codes. `?dry_run=true` writes
+nothing. `?force=true` is required when the server already has a user
+or a client other than the management client. A restore that includes
+signing keys replaces the key set and the live JWKS. Pairwise subjects
+match only when `oidc.pairwise_salt` is the same value that produced
+them. The salt is not in the file.
+
 `POST /api/users/import` and `GET /api/users/export` move accounts.
 The body is `{ "mode": "create", "users": [ ... ] }`. `mode` may be
 `upsert`. A row sets `password` or `password_hash`, not both. A hash

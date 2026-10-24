@@ -77,6 +77,8 @@ func newRootCmd() *cobra.Command {
 		auditCmd(),
 		keysCmd(),
 		orgCmd(),
+		backupCmd(),
+		restoreCmd(),
 	)
 
 	return rootCmd
