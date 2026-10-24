@@ -270,9 +270,12 @@ hashes and rehashes on the next successful login. The stock argon2id
 settings use 64 MiB of memory. Lower `Memory` in the file when login
 stalls. Startup exits when the on-disk file differs from the binary.
 A custom hasher implements `Recognizes(encoded string) bool` when its
-stored form is not bcrypt or argon2id. User import stores
+stored form is not one of the built-in prefixes. User import stores
 `password_hash` only when that method, or a built-in prefix, accepts
-the string.
+the string. Built-in salted encodings are `MD5`, `SHA256`, `SHA512`,
+`SHA3512`, `SHA2_128` (SHA-256 truncated to 16 bytes), and
+`PBKDF2`. Use those as the legacy side of `Fallback`. New passwords
+should stay on bcrypt or argon2id.
 
 ## Mail templates
 
