@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/bravo68web/oauth-impl/internal/background"
 )
@@ -411,12 +412,7 @@ func TestWebhookFiresOnlyForSelectedEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = resp.Body.Close()
-
-	mu.Lock()
-	if strings.Join(events, ",") != "login" {
-		t.Fatalf("after login: %v", events)
-	}
-	mu.Unlock()
+	waitEvents(t, &mu, &events, "login")
 
 	outForm := url.Values{"confirm": {"yes"}}
 	outForm.Set("csrf_token", csrfToken(t, browser, ts.URL+"/oauth/logout"))
@@ -425,11 +421,23 @@ func TestWebhookFiresOnlyForSelectedEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = out.Body.Close()
-	mu.Lock()
-	defer mu.Unlock()
-	if strings.Join(events, ",") != "login,logout" {
-		t.Fatalf("after logout: %v", events)
+	waitEvents(t, &mu, &events, "login,logout")
+}
+
+func waitEvents(t *testing.T, mu *sync.Mutex, events *[]string, want string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	var got string
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		got = strings.Join(*events, ",")
+		mu.Unlock()
+		if got == want {
+			return
+		}
+		time.Sleep(15 * time.Millisecond)
 	}
+	t.Fatalf("events %q, want %q", got, want)
 }
 
 func createHook(t *testing.T, base, token, hookURL string, events []string) {
