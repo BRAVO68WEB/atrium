@@ -12,6 +12,16 @@ services:
       interval: 2s
       timeout: 5s
       retries: 20
+  mailpit:
+    image: axllent/mailpit:v1.32.0
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+  webhook-tester:
+    image: ghcr.io/tarampampam/webhook-tester:2.3.0
+    command: ["start", "--auto-create-sessions"]
+    ports:
+      - "8089:8080"
   oauth-server:
     build:
       context: ..
@@ -19,6 +29,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     command: ["-config", "/config/config.yaml"]
     ports:
       - "8080:8080"

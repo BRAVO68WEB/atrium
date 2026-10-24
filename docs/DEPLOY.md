@@ -127,6 +127,48 @@ fails.
 
 Message text is in [Configuration](CONFIG.md).
 
+Mailpit catches that mail when you want to read it without a real
+mailbox. `deploy/compose.yaml` starts `axllent/mailpit` and points the
+stack SMTP settings at it. Open http://localhost:8025 for the inbox.
+The API is `GET http://localhost:8025/api/v1/messages`. A server you
+start on the host uses this block instead, because `mailpit` is only a
+name inside Compose:
+
+```yaml
+smtp:
+  enabled: true
+  host: 127.0.0.1
+  port: 1025
+  from: oauth@localhost
+  starttls: false
+  implicit_tls: false
+```
+
+## Webhook tester
+
+`deploy/compose.yaml` also starts `tarampampam/webhook-tester` on
+http://localhost:8089. With auto-created sessions, any URL whose first
+path segment is a UUID is a capture bucket. Open the bucket in the UI
+at `/s/<uuid>`.
+
+The server refuses plain `http` except to a loopback address, and it
+refuses private addresses. Register the hook from a server that is
+running on the host:
+
+```yaml
+security:
+  allow_insecure_fetch: true
+  fetch_allow_ips:
+    - 127.0.0.1
+```
+
+Use `http://127.0.0.1:8089/11111111-2222-3333-4444-555555555555` as the
+webhook URL, then open
+http://localhost:8089/s/11111111-2222-3333-4444-555555555555.
+`POST /api/webhooks/{id}/test` waits for this receiver and returns the
+result. The browser suite still uses its own receivers and does not
+call Mailpit or webhook-tester.
+
 ## Logs and traces
 
 Each request writes one log record. The fields are `method`, `route`,
