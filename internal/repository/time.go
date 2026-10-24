@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // dbTime scans a timestamp that SQLite returns as text and Postgres returns as time.Time.
@@ -12,6 +14,7 @@ type dbTime struct {
 }
 
 func (t *dbTime) Scan(src any) error {
+	defer telemetry.Step("repository.dbTime.Scan")()
 	switch v := src.(type) {
 	case time.Time:
 		t.Time = v
@@ -39,6 +42,7 @@ func (t *dbTime) Scan(src any) error {
 }
 
 func parseDBTime(value string) (time.Time, error) {
+	defer telemetry.Step("repository.parseDBTime")()
 	if i := strings.Index(value, " m="); i >= 0 {
 		value = value[:i]
 	}

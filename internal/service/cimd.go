@@ -9,6 +9,7 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // CIMDDocument is a Client ID Metadata Document.
@@ -22,6 +23,7 @@ type CIMDDocument struct {
 
 // FetchCIMD loads a metadata document. The caller checks client_id and redirects.
 func FetchCIMD(ctx context.Context, cfg *config.Config, rawURL string) (*CIMDDocument, error) {
+	defer telemetry.Step("service.FetchCIMD")()
 	body, status, err := FetchSafe(ctx, cfg, http.MethodGet, rawURL, nil, nil)
 	if err != nil {
 		return nil, err
@@ -38,6 +40,7 @@ func FetchCIMD(ctx context.Context, cfg *config.Config, rawURL string) (*CIMDDoc
 
 // ClientFromCIMD builds a public client from a metadata document.
 func ClientFromCIMD(doc *CIMDDocument) *models.Client {
+	defer telemetry.Step("service.ClientFromCIMD")()
 	grants := doc.GrantTypes
 	if len(grants) == 0 {
 		grants = []string{"authorization_code"}

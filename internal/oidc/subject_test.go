@@ -1,6 +1,7 @@
 package oidc
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -36,19 +37,19 @@ func TestPairwiseSubDependsOnSector(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := handler.CreateIDToken("a", "user-1", "", []string{"openid"})
+	first, err := handler.CreateIDToken(context.Background(), "a", "user-1", "", []string{"openid"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := handler.CreateIDToken("b", "user-1", "", []string{"openid"})
+	second, err := handler.CreateIDToken(context.Background(), "b", "user-1", "", []string{"openid"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	third, err := handler.CreateIDToken("c", "user-1", "", []string{"openid"})
+	third, err := handler.CreateIDToken(context.Background(), "c", "user-1", "", []string{"openid"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	plain, err := handler.CreateIDToken("d", "user-1", "", []string{"openid"})
+	plain, err := handler.CreateIDToken(context.Background(), "d", "user-1", "", []string{"openid"})
 	if err != nil {
 		t.Fatal(err)
 	}

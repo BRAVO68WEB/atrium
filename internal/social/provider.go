@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/bravo68web/oauth-impl/internal/config"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // Resolved is a provider with preset endpoints filled in.
@@ -34,6 +35,7 @@ type Resolved struct {
 
 // Resolve applies a preset. Discovery URLs are filled later by the HTTP client.
 func Resolve(p config.SocialProvider) (Resolved, error) {
+	defer telemetry.Step("social.Resolve")()
 	r := Resolved{
 		ID:                 p.ID,
 		Type:               p.Type,
@@ -162,6 +164,7 @@ func Resolve(p config.SocialProvider) (Resolved, error) {
 }
 
 func defaultName(kind, id string) string {
+	defer telemetry.Step("social.defaultName")()
 	switch kind {
 	case "google":
 		return "Google"
@@ -176,6 +179,7 @@ func defaultName(kind, id string) string {
 
 // AuthorizeURL builds the upstream redirect. challenge is empty when PKCE is off.
 func AuthorizeURL(p Resolved, redirectURI, state, nonce, challenge string) (string, error) {
+	defer telemetry.Step("social.AuthorizeURL")()
 	if p.Authorization == "" {
 		return "", fmt.Errorf("authorization endpoint is empty")
 	}

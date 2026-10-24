@@ -8,6 +8,7 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/go-chi/chi/v5"
 	qrcode "github.com/skip2/go-qrcode"
 )
@@ -29,6 +30,7 @@ type previewView struct {
 }
 
 func previewCatalog() []previewPage {
+	defer telemetry.Step("controller.previewCatalog")()
 	sample := map[string]string{
 		"client_id":     "preview-app",
 		"redirect_uri":  "https://app.example/cb",
@@ -200,11 +202,15 @@ func previewCatalog() []previewPage {
 
 // PreviewEnabled reports whether /preview is mounted.
 func (c *WebController) PreviewEnabled() bool {
+	defer telemetry.Step("controller.WebController.PreviewEnabled")(
+
+	// HandlePreview renders one auth page with sample data, or the catalog.
+	)
 	return c != nil && c.cfg != nil && c.cfg.Debug.UI
 }
 
-// HandlePreview renders one auth page with sample data, or the catalog.
 func (c *WebController) HandlePreview(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandlePreview")()
 	if !c.PreviewEnabled() {
 		http.NotFound(w, r)
 		return
@@ -235,6 +241,7 @@ func (c *WebController) HandlePreview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *WebController) renderPreview(w http.ResponseWriter, r *http.Request, view previewView) {
+	defer telemetry.Step("controller.WebController.renderPreview")()
 	if view.Extra == nil {
 		view.Extra = map[string]any{}
 	}
@@ -257,6 +264,7 @@ func (c *WebController) renderPreview(w http.ResponseWriter, r *http.Request, vi
 }
 
 func (c *WebController) writePreviewIndex(w http.ResponseWriter) {
+	defer telemetry.Step("controller.WebController.writePreviewIndex")()
 	pages := previewCatalog()
 	sort.Slice(pages, func(i, j int) bool { return pages[i].Label < pages[j].Label })
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -286,6 +294,7 @@ a:hover{text-decoration:underline;text-underline-offset:3px}
 }
 
 func previewQR(text string) string {
+	defer telemetry.Step("controller.previewQR")()
 	png, err := qrcode.Encode(text, qrcode.Medium, 256)
 	if err != nil {
 		return ""

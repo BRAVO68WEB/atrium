@@ -8,6 +8,7 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type SessionService struct {
@@ -16,10 +17,12 @@ type SessionService struct {
 }
 
 func NewSessionService(repo *repository.SessionRepository, lifetime time.Duration) *SessionService {
+	defer telemetry.Step("service.NewSessionService")()
 	return &SessionService{repo: repo, lifetime: lifetime}
 }
 
 func (s *SessionService) duration() time.Duration {
+	defer telemetry.Step("service.SessionService.duration")()
 	if s == nil || s.lifetime <= 0 {
 		return 8 * time.Hour
 	}
@@ -27,6 +30,7 @@ func (s *SessionService) duration() time.Duration {
 }
 
 func (s *SessionService) Start(userID, username, userAgent, ip string, mfaVerified bool) (*models.BrowserSession, error) {
+	defer telemetry.Step("service.SessionService.Start")()
 	now := time.Now()
 	sess := &models.BrowserSession{
 		ID:          uuid.NewString(),
@@ -46,6 +50,7 @@ func (s *SessionService) Start(userID, username, userAgent, ip string, mfaVerifi
 }
 
 func (s *SessionService) Get(id string) (*models.BrowserSession, error) {
+	defer telemetry.Step("service.SessionService.Get")()
 	if s == nil || id == "" {
 		return nil, sql.ErrNoRows
 	}
@@ -60,6 +65,7 @@ func (s *SessionService) Get(id string) (*models.BrowserSession, error) {
 }
 
 func (s *SessionService) GetAny(id string) (*models.BrowserSession, error) {
+	defer telemetry.Step("service.SessionService.GetAny")()
 	if s == nil || id == "" {
 		return nil, sql.ErrNoRows
 	}
@@ -67,10 +73,12 @@ func (s *SessionService) GetAny(id string) (*models.BrowserSession, error) {
 }
 
 func (s *SessionService) MarkMFA(id string) error {
+	defer telemetry.Step("service.SessionService.MarkMFA")()
 	return s.repo.MarkMFA(id)
 }
 
 func (s *SessionService) Revoke(id string) error {
+	defer telemetry.Step("service.SessionService.Revoke")()
 	if id == "" {
 		return nil
 	}
@@ -78,17 +86,21 @@ func (s *SessionService) Revoke(id string) error {
 }
 
 func (s *SessionService) List(userID string) ([]*models.BrowserSession, error) {
+	defer telemetry.Step("service.SessionService.List")()
 	return s.repo.ListByUser(userID)
 }
 
 func (s *SessionService) RevokeAllExcept(userID, exceptSID string) ([]string, error) {
+	defer telemetry.Step("service.SessionService.RevokeAllExcept")()
 	return s.repo.RevokeAllExcept(userID, exceptSID)
 }
 
 func (s *SessionService) RecordClient(sid, clientID string) error {
+	defer telemetry.Step("service.SessionService.RecordClient")()
 	return s.repo.RecordClient(sid, clientID)
 }
 
 func (s *SessionService) Clients(sid string) ([]string, error) {
+	defer telemetry.Step("service.SessionService.Clients")()
 	return s.repo.ListClients(sid)
 }

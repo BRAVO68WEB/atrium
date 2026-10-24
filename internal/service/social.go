@@ -14,6 +14,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/repository"
 	"github.com/bravo68web/oauth-impl/internal/social"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
@@ -47,6 +48,7 @@ type SocialService struct {
 }
 
 func NewSocialService(cfg *config.Config, users *UserService, userRepo *repository.UserRepository, repo *repository.SocialRepository, account *AccountService, upstream *social.Client) *SocialService {
+	defer telemetry.Step("service.NewSocialService")()
 	if upstream == nil {
 		upstream = social.NewClient(nil)
 	}
@@ -54,6 +56,7 @@ func NewSocialService(cfg *config.Config, users *UserService, userRepo *reposito
 }
 
 func (s *SocialService) Buttons() []SocialButton {
+	defer telemetry.Step("service.SocialService.Buttons")()
 	if s == nil || s.cfg == nil {
 		return nil
 	}
@@ -72,6 +75,7 @@ func (s *SocialService) Buttons() []SocialButton {
 }
 
 func (s *SocialService) provider(id string) (config.SocialProvider, bool) {
+	defer telemetry.Step("service.SocialService.provider")()
 	if s == nil || s.cfg == nil {
 		return config.SocialProvider{}, false
 	}
@@ -85,6 +89,7 @@ func (s *SocialService) provider(id string) (config.SocialProvider, bool) {
 
 // Begin stores a single-use state and returns the upstream authorization URL.
 func (s *SocialService) Begin(ctx context.Context, id string, params map[string]string) (string, error) {
+	defer telemetry.Step("service.SocialService.Begin")()
 	raw, ok := s.provider(id)
 	if !ok {
 		return "", ErrSocialProviderNotFound
@@ -133,6 +138,7 @@ func (s *SocialService) Begin(ctx context.Context, id string, params map[string]
 
 // Complete exchanges the code and finds or creates the local user.
 func (s *SocialService) Complete(ctx context.Context, id, code, state string) (SocialResult, error) {
+	defer telemetry.Step("service.SocialService.Complete")()
 	if code == "" || state == "" {
 		return SocialResult{}, ErrSocialState
 	}
@@ -172,6 +178,7 @@ func (s *SocialService) Complete(ctx context.Context, id, code, state string) (S
 }
 
 func (s *SocialService) findOrCreate(provider string, profile social.Profile) (*models.User, error) {
+	defer telemetry.Step("service.SocialService.findOrCreate")()
 	userID, err := s.repo.FindIdentity(provider, profile.Subject)
 	if err == nil {
 		user, err := s.users.GetUser(userID)
@@ -227,6 +234,7 @@ func (s *SocialService) findOrCreate(provider string, profile social.Profile) (*
 }
 
 func (s *SocialService) uniqueUsername(hint, email, provider, subject string) (string, error) {
+	defer telemetry.Step("service.SocialService.uniqueUsername")()
 	base := sanitizeUsername(hint)
 	if base == "" && email != "" {
 		local := email
@@ -256,6 +264,7 @@ func (s *SocialService) uniqueUsername(hint, email, provider, subject string) (s
 }
 
 func (s *SocialService) redirectURI(id string) string {
+	defer telemetry.Step("service.SocialService.redirectURI")()
 	issuer := ""
 	port := 8080
 	if s.cfg != nil {
@@ -271,6 +280,7 @@ func (s *SocialService) redirectURI(id string) string {
 }
 
 func sanitizeUsername(value string) string {
+	defer telemetry.Step("service.sanitizeUsername")()
 	value = strings.ToLower(strings.TrimSpace(value))
 	var b strings.Builder
 	for _, r := range value {
@@ -286,6 +296,7 @@ func sanitizeUsername(value string) string {
 }
 
 func randomHex(n int) (string, error) {
+	defer telemetry.Step("service.randomHex")()
 	buf := make([]byte, n)
 	if _, err := rand.Read(buf); err != nil {
 		return "", err

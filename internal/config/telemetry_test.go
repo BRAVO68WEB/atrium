@@ -13,6 +13,15 @@ func TestTelemetryDisabledByDefault(t *testing.T) {
 	}
 }
 
+func TestLogFormatIsTextOrJSON(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Log.Format = "yaml"
+	cfg.Normalize()
+	if err := ValidatePlatform(cfg); err == nil {
+		t.Fatal("expected log format error")
+	}
+}
+
 func TestTelemetryRequiresEndpoint(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Telemetry.Enabled = true

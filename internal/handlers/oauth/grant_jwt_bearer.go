@@ -8,9 +8,11 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 func (h *Handler) handleJWTBearer(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.handleJWTBearer")()
 	client, ok := h.tokenCaller(w, r)
 	if !ok {
 		return
@@ -30,7 +32,7 @@ func (h *Handler) handleJWTBearer(w http.ResponseWriter, r *http.Request) {
 	}
 	tokenType := boundTokenType(client)
 	scope := strings.Join(redeemed.Scopes, " ")
-	accessToken, err := h.issueAccessToken(client.ID, redeemed.UserID, scope, tokenType)
+	accessToken, err := h.issueAccessToken(r.Context(), client.ID, redeemed.UserID, scope, tokenType)
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
 		return

@@ -9,8 +9,10 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
-	"github.com/bravo68web/oauth-impl/internal/database"
 	"time"
+
+	"github.com/bravo68web/oauth-impl/internal/database"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type storedKey struct {
@@ -23,6 +25,7 @@ type storedKey struct {
 }
 
 func LoadKeySet(db database.SQL) (*KeySet, error) {
+	defer telemetry.Step("oidc.LoadKeySet")()
 	ks := &KeySet{db: db}
 	if db == nil {
 		return newMemoryKeySet()
@@ -64,6 +67,7 @@ func LoadKeySet(db database.SQL) (*KeySet, error) {
 }
 
 func newMemoryKeySet() (*KeySet, error) {
+	defer telemetry.Step("oidc.newMemoryKeySet")()
 	ks := &KeySet{}
 	if err := ks.generate("RS256"); err != nil {
 		return nil, err
@@ -75,6 +79,7 @@ func newMemoryKeySet() (*KeySet, error) {
 }
 
 func (ks *KeySet) generate(alg string) error {
+	defer telemetry.Step("oidc.KeySet.generate")()
 	item := storedKey{Alg: alg, Status: "active", Kid: generateKid()}
 	var pemText string
 	var err error
@@ -111,6 +116,7 @@ func (ks *KeySet) generate(alg string) error {
 
 // Rotate retires the active key for each algorithm and creates a replacement.
 func (ks *KeySet) Rotate(retain time.Duration) error {
+	defer telemetry.Step("oidc.KeySet.Rotate")()
 	if retain <= 0 {
 		retain = 48 * time.Hour
 	}
@@ -142,6 +148,7 @@ func (ks *KeySet) Rotate(retain time.Duration) error {
 }
 
 func (ks *KeySet) active(alg string) *storedKey {
+	defer telemetry.Step("oidc.KeySet.active")()
 	ks.mu.RLock()
 	defer ks.mu.RUnlock()
 	for i := range ks.keys {
@@ -153,6 +160,7 @@ func (ks *KeySet) active(alg string) *storedKey {
 }
 
 func (ks *KeySet) GetRSAKey() (*rsa.PrivateKey, string) {
+	defer telemetry.Step("oidc.KeySet.GetRSAKey")()
 	key := ks.active("RS256")
 	if key == nil {
 		return nil, ""
@@ -161,6 +169,7 @@ func (ks *KeySet) GetRSAKey() (*rsa.PrivateKey, string) {
 }
 
 func (ks *KeySet) GetECKey() (*ecdsa.PrivateKey, string) {
+	defer telemetry.Step("oidc.KeySet.GetECKey")()
 	key := ks.active("ES256")
 	if key == nil {
 		return nil, ""
@@ -169,6 +178,7 @@ func (ks *KeySet) GetECKey() (*ecdsa.PrivateKey, string) {
 }
 
 func (ks *KeySet) publicByKid(kid string) (any, bool) {
+	defer telemetry.Step("oidc.KeySet.publicByKid")()
 	ks.mu.RLock()
 	defer ks.mu.RUnlock()
 	for _, key := range ks.keys {
@@ -185,7 +195,46 @@ func (ks *KeySet) publicByKid(kid string) (any, bool) {
 	return nil, false
 }
 
+// Reload replaces the in-memory keys with the rows in signing_keys.
+// Restore calls this after it commits, so /oidc/jwks matches the file
+// without a process restart.
+func (ks *KeySet) Reload() error {
+	defer telemetry.Step("oidc.KeySet.Reload")()
+	if ks == nil || ks.db == nil {
+		return nil
+	}
+	rows, err := ks.db.Query(`SELECT kid, alg, status, private_pem, COALESCE(retire_at, '') FROM signing_keys`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	var next []storedKey
+	for rows.Next() {
+		var kid, alg, status, pemText, retire string
+		if err := rows.Scan(&kid, &alg, &status, &pemText, &retire); err != nil {
+			return err
+		}
+		key, err := parsePrivatePEM(alg, pemText)
+		if err != nil {
+			return err
+		}
+		item := storedKey{Kid: kid, Alg: alg, Status: status, RSA: key.RSA, EC: key.EC}
+		if retire != "" {
+			item.RetireAt, _ = time.Parse(time.RFC3339, retire)
+		}
+		next = append(next, item)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	ks.mu.Lock()
+	ks.keys = next
+	ks.mu.Unlock()
+	return nil
+}
+
 func (ks *KeySet) ToJWKS() JWKS {
+	defer telemetry.Step("oidc.KeySet.ToJWKS")()
 	ks.mu.RLock()
 	defer ks.mu.RUnlock()
 	now := time.Now()
@@ -203,6 +252,7 @@ func (ks *KeySet) ToJWKS() JWKS {
 }
 
 func publicJWK(key storedKey) JWK {
+	defer telemetry.Step("oidc.publicJWK")()
 	if key.RSA != nil {
 		return JWK{
 			Kty: "RSA", Kid: key.Kid, Use: "sig", Alg: "RS256",
@@ -220,6 +270,7 @@ func publicJWK(key storedKey) JWK {
 }
 
 func bigIntBytes(e int) []byte {
+	defer telemetry.Step("oidc.bigIntBytes")()
 	if e == 0 {
 		return []byte{0}
 	}
@@ -231,6 +282,7 @@ func bigIntBytes(e int) []byte {
 }
 
 func parsePrivatePEM(alg, text string) (storedKey, error) {
+	defer telemetry.Step("oidc.parsePrivatePEM")()
 	block, _ := pem.Decode([]byte(text))
 	if block == nil {
 		return storedKey{}, fmt.Errorf("invalid private key pem")

@@ -10,6 +10,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/repository"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type ctxKey int
@@ -26,15 +27,18 @@ type Middleware struct {
 }
 
 func NewMiddleware(tokens *repository.TokenRepository, clients *repository.ClientRepository, users *repository.UserRepository, dpop *service.DPoPService) *Middleware {
+	defer telemetry.Step("auth.NewMiddleware")()
 	return &Middleware{tokens: tokens, clients: clients, users: users, dpop: dpop}
 }
 
 func TokenFrom(ctx context.Context) *models.AccessToken {
+	defer telemetry.Step("auth.TokenFrom")()
 	tok, _ := ctx.Value(ctxToken).(*models.AccessToken)
 	return tok
 }
 
 func (m *Middleware) RequireManagement(next http.Handler) http.Handler {
+	defer telemetry.Step("auth.Middleware.RequireManagement")()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tok, status, code, desc := m.load(r, false)
 		if tok == nil {
@@ -61,6 +65,7 @@ func (m *Middleware) RequireManagement(next http.Handler) http.Handler {
 }
 
 func (m *Middleware) RequireUser(next http.Handler) http.Handler {
+	defer telemetry.Step("auth.Middleware.RequireUser")()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tok, status, code, desc := m.load(r, true)
 		if tok == nil {
@@ -87,6 +92,7 @@ func (m *Middleware) RequireUser(next http.Handler) http.Handler {
 }
 
 func (m *Middleware) load(r *http.Request, userCall bool) (*models.AccessToken, int, string, string) {
+	defer telemetry.Step("auth.Middleware.load")()
 	raw := bearer(r)
 	if raw == "" {
 		return nil, http.StatusUnauthorized, "invalid_token", "Authorization header required"
@@ -100,6 +106,7 @@ func (m *Middleware) load(r *http.Request, userCall bool) (*models.AccessToken, 
 }
 
 func (m *Middleware) checkDPoP(r *http.Request, tok *models.AccessToken) error {
+	defer telemetry.Step("auth.Middleware.checkDPoP")()
 	header := r.Header.Get("DPoP")
 	if header == "" {
 		return fmt.Errorf("DPoP header required")
@@ -109,7 +116,7 @@ func (m *Middleware) checkDPoP(r *http.Request, tok *models.AccessToken) error {
 		scheme = "https"
 	}
 	fullURI := fmt.Sprintf("%s://%s%s", scheme, r.Host, r.URL.Path)
-	proof, err := m.dpop.ValidateDPoPProof(header, r.Method, fullURI, tok.Token)
+	proof, err := m.dpop.ValidateDPoPProof(r.Context(), header, r.Method, fullURI, tok.Token)
 	if err != nil {
 		return err
 	}
@@ -120,6 +127,7 @@ func (m *Middleware) checkDPoP(r *http.Request, tok *models.AccessToken) error {
 }
 
 func bearer(r *http.Request) string {
+	defer telemetry.Step("auth.bearer")()
 	h := r.Header.Get("Authorization")
 	if len(h) > 7 && strings.EqualFold(h[:7], "bearer ") {
 		return strings.TrimSpace(h[7:])
@@ -131,6 +139,7 @@ func bearer(r *http.Request) string {
 }
 
 func writeAuthError(w http.ResponseWriter, status int, code, description string) {
+	defer telemetry.Step("auth.writeAuthError")()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer error="%s", error_description="%s"`, code, description))
 	w.WriteHeader(status)

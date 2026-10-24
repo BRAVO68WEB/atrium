@@ -10,9 +10,11 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 func (h *Handler) handleTokenExchange(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.handleTokenExchange")()
 	client, ok := h.tokenCaller(w, r)
 	if !ok {
 		return
@@ -71,7 +73,7 @@ func (h *Handler) handleTokenExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := h.issueAccessToken(clientID, subjectTokenInfo.UserID, strings.Join(scopes, " "), tokenType)
+	accessToken, err := h.issueAccessToken(r.Context(), clientID, subjectTokenInfo.UserID, strings.Join(scopes, " "), tokenType)
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
 		return
@@ -105,6 +107,7 @@ func (h *Handler) handleTokenExchange(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleIDJAGExchange(w http.ResponseWriter, r *http.Request, client *models.Client) {
+	defer telemetry.Step("oauth.Handler.handleIDJAGExchange")()
 	if !service.HasGrant(client.GrantTypes, "urn:ietf:params:oauth:grant-type:token-exchange") {
 		writeTokenError(w, http.StatusBadRequest, "unauthorized_client", "Client is not authorized for token exchange")
 		return
@@ -135,6 +138,7 @@ func (h *Handler) handleIDJAGExchange(w http.ResponseWriter, r *http.Request, cl
 }
 
 func writeGrantError(w http.ResponseWriter, err error) {
+	defer telemetry.Step("oauth.writeGrantError")()
 	var failure *service.GrantFailure
 	if errors.As(err, &failure) {
 		writeTokenError(w, failure.Status, failure.Code, failure.Description)
@@ -144,6 +148,7 @@ func writeGrantError(w http.ResponseWriter, err error) {
 }
 
 func writeIDJAG(w http.ResponseWriter, token, scope string, expiresIn int) {
+	defer telemetry.Step("oauth.writeIDJAG")()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")

@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // GrantedApp is one client the user has allowed to act for them.
@@ -25,10 +26,12 @@ type GrantService struct {
 }
 
 func NewGrantService(consents *repository.ConsentRepository, tokens *repository.TokenRepository, clients *repository.ClientRepository) *GrantService {
+	defer telemetry.Step("service.NewGrantService")()
 	return &GrantService{consents: consents, tokens: tokens, clients: clients}
 }
 
 func (s *GrantService) List(userID string) ([]GrantedApp, error) {
+	defer telemetry.Step("service.GrantService.List")()
 	if s == nil || s.consents == nil {
 		return nil, nil
 	}
@@ -57,6 +60,7 @@ func (s *GrantService) List(userID string) ([]GrantedApp, error) {
 
 // Revoke removes the consent and revokes that client's access and refresh tokens for the user.
 func (s *GrantService) Revoke(userID, clientID string) error {
+	defer telemetry.Step("service.GrantService.Revoke")()
 	if s == nil || s.consents == nil || s.tokens == nil {
 		return nil
 	}
@@ -67,6 +71,7 @@ func (s *GrantService) Revoke(userID, clientID string) error {
 }
 
 func firstLetter(name string) string {
+	defer telemetry.Step("service.firstLetter")()
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "?"

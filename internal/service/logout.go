@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"net/url"
@@ -10,6 +11,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/oidc"
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type LogoutService struct {
@@ -22,18 +24,21 @@ type LogoutService struct {
 }
 
 func (s *LogoutService) SetFetchConfig(cfg *config.Config) {
+	defer telemetry.Step("service.LogoutService.SetFetchConfig")()
 	if s != nil {
 		s.fetch = cfg
 	}
 }
 
 func (s *LogoutService) SetWebhooks(d *WebhookDispatcher) {
+	defer telemetry.Step("service.LogoutService.SetWebhooks")()
 	if s != nil {
 		s.hooks = d
 	}
 }
 
 func NewLogoutService(sessions *SessionService, clients *repository.ClientRepository, oidcHandler *oidc.Handler) *LogoutService {
+	defer telemetry.Step("service.NewLogoutService")()
 	return &LogoutService{
 		sessions: sessions,
 		clients:  clients,
@@ -48,6 +53,7 @@ func NewLogoutService(sessions *SessionService, clients *repository.ClientReposi
 }
 
 func (s *LogoutService) End(sid string) {
+	defer telemetry.Step("service.LogoutService.End")()
 	if s == nil || sid == "" {
 		return
 	}
@@ -67,6 +73,7 @@ func (s *LogoutService) End(sid string) {
 }
 
 func (s *LogoutService) Notify(sid, sub string) {
+	defer telemetry.Step("service.LogoutService.Notify")()
 	if s == nil || s.oidc == nil || sid == "" {
 		return
 	}
@@ -81,7 +88,7 @@ func (s *LogoutService) Notify(sid, sub string) {
 			continue
 		}
 		subject := sub
-		if computed, err := s.oidc.Subject(client, sub); err == nil && computed != "" {
+		if computed, err := s.oidc.Subject(context.Background(), client, sub); err == nil && computed != "" {
 			subject = computed
 		}
 		tok, err := s.oidc.CreateLogoutToken(client.ID, subject, sid)

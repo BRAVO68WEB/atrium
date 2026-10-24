@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // ErrDeviceRevoked means the user has no active authenticator left.
@@ -30,6 +32,7 @@ type LoginNotice struct {
 // No registered device returns empty strings and a nil error, so CIBA
 // without an authenticator stays on its existing path.
 func (s *Service) PrepareLogin(userID, authReqID, interaction, binding string) (string, string, error) {
+	defer telemetry.Step("push.Service.PrepareLogin")()
 	var deviceID, typesText string
 	err := s.db.QueryRow(`SELECT id, COALESCE(interaction_types, '[]') FROM push_devices WHERE user_id = ? AND status = 'active' ORDER BY is_primary DESC, COALESCE(last_used_at, created_at) DESC LIMIT 1`, userID).Scan(&deviceID, &typesText)
 	if err != nil {
@@ -81,6 +84,7 @@ func (s *Service) PrepareLogin(userID, authReqID, interaction, binding string) (
 
 // DeviceRevoked reports a pending sign-in whose authenticator was revoked.
 func (s *Service) DeviceRevoked(authReqID string) bool {
+	defer telemetry.Step("push.Service.DeviceRevoked")()
 	var status string
 	err := s.db.QueryRow(`SELECT status FROM push_auth_requests WHERE auth_req_id = ?`, authReqID).Scan(&status)
 	return err == nil && status == "revoked"
@@ -88,6 +92,7 @@ func (s *Service) DeviceRevoked(authReqID string) bool {
 
 // PendingLogins lists sign-in requests waiting on this user's device.
 func (s *Service) PendingLogins(userID string) ([]LoginNotice, error) {
+	defer telemetry.Step("push.Service.PendingLogins")()
 	rows, err := s.db.Query(`SELECT auth_req_id, COALESCE(binding_message, ''), interaction_type FROM push_auth_requests WHERE user_id = ? AND status = 'pending' ORDER BY auth_req_id`, userID)
 	if err != nil {
 		return nil, err
@@ -109,6 +114,7 @@ func (s *Service) PendingLogins(userID string) ([]LoginNotice, error) {
 
 // NumberChoices returns three two-digit values. One of them is answer.
 func NumberChoices(answer string) []string {
+	defer telemetry.Step("push.NumberChoices")()
 	seen := map[string]bool{answer: true}
 	out := []string{answer}
 	for len(out) < 3 {
@@ -137,6 +143,7 @@ func NumberChoices(answer string) []string {
 // FinishLogin marks the pending sign-in approved or denied for this user.
 // proof must match the stored check for number_choose and input_manual.
 func (s *Service) FinishLogin(userID, authReqID, status, proof string) error {
+	defer telemetry.Step("push.Service.FinishLogin")()
 	if status == "approved" {
 		var interaction, binding string
 		err := s.db.QueryRow(`SELECT interaction_type, COALESCE(binding_message, '') FROM push_auth_requests WHERE auth_req_id = ? AND user_id = ? AND status = 'pending'`, authReqID, userID).Scan(&interaction, &binding)
@@ -160,6 +167,7 @@ func (s *Service) FinishLogin(userID, authReqID, status, proof string) error {
 
 // ListPending returns this device's waiting sign-ins. The caller has already authenticated.
 func (s *Service) ListPending(deviceID string) ([]LoginNotice, error) {
+	defer telemetry.Step("push.Service.ListPending")()
 	rows, err := s.db.Query(`SELECT auth_req_id, COALESCE(binding_message, ''), interaction_type FROM push_auth_requests WHERE device_id = ? AND status = 'pending' ORDER BY auth_req_id`, deviceID)
 	if err != nil {
 		return nil, err
@@ -181,6 +189,7 @@ func (s *Service) ListPending(deviceID string) ([]LoginNotice, error) {
 
 // PollPending authenticates the device and lists its pending sign-ins.
 func (s *Service) PollPending(r *http.Request, deviceID, credential string) ([]LoginNotice, string, error) {
+	defer telemetry.Step("push.Service.PollPending")()
 	row, err := s.authenticate(r, deviceID, credential)
 	if err != nil {
 		return nil, "", err
@@ -194,6 +203,7 @@ func (s *Service) PollPending(r *http.Request, deviceID, credential string) ([]L
 
 // PollDecide authenticates the device and records its decision.
 func (s *Service) PollDecide(r *http.Request, deviceID, credential, authReqID, action, proof, mode string) (string, string, error) {
+	defer telemetry.Step("push.Service.PollDecide")()
 	row, err := s.authenticate(r, deviceID, credential)
 	if err != nil {
 		return "", "", err
@@ -210,10 +220,12 @@ func (s *Service) PollDecide(r *http.Request, deviceID, credential, authReqID, a
 }
 
 func (s *Service) cascadeRevoke(deviceID string) {
+	defer telemetry.Step("push.Service.cascadeRevoke")()
 	_, _ = s.db.Exec(`UPDATE push_auth_requests SET status = 'revoked' WHERE device_id = ? AND status = 'pending'`, deviceID)
 }
 
 func ceremonyRank(value string) int {
+	defer telemetry.Step("push.ceremonyRank")()
 	switch value {
 	case "boolean":
 		return 1

@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"golang.org/x/crypto/hkdf"
 )
 
@@ -24,6 +25,7 @@ const Info = "draft-richer-oauth-oob-authcode"
 
 // Combine folds code and state into the single value the helper page shows.
 func Combine(code, state string) (string, error) {
+	defer telemetry.Step("oobcode.Combine")()
 	if code == "" || state == "" {
 		return "", fmt.Errorf("code and state are required")
 	}
@@ -42,6 +44,7 @@ func Combine(code, state string) (string, error) {
 
 // Recover extracts the authorization code from a combined value.
 func Recover(combined, state string) (string, error) {
+	defer telemetry.Step("oobcode.Recover")()
 	combined = strings.TrimSpace(combined)
 	if len(combined) <= 4 {
 		return "", fmt.Errorf("combined code is too short")
@@ -71,6 +74,7 @@ func Recover(combined, state string) (string, error) {
 
 // FromPaste accepts a raw code, a combined code, or the helper page URL.
 func FromPaste(pasted, state string, combined bool) (string, error) {
+	defer telemetry.Step("oobcode.FromPaste")()
 	pasted = strings.TrimSpace(pasted)
 	if code, ok, err := codeFromURL(pasted, state); ok || err != nil {
 		return code, err
@@ -85,6 +89,7 @@ func FromPaste(pasted, state string, combined bool) (string, error) {
 }
 
 func codeFromURL(pasted, state string) (string, bool, error) {
+	defer telemetry.Step("oobcode.codeFromURL")()
 	if !strings.Contains(pasted, "code=") {
 		return "", false, nil
 	}
@@ -103,8 +108,11 @@ func codeFromURL(pasted, state string) (string, bool, error) {
 }
 
 func derivedKey(state string, length int) ([]byte, error) {
+	defer
 	// A zero-length salt is what the draft specifies. A nil salt would
 	// expand to a string of hash-length zeros instead.
+	telemetry.Step("oobcode.derivedKey")()
+
 	reader := hkdf.New(func() hash.Hash { return sha256.New() }, []byte(state), []byte{}, []byte(Info))
 	key := make([]byte, length)
 	if _, err := io.ReadFull(reader, key); err != nil {

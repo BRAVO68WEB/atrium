@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/bravo68web/oauth-impl/internal/config"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 var ErrDisabled = fmt.Errorf("mailer disabled")
@@ -21,15 +22,19 @@ type Mailer interface {
 
 type Nop struct{}
 
-func (Nop) Enabled() bool { return false }
+func (Nop) Enabled() bool { defer telemetry.Step("mailer.Nop.Enabled")(); return false }
 
-func (Nop) Send(string, string, string) error { return ErrDisabled }
+func (Nop) Send(string, string, string) error {
+	defer telemetry.Step("mailer.Nop.Send")()
+	return ErrDisabled
+}
 
 type smtpMailer struct {
 	cfg config.SMTPConfig
 }
 
 func New(cfg config.SMTPConfig) (Mailer, error) {
+	defer telemetry.Step("mailer.New")()
 	if !cfg.Enabled {
 		return Nop{}, nil
 	}
@@ -42,9 +47,10 @@ func New(cfg config.SMTPConfig) (Mailer, error) {
 	return &smtpMailer{cfg: cfg}, nil
 }
 
-func (m *smtpMailer) Enabled() bool { return true }
+func (m *smtpMailer) Enabled() bool { defer telemetry.Step("mailer.smtpMailer.Enabled")(); return true }
 
 func (m *smtpMailer) Send(to, subject, text string) error {
+	defer telemetry.Step("mailer.smtpMailer.Send")()
 	toAddr, err := mailbox(to)
 	if err != nil {
 		return err
@@ -108,7 +114,10 @@ func (m *smtpMailer) Send(to, subject, text string) error {
 }
 
 func sanitizeMailText(text string) string {
+	defer
 	// Normalize line endings to LF for predictable downstream handling.
+	telemetry.Step("mailer.sanitizeMailText")()
+
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 
@@ -131,15 +140,20 @@ func sanitizeMailText(text string) string {
 
 // SanitizeText normalizes untrusted text before including it in email content.
 func SanitizeText(text string) string {
+	defer telemetry.Step("mailer.SanitizeText")(
+
+	// OneLine removes breaks and control characters from a single mail field.
+	)
 	return sanitizeMailText(text)
 }
 
-// OneLine removes breaks and control characters from a single mail field.
 func OneLine(text string) string {
+	defer telemetry.Step("mailer.OneLine")()
 	return oneLine(text)
 }
 
 func oneLine(text string) string {
+	defer telemetry.Step("mailer.oneLine")()
 	text = sanitizeMailText(text)
 	text = strings.ReplaceAll(text, "\n", " ")
 	return strings.Join(strings.Fields(text), " ")
@@ -147,6 +161,7 @@ func oneLine(text string) string {
 
 // mailbox returns the addr-spec. A display name or an extra header is rejected.
 func mailbox(value string) (string, error) {
+	defer telemetry.Step("mailer.mailbox")()
 	value = strings.TrimSpace(value)
 	if value == "" || strings.ContainsAny(value, "\r\n") {
 		return "", fmt.Errorf("invalid mail address")

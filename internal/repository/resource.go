@@ -2,10 +2,12 @@ package repository
 
 import (
 	"encoding/json"
-	"github.com/bravo68web/oauth-impl/internal/database"
 	"time"
 
+	"github.com/bravo68web/oauth-impl/internal/database"
+
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type ResourceRepository struct {
@@ -13,10 +15,12 @@ type ResourceRepository struct {
 }
 
 func NewResourceRepository(db database.SQL) *ResourceRepository {
+	defer telemetry.Step("repository.NewResourceRepository")()
 	return &ResourceRepository{db: db}
 }
 
 func (r *ResourceRepository) Create(resource *models.Resource) error {
+	defer telemetry.Step("repository.ResourceRepository.Create")()
 	scopesJSON, err := json.Marshal(resource.Scopes)
 	if err != nil {
 		return err
@@ -33,6 +37,7 @@ func (r *ResourceRepository) Create(resource *models.Resource) error {
 }
 
 func (r *ResourceRepository) Get(uri string) (*models.Resource, error) {
+	defer telemetry.Step("repository.ResourceRepository.Get")()
 	query := `SELECT uri, name, description, scopes, created_at
 		FROM resources WHERE uri = ?`
 
@@ -57,6 +62,7 @@ func (r *ResourceRepository) Get(uri string) (*models.Resource, error) {
 }
 
 func (r *ResourceRepository) List() ([]*models.Resource, error) {
+	defer telemetry.Step("repository.ResourceRepository.List")()
 	query := `SELECT uri, name, description, scopes, created_at
 		FROM resources ORDER BY name`
 
@@ -91,6 +97,7 @@ func (r *ResourceRepository) List() ([]*models.Resource, error) {
 }
 
 func (r *ResourceRepository) Update(resource *models.Resource) error {
+	defer telemetry.Step("repository.ResourceRepository.Update")()
 	scopesJSON, err := json.Marshal(resource.Scopes)
 	if err != nil {
 		return err
@@ -105,6 +112,7 @@ func (r *ResourceRepository) Update(resource *models.Resource) error {
 }
 
 func (r *ResourceRepository) Delete(uri string) error {
+	defer telemetry.Step("repository.ResourceRepository.Delete")()
 	_, err := r.db.Exec("DELETE FROM resources WHERE uri = ?", uri)
 	return err
 }

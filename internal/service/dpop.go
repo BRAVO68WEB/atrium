@@ -14,6 +14,7 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/cache"
 
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -41,10 +42,12 @@ type DPoPJWK struct {
 }
 
 func NewDPoPService() *DPoPService {
+	defer telemetry.Step("service.NewDPoPService")()
 	return NewDPoPServiceWithCache(cache.NewMemory())
 }
 
 func NewDPoPServiceWithCache(store cache.Cache) *DPoPService {
+	defer telemetry.Step("service.NewDPoPServiceWithCache")()
 	if store == nil {
 		store = cache.NewMemory()
 	}
@@ -52,7 +55,8 @@ func NewDPoPServiceWithCache(store cache.Cache) *DPoPService {
 }
 
 // ValidateDPoPProof validates a DPoP proof JWT
-func (s *DPoPService) ValidateDPoPProof(dpopHeader string, method string, uri string, accessToken string) (*DPoPProof, error) {
+func (s *DPoPService) ValidateDPoPProof(ctx context.Context, dpopHeader string, method string, uri string, accessToken string) (*DPoPProof, error) {
+	defer telemetry.Step("service.DPoPService.ValidateDPoPProof")()
 	if dpopHeader == "" {
 		return nil, fmt.Errorf("DPoP header is required")
 	}
@@ -129,7 +133,7 @@ func (s *DPoPService) ValidateDPoPProof(dpopHeader string, method string, uri st
 	}
 
 	// Check for replay
-	if err := s.checkReplay(jti); err != nil {
+	if err := s.checkReplay(ctx, jti); err != nil {
 		return nil, err
 	}
 
@@ -148,6 +152,7 @@ func (s *DPoPService) ValidateDPoPProof(dpopHeader string, method string, uri st
 
 // CreateDPoPProof creates a DPoP proof JWT
 func (s *DPoPService) CreateDPoPProof(key *ecdsa.PrivateKey, method string, uri string, accessToken string) (string, error) {
+	defer telemetry.Step("service.DPoPService.CreateDPoPProof")()
 	jti, err := generateJTI()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate jti: %w", err)
@@ -188,12 +193,16 @@ func (s *DPoPService) CreateDPoPProof(key *ecdsa.PrivateKey, method string, uri 
 
 // GenerateKeyPair generates a new ECDSA P-256 key pair
 func (s *DPoPService) GenerateKeyPair() (*ecdsa.PrivateKey, error) {
+	defer telemetry.Step("service.DPoPService.GenerateKeyPair")()
 	return ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 }
 
 // GetPublicKeyThumbprint returns the JWK thumbprint of a public key
 func (s *DPoPService) GetPublicKeyThumbprint(pubKey *ecdsa.PublicKey) (string, error) {
+	defer
 	// Get coordinates via ECDH API
+	telemetry.Step("service.DPoPService.GetPublicKeyThumbprint")()
+
 	ecdhKey, err := pubKey.ECDH()
 	if err != nil {
 		return "", fmt.Errorf("failed to convert to ECDH key: %w", err)
@@ -223,6 +232,7 @@ func (s *DPoPService) GetPublicKeyThumbprint(pubKey *ecdsa.PublicKey) (string, e
 
 // ExportPublicKeyAsJWK exports a public key as a JWK map
 func (s *DPoPService) ExportPublicKeyAsJWK(pubKey *ecdsa.PublicKey) map[string]interface{} {
+	defer telemetry.Step("service.DPoPService.ExportPublicKeyAsJWK")()
 	ecdhKey, _ := pubKey.ECDH()
 	pubBytes := ecdhKey.Bytes()
 	return map[string]interface{}{
@@ -234,6 +244,7 @@ func (s *DPoPService) ExportPublicKeyAsJWK(pubKey *ecdsa.PublicKey) map[string]i
 }
 
 func (s *DPoPService) parseJWK(jwkRaw map[string]interface{}) (*ecdsa.PublicKey, error) {
+	defer telemetry.Step("service.DPoPService.parseJWK")()
 	kty, _ := jwkRaw["kty"].(string)
 	if kty != "EC" {
 		return nil, fmt.Errorf("unsupported key type: %s", kty)
@@ -268,7 +279,10 @@ func (s *DPoPService) parseJWK(jwkRaw map[string]interface{}) (*ecdsa.PublicKey,
 }
 
 func (s *DPoPService) validateATH(ath string, accessToken string) error {
+	defer
 	// Compute SHA-256 hash of access token
+	telemetry.Step("service.DPoPService.validateATH")()
+
 	hash := sha256.Sum256([]byte(accessToken))
 	expectedATH := base64.RawURLEncoding.EncodeToString(hash[:])
 
@@ -279,15 +293,20 @@ func (s *DPoPService) validateATH(ath string, accessToken string) error {
 }
 
 func (s *DPoPService) computeATH(accessToken string) string {
+	defer telemetry.Step("service.DPoPService.computeATH")()
 	hash := sha256.Sum256([]byte(accessToken))
 	return base64.RawURLEncoding.EncodeToString(hash[:])
 }
 
-func (s *DPoPService) checkReplay(jti string) error {
+func (s *DPoPService) checkReplay(ctx context.Context, jti string) error {
+	defer telemetry.Step("service.DPoPService.checkReplay")()
 	if s == nil || s.replay == nil {
 		return fmt.Errorf("DPoP replay cache is not configured")
 	}
-	ok, err := s.replay.Add(context.Background(), "dpop:jti:"+jti, []byte("1"), 10*time.Minute)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ok, err := s.replay.Add(ctx, "dpop:jti:"+jti, []byte("1"), 10*time.Minute)
 	if err != nil {
 		return err
 	}
@@ -298,7 +317,10 @@ func (s *DPoPService) checkReplay(jti string) error {
 }
 
 func (s *DPoPService) normalizeURI(uri string) string {
+	defer
 	// Remove query and fragment
+	telemetry.Step("service.DPoPService.normalizeURI")()
+
 	if idx := strings.Index(uri, "?"); idx != -1 {
 		uri = uri[:idx]
 	}
@@ -309,6 +331,7 @@ func (s *DPoPService) normalizeURI(uri string) string {
 }
 
 func generateJTI() (string, error) {
+	defer telemetry.Step("service.generateJTI")()
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err != nil {

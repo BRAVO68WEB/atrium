@@ -6,12 +6,14 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // enforceClientDPoP requires a proof when the OAuth app forces DPoP.
 // The server flag security.dpop.enabled does not turn this off.
 // The bool is false when the error response has already been written.
 func (h *Handler) enforceClientDPoP(w http.ResponseWriter, r *http.Request, client *models.Client) (string, bool) {
+	defer telemetry.Step("oauth.Handler.enforceClientDPoP")()
 	if client == nil || !client.DPoPBoundAccessTokens {
 		return "", true
 	}
@@ -28,6 +30,7 @@ func (h *Handler) enforceClientDPoP(w http.ResponseWriter, r *http.Request, clie
 }
 
 func (h *Handler) revokeDPoP(w http.ResponseWriter, r *http.Request, client *models.Client, token string) bool {
+	defer telemetry.Step("oauth.Handler.revokeDPoP")()
 	needs := client != nil && client.DPoPBoundAccessTokens
 	proofToken := ""
 	var boundJKT string
@@ -60,6 +63,7 @@ func (h *Handler) revokeDPoP(w http.ResponseWriter, r *http.Request, client *mod
 // boundRefreshDPoP keeps a refreshed token on the key that issued it.
 // A client that requires DPoP still needs a proof when the old token had none.
 func (h *Handler) boundRefreshDPoP(w http.ResponseWriter, r *http.Request, client *models.Client, boundJKT string) (string, bool) {
+	defer telemetry.Step("oauth.Handler.boundRefreshDPoP")()
 	if (client == nil || !client.DPoPBoundAccessTokens) && boundJKT == "" {
 		return "", true
 	}
@@ -80,6 +84,7 @@ func (h *Handler) boundRefreshDPoP(w http.ResponseWriter, r *http.Request, clien
 }
 
 func boundTokenType(client *models.Client) string {
+	defer telemetry.Step("oauth.boundTokenType")()
 	if client != nil && client.DPoPBoundAccessTokens {
 		return "DPoP"
 	}
@@ -87,6 +92,7 @@ func boundTokenType(client *models.Client) string {
 }
 
 func (h *Handler) ValidateDPoPProof(r *http.Request, accessToken string) (*service.DPoPProof, error) {
+	defer telemetry.Step("oauth.Handler.ValidateDPoPProof")()
 	dpopHeader := r.Header.Get("DPoP")
 	if dpopHeader == "" {
 		return nil, fmt.Errorf("DPoP header is required")
@@ -99,5 +105,5 @@ func (h *Handler) ValidateDPoPProof(r *http.Request, accessToken string) (*servi
 	}
 	fullURI := fmt.Sprintf("%s://%s%s", scheme, r.Host, r.URL.Path)
 
-	return h.dpopSvc.ValidateDPoPProof(dpopHeader, r.Method, fullURI, accessToken)
+	return h.dpopSvc.ValidateDPoPProof(r.Context(), dpopHeader, r.Method, fullURI, accessToken)
 }

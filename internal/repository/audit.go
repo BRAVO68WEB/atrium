@@ -2,9 +2,11 @@ package repository
 
 import (
 	"encoding/json"
-	"github.com/bravo68web/oauth-impl/internal/database"
 	"time"
 
+	"github.com/bravo68web/oauth-impl/internal/database"
+
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/google/uuid"
 )
 
@@ -26,10 +28,12 @@ type AuditRepository struct {
 }
 
 func NewAuditRepository(db database.SQL) *AuditRepository {
+	defer telemetry.Step("repository.NewAuditRepository")()
 	return &AuditRepository{db: db}
 }
 
 func (r *AuditRepository) Insert(row AuditRow) error {
+	defer telemetry.Step("repository.AuditRepository.Insert")()
 	if r == nil || r.db == nil {
 		return nil
 	}
@@ -53,6 +57,7 @@ func (r *AuditRepository) Insert(row AuditRow) error {
 }
 
 func (r *AuditRepository) List(action, actorID string, since time.Time) ([]AuditRow, error) {
+	defer telemetry.Step("repository.AuditRepository.List")()
 	rows, err := r.db.Query(`SELECT id, actor_type, actor_id, action, COALESCE(target_type,''), COALESCE(target_id,''), COALESCE(ip,''), COALESCE(user_agent,''), metadata, created_at
 		FROM audit_logs ORDER BY created_at DESC`)
 	if err != nil {

@@ -6,12 +6,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/bravo68web/oauth-impl/internal/cache"
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 const sectorCacheTTL = 5 * time.Minute
@@ -19,12 +21,14 @@ const sectorCacheTTL = 5 * time.Minute
 // PairwiseIdentifier is the PPID for one sector and local account.
 // The salt is the server secret. Changing it changes every pairwise sub.
 func PairwiseIdentifier(sectorID, userID, salt string) string {
+	defer telemetry.Step("oidc.PairwiseIdentifier")()
 	sum := sha256.Sum256([]byte(sectorID + "\n" + userID + "\n" + salt))
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
 // Subject returns the local user id for a public client and the PPID for a pairwise client.
-func (h *Handler) Subject(client *models.Client, userID string) (string, error) {
+func (h *Handler) Subject(ctx context.Context, client *models.Client, userID string) (string, error) {
+	defer telemetry.Step("oidc.Handler.Subject")()
 	if userID == "" || client == nil || !strings.EqualFold(client.SubjectType, "pairwise") {
 		return userID, nil
 	}
@@ -35,7 +39,7 @@ func (h *Handler) Subject(client *models.Client, userID string) (string, error) 
 	if salt == "" {
 		return "", fmt.Errorf("oidc.pairwise_salt is required")
 	}
-	sector, err := h.sectorID(client)
+	sector, err := h.sectorID(ctx, client)
 	if err != nil {
 		return "", err
 	}
@@ -46,7 +50,8 @@ func (h *Handler) Subject(client *models.Client, userID string) (string, error) 
 	return ppid, nil
 }
 
-func (h *Handler) SubjectFor(clientID, userID string) (string, error) {
+func (h *Handler) SubjectFor(ctx context.Context, clientID, userID string) (string, error) {
+	defer telemetry.Step("oidc.Handler.SubjectFor")()
 	if userID == "" {
 		return clientID, nil
 	}
@@ -57,17 +62,18 @@ func (h *Handler) SubjectFor(clientID, userID string) (string, error) {
 	if err != nil || client == nil {
 		return userID, nil
 	}
-	return h.Subject(client, userID)
+	return h.Subject(ctx, client, userID)
 }
 
-func (h *Handler) sectorID(client *models.Client) (string, error) {
+func (h *Handler) sectorID(ctx context.Context, client *models.Client) (string, error) {
+	defer telemetry.Step("oidc.Handler.sectorID")()
 	if strings.TrimSpace(client.SectorIdentifierURI) != "" {
 		raw := strings.TrimSpace(client.SectorIdentifierURI)
 		parsed, err := url.Parse(raw)
 		if err != nil || parsed.Hostname() == "" || parsed.Scheme != "https" {
 			return "", fmt.Errorf("sector_identifier_uri must be an absolute https url")
 		}
-		listed, err := h.sectorRedirects(raw)
+		listed, err := h.sectorRedirects(ctx, raw)
 		if err != nil {
 			return "", err
 		}
@@ -87,6 +93,7 @@ func (h *Handler) sectorID(client *models.Client) (string, error) {
 
 // SectorHost is the shared redirect host for a pairwise client without a sector URI.
 func SectorHost(redirects []string) (string, error) {
+	defer telemetry.Step("oidc.SectorHost")()
 	host := ""
 	for _, raw := range redirects {
 		parsed, err := url.Parse(raw)
@@ -108,9 +115,16 @@ func SectorHost(redirects []string) (string, error) {
 	return host, nil
 }
 
-func (h *Handler) sectorRedirects(rawURL string) ([]string, error) {
+func (h *Handler) sectorRedirects(ctx context.Context, rawURL string) ([]string, error) {
+	defer telemetry.Step("oidc.Handler.sectorRedirects")()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if h != nil && h.sectorCache != nil {
-		if cached, ok, err := h.sectorCache.Get(context.Background(), "sector:"+rawURL); err == nil && ok {
+		cached, ok, err := h.sectorCache.Get(ctx, "sector:"+rawURL)
+		if err != nil {
+			log.Printf("cache sector: %v", err)
+		} else if ok {
 			var listed []string
 			if err := json.Unmarshal(cached, &listed); err == nil {
 				return listed, nil
@@ -120,7 +134,7 @@ func (h *Handler) sectorRedirects(rawURL string) ([]string, error) {
 	if h == nil || h.fetchSector == nil {
 		return nil, fmt.Errorf("sector identifier document cannot be fetched")
 	}
-	body, err := h.fetchSector(context.Background(), rawURL)
+	body, err := h.fetchSector(ctx, rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -129,12 +143,15 @@ func (h *Handler) sectorRedirects(rawURL string) ([]string, error) {
 		return nil, fmt.Errorf("sector identifier document is not a json array of urls")
 	}
 	if h.sectorCache != nil {
-		_ = h.sectorCache.Set(context.Background(), "sector:"+rawURL, body, sectorCacheTTL)
+		if err := h.sectorCache.Set(ctx, "sector:"+rawURL, body, sectorCacheTTL); err != nil {
+			log.Printf("cache sector: %v", err)
+		}
 	}
 	return listed, nil
 }
 
 func (h *Handler) rememberPairwise(sector, ppid, userID string) error {
+	defer telemetry.Step("oidc.Handler.rememberPairwise")()
 	if h == nil || h.db == nil {
 		return nil
 	}
@@ -148,13 +165,17 @@ func (h *Handler) rememberPairwise(sector, ppid, userID string) error {
 
 // SetSectorFetch supplies the SSRF-safe GET used for sector identifier documents.
 func (h *Handler) SetSectorFetch(fn func(ctx context.Context, rawURL string) ([]byte, error)) {
+	defer telemetry.Step("oidc.Handler.SetSectorFetch")(
+
+	// SetSectorCache stores sector documents for five minutes.
+	)
 	if h != nil {
 		h.fetchSector = fn
 	}
 }
 
-// SetSectorCache stores sector documents for five minutes.
 func (h *Handler) SetSectorCache(c cache.Cache) {
+	defer telemetry.Step("oidc.Handler.SetSectorCache")()
 	if h != nil {
 		h.sectorCache = c
 	}

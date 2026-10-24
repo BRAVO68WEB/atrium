@@ -1,10 +1,12 @@
 package repository
 
 import (
-	"github.com/bravo68web/oauth-impl/internal/database"
 	"time"
 
+	"github.com/bravo68web/oauth-impl/internal/database"
+
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type SessionRepository struct {
@@ -12,10 +14,12 @@ type SessionRepository struct {
 }
 
 func NewSessionRepository(db database.SQL) *SessionRepository {
+	defer telemetry.Step("repository.NewSessionRepository")()
 	return &SessionRepository{db: db}
 }
 
 func (r *SessionRepository) Create(s *models.BrowserSession) error {
+	defer telemetry.Step("repository.SessionRepository.Create")()
 	_, err := r.db.Exec(`INSERT INTO sessions (id, user_id, username, auth_time, mfa_verified, user_agent, ip, created_at, expires_at, revoked)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		s.ID, s.UserID, s.Username, s.AuthTime, boolInt(s.MFAVerified), s.UserAgent, s.IP, s.CreatedAt, s.ExpiresAt, boolInt(s.Revoked),
@@ -24,6 +28,7 @@ func (r *SessionRepository) Create(s *models.BrowserSession) error {
 }
 
 func scanSession(scan func(dest ...any) error) (*models.BrowserSession, error) {
+	defer telemetry.Step("repository.scanSession")()
 	s := &models.BrowserSession{}
 	var mfa, revoked int
 	if err := scan(
@@ -39,20 +44,24 @@ func scanSession(scan func(dest ...any) error) (*models.BrowserSession, error) {
 const sessionColumns = `id, user_id, COALESCE(username, ''), auth_time, mfa_verified, COALESCE(user_agent, ''), COALESCE(ip, ''), created_at, expires_at, revoked`
 
 func (r *SessionRepository) Get(id string) (*models.BrowserSession, error) {
+	defer telemetry.Step("repository.SessionRepository.Get")()
 	return scanSession(r.db.QueryRow(`SELECT `+sessionColumns+` FROM sessions WHERE id = ?`, id).Scan)
 }
 
 func (r *SessionRepository) MarkMFA(id string) error {
+	defer telemetry.Step("repository.SessionRepository.MarkMFA")()
 	_, err := r.db.Exec(`UPDATE sessions SET mfa_verified = 1 WHERE id = ?`, id)
 	return err
 }
 
 func (r *SessionRepository) Revoke(id string) error {
+	defer telemetry.Step("repository.SessionRepository.Revoke")()
 	_, err := r.db.Exec(`UPDATE sessions SET revoked = 1 WHERE id = ?`, id)
 	return err
 }
 
 func (r *SessionRepository) ListByUser(userID string) ([]*models.BrowserSession, error) {
+	defer telemetry.Step("repository.SessionRepository.ListByUser")()
 	rows, err := r.db.Query(`SELECT `+sessionColumns+` FROM sessions WHERE user_id = ? ORDER BY created_at DESC`, userID)
 	if err != nil {
 		return nil, err
@@ -70,6 +79,7 @@ func (r *SessionRepository) ListByUser(userID string) ([]*models.BrowserSession,
 }
 
 func (r *SessionRepository) RevokeAllExcept(userID, exceptSID string) ([]string, error) {
+	defer telemetry.Step("repository.SessionRepository.RevokeAllExcept")()
 	rows, err := r.db.Query(`SELECT id FROM sessions WHERE user_id = ? AND revoked = 0 AND id != ?`, userID, exceptSID)
 	if err != nil {
 		return nil, err
@@ -95,6 +105,7 @@ func (r *SessionRepository) RevokeAllExcept(userID, exceptSID string) ([]string,
 }
 
 func (r *SessionRepository) RecordClient(sid, clientID string) error {
+	defer telemetry.Step("repository.SessionRepository.RecordClient")()
 	if sid == "" || clientID == "" {
 		return nil
 	}
@@ -103,6 +114,7 @@ func (r *SessionRepository) RecordClient(sid, clientID string) error {
 }
 
 func (r *SessionRepository) ListClients(sid string) ([]string, error) {
+	defer telemetry.Step("repository.SessionRepository.ListClients")()
 	rows, err := r.db.Query(`SELECT client_id FROM session_clients WHERE sid = ?`, sid)
 	if err != nil {
 		return nil, err
@@ -120,5 +132,6 @@ func (r *SessionRepository) ListClients(sid string) ([]string, error) {
 }
 
 func (r *SessionRepository) Active(s *models.BrowserSession, now time.Time) bool {
+	defer telemetry.Step("repository.SessionRepository.Active")()
 	return s != nil && !s.Revoked && now.Before(s.ExpiresAt)
 }

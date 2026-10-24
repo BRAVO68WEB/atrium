@@ -5,9 +5,11 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 func applyClaimMappings(mappings []config.ClaimMapping, user *models.User, scopes []string) map[string]any {
+	defer telemetry.Step("oidc.applyClaimMappings")()
 	if len(mappings) == 0 {
 		return nil
 	}
@@ -26,6 +28,7 @@ func applyClaimMappings(mappings []config.ClaimMapping, user *models.User, scope
 }
 
 func reservedClaim(claim string) bool {
+	defer telemetry.Step("oidc.reservedClaim")()
 	switch claim {
 	case "iss", "sub", "aud", "exp", "iat", "nbf", "nonce", "sid", "auth_time", "org_id", "org_slug":
 		return true
@@ -35,6 +38,7 @@ func reservedClaim(claim string) bool {
 }
 
 func scopesCover(have, need []string) bool {
+	defer telemetry.Step("oidc.scopesCover")()
 	if len(need) == 0 {
 		return true
 	}
@@ -51,6 +55,7 @@ func scopesCover(have, need []string) bool {
 }
 
 func claimValue(source string, user *models.User) (any, bool) {
+	defer telemetry.Step("oidc.claimValue")()
 	if strings.HasPrefix(source, "const:") {
 		return strings.TrimPrefix(source, "const:"), true
 	}

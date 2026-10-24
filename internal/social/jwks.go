@@ -11,10 +11,12 @@ import (
 	"math/big"
 	"net/http"
 
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 func verifyIDToken(ctx context.Context, c *Client, jwksURL, raw, issuer, audience, nonce string) (map[string]any, error) {
+	defer telemetry.Step("social.verifyIDToken")()
 	if jwksURL == "" {
 		return nil, fmt.Errorf("jwks uri is empty")
 	}
@@ -74,6 +76,7 @@ func verifyIDToken(ctx context.Context, c *Client, jwksURL, raw, issuer, audienc
 }
 
 func parseJWK(raw json.RawMessage) (string, any, error) {
+	defer telemetry.Step("social.parseJWK")()
 	var meta struct {
 		Kty string `json:"kty"`
 		Kid string `json:"kid"`
@@ -127,6 +130,7 @@ func parseJWK(raw json.RawMessage) (string, any, error) {
 }
 
 func ecPublicKey(curve elliptic.Curve, x, y []byte) (*ecdsa.PublicKey, error) {
+	defer telemetry.Step("social.ecPublicKey")()
 	size := (curve.Params().BitSize + 7) / 8
 	if len(x) == 0 || len(y) == 0 || len(x) > size || len(y) > size {
 		return nil, fmt.Errorf("invalid EC coordinates")

@@ -2,10 +2,12 @@ package repository
 
 import (
 	"encoding/json"
-	"github.com/bravo68web/oauth-impl/internal/database"
 	"time"
 
+	"github.com/bravo68web/oauth-impl/internal/database"
+
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type CIBARepository struct {
@@ -13,10 +15,12 @@ type CIBARepository struct {
 }
 
 func NewCIBARepository(db database.SQL) *CIBARepository {
+	defer telemetry.Step("repository.NewCIBARepository")()
 	return &CIBARepository{db: db}
 }
 
 func (r *CIBARepository) Save(req *models.CIBARequest) error {
+	defer telemetry.Step("repository.CIBARepository.Save")()
 	scopesJSON, err := json.Marshal(req.Scopes)
 	if err != nil {
 		return err
@@ -39,6 +43,7 @@ func (r *CIBARepository) Save(req *models.CIBARequest) error {
 }
 
 func (r *CIBARepository) GetByID(authReqID string) (*models.CIBARequest, error) {
+	defer telemetry.Step("repository.CIBARepository.GetByID")()
 	query := `SELECT auth_req_id, client_id, user_id, binding_message, user_code,
 		status, delivery_mode, expires_at, interval, client_notification_token, scopes
 		FROM ciba_requests WHERE auth_req_id = ?`
@@ -64,11 +69,13 @@ func (r *CIBARepository) GetByID(authReqID string) (*models.CIBARequest, error) 
 }
 
 func (r *CIBARepository) UpdateStatus(authReqID, status string) error {
+	defer telemetry.Step("repository.CIBARepository.UpdateStatus")()
 	_, err := r.db.Exec("UPDATE ciba_requests SET status = ? WHERE auth_req_id = ?", status, authReqID)
 	return err
 }
 
 func (r *CIBARepository) GetPending() ([]*models.CIBARequest, error) {
+	defer telemetry.Step("repository.CIBARepository.GetPending")()
 	query := `SELECT auth_req_id, client_id, user_id, binding_message, user_code,
 		status, delivery_mode, expires_at, interval, client_notification_token, scopes
 		FROM ciba_requests WHERE status = 'pending' AND expires_at > ?

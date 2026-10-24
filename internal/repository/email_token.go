@@ -7,9 +7,11 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
-	"github.com/bravo68web/oauth-impl/internal/database"
 	"time"
 
+	"github.com/bravo68web/oauth-impl/internal/database"
+
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/google/uuid"
 )
 
@@ -18,10 +20,12 @@ type EmailTokenRepository struct {
 }
 
 func NewEmailTokenRepository(db database.SQL) *EmailTokenRepository {
+	defer telemetry.Step("repository.NewEmailTokenRepository")()
 	return &EmailTokenRepository{db: db}
 }
 
 func (r *EmailTokenRepository) Create(userID, purpose string, ttl time.Duration) (string, error) {
+	defer telemetry.Step("repository.EmailTokenRepository.Create")()
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
@@ -41,6 +45,7 @@ func (r *EmailTokenRepository) Create(userID, purpose string, ttl time.Duration)
 }
 
 func (r *EmailTokenRepository) Consume(raw, purpose string) (string, error) {
+	defer telemetry.Step("repository.EmailTokenRepository.Consume")()
 	sum := sha256.Sum256([]byte(raw))
 	hash := hex.EncodeToString(sum[:])
 	var id, userID, stored string

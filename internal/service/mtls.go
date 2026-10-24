@@ -11,6 +11,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type MTLSService struct {
@@ -22,6 +24,7 @@ type MTLSService struct {
 }
 
 func NewMTLSService() *MTLSService {
+	defer telemetry.Step("service.NewMTLSService")()
 	return &MTLSService{
 		certStore: make(map[string]*x509.Certificate),
 	}
@@ -29,12 +32,16 @@ func NewMTLSService() *MTLSService {
 
 // SetCRLPath sets the CRL file path and loads it
 func (s *MTLSService) SetCRLPath(crlPath string) error {
+	defer telemetry.Step("service.MTLSService.SetCRLPath")(
+
+	// LoadCRL loads the CRL from the configured path
+	)
 	s.crlPath = crlPath
 	return s.LoadCRL()
 }
 
-// LoadCRL loads the CRL from the configured path
 func (s *MTLSService) LoadCRL() error {
+	defer telemetry.Step("service.MTLSService.LoadCRL")()
 	if s.crlPath == "" {
 		return nil
 	}
@@ -61,6 +68,7 @@ func (s *MTLSService) LoadCRL() error {
 
 // ExtractClientCertificate extracts the client certificate from the TLS connection
 func (s *MTLSService) ExtractClientCertificate(r *http.Request) *x509.Certificate {
+	defer telemetry.Step("service.MTLSService.ExtractClientCertificate")()
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 		return nil
 	}
@@ -69,6 +77,7 @@ func (s *MTLSService) ExtractClientCertificate(r *http.Request) *x509.Certificat
 
 // ValidateClientCertificate validates the client certificate
 func (s *MTLSService) ValidateClientCertificate(cert *x509.Certificate, roots *x509.CertPool) error {
+	defer telemetry.Step("service.MTLSService.ValidateClientCertificate")()
 	if cert == nil {
 		return fmt.Errorf("no client certificate provided")
 	}
@@ -108,6 +117,7 @@ func (s *MTLSService) ValidateClientCertificate(cert *x509.Certificate, roots *x
 
 // IsCertificateRevoked checks if a certificate is in the CRL
 func (s *MTLSService) IsCertificateRevoked(cert *x509.Certificate) bool {
+	defer telemetry.Step("service.MTLSService.IsCertificateRevoked")()
 	if !s.crlLoaded || s.crl == nil {
 		return false
 	}
@@ -123,12 +133,14 @@ func (s *MTLSService) IsCertificateRevoked(cert *x509.Certificate) bool {
 
 // GetCertificateThumbprint returns the SHA-256 thumbprint of a certificate
 func (s *MTLSService) GetCertificateThumbprint(cert *x509.Certificate) string {
+	defer telemetry.Step("service.MTLSService.GetCertificateThumbprint")()
 	hash := sha256.Sum256(cert.Raw)
 	return base64.RawURLEncoding.EncodeToString(hash[:])
 }
 
 // StoreCertificate stores a certificate for later lookup
 func (s *MTLSService) StoreCertificate(thumbprint string, cert *x509.Certificate) {
+	defer telemetry.Step("service.MTLSService.StoreCertificate")()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.certStore[thumbprint] = cert
@@ -136,6 +148,7 @@ func (s *MTLSService) StoreCertificate(thumbprint string, cert *x509.Certificate
 
 // GetCertificate retrieves a certificate by thumbprint
 func (s *MTLSService) GetCertificate(thumbprint string) *x509.Certificate {
+	defer telemetry.Step("service.MTLSService.GetCertificate")()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.certStore[thumbprint]
@@ -143,6 +156,7 @@ func (s *MTLSService) GetCertificate(thumbprint string) *x509.Certificate {
 
 // ValidateClientAuthType validates the client authentication type
 func (s *MTLSService) ValidateClientAuthType(cert *x509.Certificate, expectedType string) error {
+	defer telemetry.Step("service.MTLSService.ValidateClientAuthType")()
 	if cert == nil {
 		return fmt.Errorf("no certificate provided")
 	}
@@ -162,14 +176,20 @@ func (s *MTLSService) ValidateClientAuthType(cert *x509.Certificate, expectedTyp
 
 // CreateCertificateBoundToken creates a certificate-bound access token
 func (s *MTLSService) CreateCertificateBoundToken(token string, cert *x509.Certificate) string {
+	defer
 	// In production, this would store the binding
+	telemetry.Step("service.MTLSService.CreateCertificateBoundToken")()
+
 	thumbprint := s.GetCertificateThumbprint(cert)
 	return fmt.Sprintf("%s?cert_thumbprint=%s", token, thumbprint)
 }
 
 // ValidateCertificateBinding validates that a token is bound to a certificate
 func (s *MTLSService) ValidateCertificateBinding(token string, cert *x509.Certificate) error {
+	defer
 	// In production, this would check the binding in the database
+	telemetry.Step("service.MTLSService.ValidateCertificateBinding")()
+
 	if cert == nil {
 		return fmt.Errorf("no certificate provided")
 	}
@@ -178,6 +198,7 @@ func (s *MTLSService) ValidateCertificateBinding(token string, cert *x509.Certif
 
 // ParseClientCertHeader parses the client certificate from a header (for reverse proxy setups)
 func (s *MTLSService) ParseClientCertHeader(header string) (*x509.Certificate, error) {
+	defer telemetry.Step("service.MTLSService.ParseClientCertHeader")()
 	if header == "" {
 		return nil, fmt.Errorf("no certificate header provided")
 	}
@@ -199,6 +220,7 @@ func (s *MTLSService) ParseClientCertHeader(header string) (*x509.Certificate, e
 
 // CreateTLSConfig creates a TLS configuration for mTLS
 func (s *MTLSService) CreateTLSConfig(certPool *x509.CertPool) *tls.Config {
+	defer telemetry.Step("service.MTLSService.CreateTLSConfig")()
 	return &tls.Config{
 		ClientAuth: tls.RequireAndVerifyClientCert,
 		ClientCAs:  certPool,

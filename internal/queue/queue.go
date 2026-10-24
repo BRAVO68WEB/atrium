@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type AuthRequestType string
@@ -59,6 +61,7 @@ type MemoryQueue struct {
 }
 
 func NewMemoryQueue(maxSize int) *MemoryQueue {
+	defer telemetry.Step("queue.NewMemoryQueue")()
 	return &MemoryQueue{
 		requests: make(map[string]*AuthRequest),
 		pending:  make(chan string, maxSize),
@@ -67,6 +70,7 @@ func NewMemoryQueue(maxSize int) *MemoryQueue {
 }
 
 func (q *MemoryQueue) Enqueue(req *AuthRequest) error {
+	defer telemetry.Step("queue.MemoryQueue.Enqueue")()
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -90,6 +94,7 @@ func (q *MemoryQueue) Enqueue(req *AuthRequest) error {
 }
 
 func (q *MemoryQueue) Dequeue() (*AuthRequest, error) {
+	defer telemetry.Step("queue.MemoryQueue.Dequeue")()
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 
@@ -103,6 +108,7 @@ func (q *MemoryQueue) Dequeue() (*AuthRequest, error) {
 }
 
 func (q *MemoryQueue) GetByID(id string) (*AuthRequest, error) {
+	defer telemetry.Step("queue.MemoryQueue.GetByID")()
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 
@@ -115,6 +121,7 @@ func (q *MemoryQueue) GetByID(id string) (*AuthRequest, error) {
 }
 
 func (q *MemoryQueue) GetPending() ([]*AuthRequest, error) {
+	defer telemetry.Step("queue.MemoryQueue.GetPending")()
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 
@@ -129,6 +136,7 @@ func (q *MemoryQueue) GetPending() ([]*AuthRequest, error) {
 }
 
 func (q *MemoryQueue) Approve(id string, userID string) error {
+	defer telemetry.Step("queue.MemoryQueue.Approve")()
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -152,6 +160,7 @@ func (q *MemoryQueue) Approve(id string, userID string) error {
 }
 
 func (q *MemoryQueue) Deny(id string, reason string) error {
+	defer telemetry.Step("queue.MemoryQueue.Deny")()
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -170,6 +179,7 @@ func (q *MemoryQueue) Deny(id string, reason string) error {
 }
 
 func (q *MemoryQueue) Count() int {
+	defer telemetry.Step("queue.MemoryQueue.Count")()
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 
@@ -183,6 +193,7 @@ func (q *MemoryQueue) Count() int {
 }
 
 func (q *MemoryQueue) StartCleanup(ctx context.Context, interval time.Duration) {
+	defer telemetry.Step("queue.MemoryQueue.StartCleanup")()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -197,6 +208,7 @@ func (q *MemoryQueue) StartCleanup(ctx context.Context, interval time.Duration) 
 }
 
 func (q *MemoryQueue) cleanup() {
+	defer telemetry.Step("queue.MemoryQueue.cleanup")()
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -210,6 +222,7 @@ func (q *MemoryQueue) cleanup() {
 }
 
 func (q *MemoryQueue) Poll(ctx context.Context, interval time.Duration) <-chan *AuthRequest {
+	defer telemetry.Step("queue.MemoryQueue.Poll")()
 	ch := make(chan *AuthRequest)
 
 	go func() {
@@ -241,6 +254,7 @@ func (q *MemoryQueue) Poll(ctx context.Context, interval time.Duration) <-chan *
 }
 
 func (q *MemoryQueue) WaitForApproval(ctx context.Context, id string, timeout time.Duration) (*AuthRequest, error) {
+	defer telemetry.Step("queue.MemoryQueue.WaitForApproval")()
 	deadline := time.Now().Add(timeout)
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()

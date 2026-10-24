@@ -20,6 +20,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/repository"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type AccountController struct {
@@ -37,12 +38,14 @@ type AccountController struct {
 }
 
 func (c *AccountController) SetGrants(g *service.GrantService) {
+	defer telemetry.Step("controller.AccountController.SetGrants")()
 	if c != nil {
 		c.grants = g
 	}
 }
 
 func (c *AccountController) SetAudit(a *service.AuditLog) {
+	defer telemetry.Step("controller.AccountController.SetAudit")()
 	if c != nil {
 		c.audit = a
 	}
@@ -58,6 +61,7 @@ func NewAccountController(
 	templates *template.Template,
 	cfg *config.Config,
 ) *AccountController {
+	defer telemetry.Step("controller.NewAccountController")()
 	return &AccountController{
 		account:   account,
 		users:     users,
@@ -72,6 +76,7 @@ func NewAccountController(
 }
 
 func (c *AccountController) HandleRegister(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleRegister")()
 	if c.account != nil && c.account.RegistrationDisabled() {
 		writeError(w, http.StatusForbidden, "registration_disabled", "Registration is disabled")
 		return
@@ -102,6 +107,7 @@ func (c *AccountController) HandleRegister(w http.ResponseWriter, r *http.Reques
 }
 
 func (c *AccountController) HandleForgot(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleForgot")()
 	var req struct {
 		Username string `json:"username"`
 		Email    string `json:"email"`
@@ -118,6 +124,7 @@ func (c *AccountController) HandleForgot(w http.ResponseWriter, r *http.Request)
 }
 
 func (c *AccountController) HandleReset(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleReset")()
 	var req struct {
 		Token    string `json:"token"`
 		Password string `json:"password"`
@@ -130,6 +137,7 @@ func (c *AccountController) HandleReset(w http.ResponseWriter, r *http.Request) 
 }
 
 func (c *AccountController) HandleVerifyEmail(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleVerifyEmail")()
 	var req struct {
 		Token string `json:"token"`
 	}
@@ -145,6 +153,7 @@ func (c *AccountController) HandleVerifyEmail(w http.ResponseWriter, r *http.Req
 }
 
 func (c *AccountController) HandleMe(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleMe")()
 	user, ok := c.caller(w, r)
 	if !ok {
 		return
@@ -158,6 +167,7 @@ func (c *AccountController) HandleMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AccountController) HandlePatchMe(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandlePatchMe")()
 	user, ok := c.caller(w, r)
 	if !ok {
 		return
@@ -185,6 +195,7 @@ func (c *AccountController) HandlePatchMe(w http.ResponseWriter, r *http.Request
 }
 
 func (c *AccountController) HandleChangePassword(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleChangePassword")()
 	user, ok := c.caller(w, r)
 	if !ok {
 		return
@@ -220,6 +231,7 @@ func (c *AccountController) HandleChangePassword(w http.ResponseWriter, r *http.
 }
 
 func (c *AccountController) HandleResend(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleResend")()
 	user, ok := c.caller(w, r)
 	if !ok {
 		return
@@ -236,6 +248,7 @@ func (c *AccountController) HandleResend(w http.ResponseWriter, r *http.Request)
 }
 
 func (c *AccountController) HandleListSessions(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleListSessions")()
 	user, ok := c.caller(w, r)
 	if !ok {
 		return
@@ -249,6 +262,7 @@ func (c *AccountController) HandleListSessions(w http.ResponseWriter, r *http.Re
 }
 
 func (c *AccountController) HandleRevokeSession(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleRevokeSession")()
 	user, ok := c.caller(w, r)
 	if !ok {
 		return
@@ -265,6 +279,7 @@ func (c *AccountController) HandleRevokeSession(w http.ResponseWriter, r *http.R
 }
 
 func (c *AccountController) HandleListRefresh(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleListRefresh")()
 	user, ok := c.caller(w, r)
 	if !ok {
 		return
@@ -278,6 +293,7 @@ func (c *AccountController) HandleListRefresh(w http.ResponseWriter, r *http.Req
 }
 
 func (c *AccountController) HandleRevokeRefresh(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleRevokeRefresh")()
 	user, ok := c.caller(w, r)
 	if !ok {
 		return
@@ -298,6 +314,7 @@ func (c *AccountController) HandleRevokeRefresh(w http.ResponseWriter, r *http.R
 }
 
 func (c *AccountController) HandleLoginAnalytics(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleLoginAnalytics")()
 	user, ok := c.caller(w, r)
 	if !ok {
 		return
@@ -316,6 +333,7 @@ func (c *AccountController) HandleLoginAnalytics(w http.ResponseWriter, r *http.
 }
 
 func (c *AccountController) HandleActivity(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleActivity")()
 	user, ok := c.caller(w, r)
 	if !ok {
 		return
@@ -330,10 +348,12 @@ func (c *AccountController) HandleActivity(w http.ResponseWriter, r *http.Reques
 }
 
 func (c *AccountController) HandleForgotPage(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleForgotPage")()
 	c.render(w, r, "forgot.html", map[string]any{"Error": "", "Status": ""})
 }
 
 func (c *AccountController) HandleForgotSubmit(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleForgotSubmit")()
 	_ = r.ParseForm()
 	if !csrfOK(r) {
 		rejectCSRF(w)
@@ -360,10 +380,12 @@ func (c *AccountController) HandleForgotSubmit(w http.ResponseWriter, r *http.Re
 }
 
 func (c *AccountController) HandleResetPage(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleResetPage")()
 	c.render(w, r, "reset.html", map[string]any{"Error": "", "Token": r.URL.Query().Get("token"), "Done": false})
 }
 
 func (c *AccountController) HandleResetSubmit(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleResetSubmit")()
 	_ = r.ParseForm()
 	if !csrfOK(r) {
 		rejectCSRF(w)
@@ -390,6 +412,7 @@ func (c *AccountController) HandleResetSubmit(w http.ResponseWriter, r *http.Req
 }
 
 func (c *AccountController) HandleProfile(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleProfile")()
 	session := c.browserSession(r)
 	if session == nil {
 		http.Redirect(w, r, "/login?next="+url.QueryEscape("/profile"), http.StatusFound)
@@ -400,6 +423,7 @@ func (c *AccountController) HandleProfile(w http.ResponseWriter, r *http.Request
 }
 
 func (c *AccountController) HandleProfileRevoke(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleProfileRevoke")()
 	c.postProfile(w, r, func(session *oauth.Session) (string, string) {
 		clientID := strings.TrimSpace(r.Form.Get("client_id"))
 		if clientID == "" || c.grants == nil {
@@ -416,6 +440,7 @@ func (c *AccountController) HandleProfileRevoke(w http.ResponseWriter, r *http.R
 }
 
 func (c *AccountController) HandleProfilePassword(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleProfilePassword")()
 	c.postProfile(w, r, func(session *oauth.Session) (string, string) {
 		err := c.account.ChangePassword(session.UserID, r.Form.Get("current_password"), r.Form.Get("new_password"), "", session.ID)
 		if err != nil {
@@ -429,6 +454,7 @@ func (c *AccountController) HandleProfilePassword(w http.ResponseWriter, r *http
 }
 
 func (c *AccountController) HandleProfileEmail(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleProfileEmail")()
 	c.postProfile(w, r, func(session *oauth.Session) (string, string) {
 		user, err := c.users.GetUser(session.UserID)
 		if err != nil {
@@ -445,6 +471,7 @@ func (c *AccountController) HandleProfileEmail(w http.ResponseWriter, r *http.Re
 }
 
 func (c *AccountController) HandleProfileMFA(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleProfileMFA")()
 	c.postProfile(w, r, func(session *oauth.Session) (string, string) {
 		if c.totp == nil {
 			return "", "Authenticator is not available"
@@ -464,6 +491,7 @@ func (c *AccountController) HandleProfileMFA(w http.ResponseWriter, r *http.Requ
 }
 
 func (c *AccountController) HandleProfileSession(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleProfileSession")()
 	c.postProfile(w, r, func(session *oauth.Session) (string, string) {
 		sid := strings.TrimSpace(r.Form.Get("session_id"))
 		if sid == "" {
@@ -483,6 +511,7 @@ func (c *AccountController) HandleProfileSession(w http.ResponseWriter, r *http.
 }
 
 func (c *AccountController) postProfile(w http.ResponseWriter, r *http.Request, act func(*oauth.Session) (string, string)) {
+	defer telemetry.Step("controller.AccountController.postProfile")()
 	session := c.browserSession(r)
 	if session == nil {
 		http.Redirect(w, r, "/login?next="+url.QueryEscape("/profile"), http.StatusFound)
@@ -502,6 +531,7 @@ func (c *AccountController) postProfile(w http.ResponseWriter, r *http.Request, 
 }
 
 func (c *AccountController) HandleListMyConsents(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleListMyConsents")()
 	user, ok := c.caller(w, r)
 	if !ok {
 		return
@@ -515,6 +545,7 @@ func (c *AccountController) HandleListMyConsents(w http.ResponseWriter, r *http.
 }
 
 func (c *AccountController) HandleRevokeMyConsent(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleRevokeMyConsent")()
 	user, ok := c.caller(w, r)
 	if !ok {
 		return
@@ -535,6 +566,7 @@ func (c *AccountController) HandleRevokeMyConsent(w http.ResponseWriter, r *http
 }
 
 func (c *AccountController) browserSession(r *http.Request) *oauth.Session {
+	defer telemetry.Step("controller.AccountController.browserSession")()
 	if c == nil || c.oauth == nil {
 		return nil
 	}
@@ -546,6 +578,7 @@ func (c *AccountController) browserSession(r *http.Request) *oauth.Session {
 }
 
 func (c *AccountController) grantList(userID string) ([]service.GrantedApp, error) {
+	defer telemetry.Step("controller.AccountController.grantList")()
 	if c.grants == nil {
 		return nil, nil
 	}
@@ -561,6 +594,7 @@ type profileGrant struct {
 }
 
 func profileStatus(raw string) string {
+	defer telemetry.Step("controller.profileStatus")()
 	switch raw {
 	case "password":
 		return "Password updated."
@@ -582,6 +616,7 @@ type profileSession struct {
 }
 
 func (c *AccountController) renderProfile(w http.ResponseWriter, r *http.Request, session *oauth.Session, user *models.User, removed bool, message, status string) {
+	defer telemetry.Step("controller.AccountController.renderProfile")()
 	email := ""
 	name := session.Username
 	verified := false
@@ -648,6 +683,7 @@ func (c *AccountController) renderProfile(w http.ResponseWriter, r *http.Request
 }
 
 func sessionDetail(s *models.BrowserSession) string {
+	defer telemetry.Step("controller.sessionDetail")()
 	parts := []string{}
 	if s.IP != "" {
 		parts = append(parts, s.IP)
@@ -666,6 +702,7 @@ func sessionDetail(s *models.BrowserSession) string {
 }
 
 func (c *AccountController) HandleVerifyPage(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.AccountController.HandleVerifyPage")()
 	err := c.account.Verify(r.URL.Query().Get("token"))
 	msg := "Your email is confirmed. You can sign in."
 	if err != nil {
@@ -675,6 +712,7 @@ func (c *AccountController) HandleVerifyPage(w http.ResponseWriter, r *http.Requ
 }
 
 func (c *AccountController) caller(w http.ResponseWriter, r *http.Request) (*models.User, bool) {
+	defer telemetry.Step("controller.AccountController.caller")()
 	tok := auth.TokenFrom(r.Context())
 	if tok == nil || tok.UserID == "" {
 		writeError(w, http.StatusUnauthorized, "invalid_token", "User token required")
@@ -689,6 +727,7 @@ func (c *AccountController) caller(w http.ResponseWriter, r *http.Request) (*mod
 }
 
 func (c *AccountController) writeForgot(w http.ResponseWriter, r *http.Request, id string) {
+	defer telemetry.Step("controller.AccountController.writeForgot")()
 	err := c.account.Forgot(id, c.account.RequestIP(r))
 	if errors.Is(err, mailer.ErrDisabled) {
 		writeError(w, http.StatusServiceUnavailable, "mailer_disabled", "SMTP is not configured")
@@ -706,6 +745,7 @@ func (c *AccountController) writeForgot(w http.ResponseWriter, r *http.Request, 
 }
 
 func (c *AccountController) writeReset(w http.ResponseWriter, r *http.Request, token, password string) {
+	defer telemetry.Step("controller.AccountController.writeReset")()
 	err := c.account.Reset(token, password, c.account.RequestIP(r))
 	if errors.Is(err, service.ErrRateLimited) {
 		writeError(w, http.StatusTooManyRequests, "slow_down", "Too many requests")
@@ -725,6 +765,7 @@ func (c *AccountController) writeReset(w http.ResponseWriter, r *http.Request, t
 }
 
 func (c *AccountController) botOK(w http.ResponseWriter, r *http.Request, username string) bool {
+	defer telemetry.Step("controller.AccountController.botOK")()
 	if c == nil || c.cfg == nil || c.cfg.Security.BotProtection.Provider == "" {
 		return true
 	}
@@ -744,6 +785,7 @@ func (c *AccountController) botOK(w http.ResponseWriter, r *http.Request, userna
 }
 
 func (c *AccountController) render(w http.ResponseWriter, r *http.Request, name string, data any) {
+	defer telemetry.Step("controller.AccountController.render")()
 	if c.templates == nil {
 		http.Error(w, "template unavailable", http.StatusInternalServerError)
 		return
@@ -767,6 +809,7 @@ func (c *AccountController) render(w http.ResponseWriter, r *http.Request, name 
 }
 
 func accountChrome(name string) (string, string) {
+	defer telemetry.Step("controller.accountChrome")()
 	switch name {
 	case "forgot.html":
 		return "Forgot Password", "Reset password"
@@ -791,6 +834,7 @@ type userPatch struct {
 }
 
 func applyProfile(user *models.User, req userPatch) bool {
+	defer telemetry.Step("controller.applyProfile")()
 	emailChanged := false
 	if req.Email != nil && *req.Email != user.Email {
 		user.Email = *req.Email
@@ -815,6 +859,7 @@ func applyProfile(user *models.User, req userPatch) bool {
 }
 
 func publicUser(user *models.User) map[string]any {
+	defer telemetry.Step("controller.publicUser")()
 	var last any
 	if user.LastLoginAt != nil {
 		last = user.LastLoginAt.Format(time.RFC3339)
@@ -834,6 +879,7 @@ func publicUser(user *models.User) map[string]any {
 }
 
 func SafeNext(raw string) string {
+	defer telemetry.Step("controller.SafeNext")()
 	if raw == "" || strings.HasPrefix(raw, "//") {
 		return ""
 	}
@@ -848,6 +894,7 @@ func SafeNext(raw string) string {
 }
 
 func loginWindow(r *http.Request) (time.Duration, error) {
+	defer telemetry.Step("controller.loginWindow")()
 	raw := r.URL.Query().Get("window")
 	if raw == "" {
 		return 30 * 24 * time.Hour, nil

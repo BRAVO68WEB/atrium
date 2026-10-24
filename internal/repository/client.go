@@ -3,10 +3,12 @@ package repository
 import (
 	"database/sql"
 	"encoding/json"
-	"github.com/bravo68web/oauth-impl/internal/database"
 	"time"
 
+	"github.com/bravo68web/oauth-impl/internal/database"
+
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type ClientRepository struct {
@@ -14,10 +16,12 @@ type ClientRepository struct {
 }
 
 func NewClientRepository(db database.SQL) *ClientRepository {
+	defer telemetry.Step("repository.NewClientRepository")()
 	return &ClientRepository{db: db}
 }
 
 func (r *ClientRepository) Create(client *models.Client) error {
+	defer telemetry.Step("repository.ClientRepository.Create")()
 	redirectURIs, _ := json.Marshal(client.RedirectURIs)
 	grantTypes, _ := json.Marshal(client.GrantTypes)
 	scopes, _ := json.Marshal(client.Scopes)
@@ -62,11 +66,13 @@ func (r *ClientRepository) Create(client *models.Client) error {
 }
 
 func (r *ClientRepository) GetByID(id string) (*models.Client, error) {
+	defer telemetry.Step("repository.ClientRepository.GetByID")()
 	row := r.db.QueryRow(clientSelect+` WHERE id = ?`, id)
 	return scanClient(row.Scan)
 }
 
 func (r *ClientRepository) List() ([]*models.Client, error) {
+	defer telemetry.Step("repository.ClientRepository.List")()
 	rows, err := r.db.Query(clientSelect + ` ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -85,6 +91,7 @@ func (r *ClientRepository) List() ([]*models.Client, error) {
 }
 
 func (r *ClientRepository) Update(client *models.Client) error {
+	defer telemetry.Step("repository.ClientRepository.Update")()
 	redirectURIs, _ := json.Marshal(client.RedirectURIs)
 	grantTypes, _ := json.Marshal(client.GrantTypes)
 	scopes, _ := json.Marshal(client.Scopes)
@@ -124,6 +131,7 @@ func (r *ClientRepository) Update(client *models.Client) error {
 }
 
 func subjectTypeOrPublic(value string) string {
+	defer telemetry.Step("repository.subjectTypeOrPublic")()
 	if value == "" {
 		return "public"
 	}
@@ -131,12 +139,14 @@ func subjectTypeOrPublic(value string) string {
 }
 
 func (r *ClientRepository) CountPairwise() (int, error) {
+	defer telemetry.Step("repository.ClientRepository.CountPairwise")()
 	var n int
 	err := r.db.QueryRow(`SELECT COUNT(*) FROM clients WHERE subject_type = 'pairwise'`).Scan(&n)
 	return n, err
 }
 
 func (r *ClientRepository) Delete(id string) error {
+	defer telemetry.Step("repository.ClientRepository.Delete")()
 	_, err := r.db.Exec("DELETE FROM clients WHERE id = ?", id)
 	return err
 }
@@ -155,6 +165,7 @@ const clientSelect = `SELECT id, secret, name, redirect_uris, grant_types, scope
 	FROM clients`
 
 func scanClient(scan func(dest ...any) error) (*models.Client, error) {
+	defer telemetry.Step("repository.scanClient")()
 	client := &models.Client{}
 	var redirectURIs, grantTypes, scopes, postLogout, source string
 	var jwks, jwksUri, reqObjAlg sql.NullString
@@ -210,6 +221,7 @@ func scanClient(scan func(dest ...any) error) (*models.Client, error) {
 }
 
 func boolInt(v bool) int {
+	defer telemetry.Step("repository.boolInt")()
 	if v {
 		return 1
 	}
@@ -217,6 +229,7 @@ func boolInt(v bool) int {
 }
 
 func decodeStringList(raw string, dest *[]string) error {
+	defer telemetry.Step("repository.decodeStringList")()
 	if raw == "" || raw == "null" {
 		*dest = []string{}
 		return nil

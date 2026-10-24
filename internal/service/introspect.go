@@ -9,6 +9,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // ErrInvalidClient is returned when the introspection caller cannot authenticate.
@@ -41,6 +42,7 @@ type Introspector struct {
 }
 
 func NewIntrospector(tokens *repository.TokenRepository, users *repository.UserRepository, cfg *config.Config) *Introspector {
+	defer telemetry.Step("service.NewIntrospector")()
 	issuer := ""
 	management := ""
 	if cfg != nil {
@@ -53,6 +55,7 @@ func NewIntrospector(tokens *repository.TokenRepository, users *repository.UserR
 // Introspect returns an inactive result when the token is unknown, expired,
 // revoked, or the caller is not allowed to see it.
 func (s *Introspector) Introspect(caller *models.Client, raw, hint string) (*Introspection, error) {
+	defer telemetry.Step("service.Introspector.Introspect")()
 	if caller == nil || caller.TokenEndpointAuthMethod == "none" || caller.TokenEndpointAuthMethod == "" {
 		return nil, ErrInvalidClient
 	}
@@ -105,6 +108,7 @@ func (s *Introspector) Introspect(caller *models.Client, raw, hint string) (*Int
 }
 
 func (s *Introspector) lookup(raw, hint string) (*models.AccessToken, *models.RefreshToken) {
+	defer telemetry.Step("service.Introspector.lookup")()
 	hint = strings.ToLower(strings.TrimSpace(hint))
 	if hint == "refresh_token" {
 		if rt, err := s.tokens.GetRefreshToken(raw); err == nil {
@@ -123,6 +127,7 @@ func (s *Introspector) lookup(raw, hint string) (*models.AccessToken, *models.Re
 }
 
 func (s *Introspector) allowed(caller *models.Client, tokenClient, resource string) bool {
+	defer telemetry.Step("service.Introspector.allowed")()
 	if s.managementClientID != "" && caller.ID == s.managementClientID {
 		return true
 	}
@@ -133,6 +138,7 @@ func (s *Introspector) allowed(caller *models.Client, tokenClient, resource stri
 }
 
 func flatten(access *models.AccessToken, refresh *models.RefreshToken) (clientID, resource, userID string, scopes []string, tokenType string, exp, iat time.Time, jti, orgID, act string, revoked bool) {
+	defer telemetry.Step("service.flatten")()
 	if access != nil {
 		tokenType = access.TokenType
 		if tokenType == "" {

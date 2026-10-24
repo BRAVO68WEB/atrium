@@ -8,9 +8,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 func (h *Handler) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleLogout")()
 	if err := r.ParseForm(); err != nil && r.Method == http.MethodPost {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
@@ -136,6 +138,7 @@ func (h *Handler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) renderLogout(w http.ResponseWriter, r *http.Request, values url.Values, errMsg string) {
+	defer telemetry.Step("oauth.Handler.renderLogout")()
 	data := map[string]any{
 		"Error":                 errMsg,
 		"IDTokenHint":           values.Get("id_token_hint"),
@@ -166,6 +169,7 @@ func (h *Handler) renderLogout(w http.ResponseWriter, r *http.Request, values ur
 }
 
 func (h *Handler) renderLoggedOut(w http.ResponseWriter) {
+	defer telemetry.Step("oauth.Handler.renderLoggedOut")()
 	data := map[string]any{"Error": "", "Done": true}
 	h.brandTheme.Apply(data, "Sign Out", "Signed out", "")
 	if h.pages != nil {
@@ -179,6 +183,7 @@ func (h *Handler) renderLoggedOut(w http.ResponseWriter) {
 }
 
 func audienceOf(raw any) string {
+	defer telemetry.Step("oauth.audienceOf")()
 	switch v := raw.(type) {
 	case string:
 		return v
@@ -196,6 +201,7 @@ func audienceOf(raw any) string {
 }
 
 func containsString(list []string, want string) bool {
+	defer telemetry.Step("oauth.containsString")()
 	for _, item := range list {
 		if item == want {
 			return true

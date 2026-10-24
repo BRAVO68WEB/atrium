@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -64,5 +65,26 @@ func TestRedisCacheTTLAndAdd(t *testing.T) {
 	added, err = store.Add(ctx, "dpop:jti:1", []byte("1"), time.Minute)
 	if err != nil || added {
 		t.Fatalf("replay add = %v %v", added, err)
+	}
+}
+
+func TestMemoryCacheDropsExpiredKeys(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemory()
+	for i := 0; i < memorySweepAt; i++ {
+		if err := store.Set(ctx, fmt.Sprintf("dpop:jti:%d", i), []byte("1"), time.Millisecond); err != nil {
+			t.Fatal(err)
+		}
+	}
+	time.Sleep(5 * time.Millisecond)
+	if err := store.Set(ctx, "dpop:jti:fresh", []byte("1"), time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	store.mu.Lock()
+	left := len(store.items)
+	_, fresh := store.items["dpop:jti:fresh"]
+	store.mu.Unlock()
+	if !fresh || left != 1 {
+		t.Fatalf("map has %d keys, fresh=%v", left, fresh)
 	}
 }

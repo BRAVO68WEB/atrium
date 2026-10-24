@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -18,6 +19,7 @@ const (
 )
 
 func (h *Handler) sealIDToken(clientID, signed string) (string, error) {
+	defer telemetry.Step("oidc.Handler.sealIDToken")()
 	client, err := h.loadClient(clientID)
 	if err != nil || client == nil {
 		return signed, nil
@@ -26,6 +28,7 @@ func (h *Handler) sealIDToken(clientID, signed string) (string, error) {
 }
 
 func (h *Handler) sealUserInfo(clientID string, claims map[string]any) (string, bool, error) {
+	defer telemetry.Step("oidc.Handler.sealUserInfo")()
 	client, err := h.loadClient(clientID)
 	if err != nil || client == nil || strings.TrimSpace(client.UserinfoEncryptedResponseAlg) == "" {
 		return "", false, nil
@@ -45,6 +48,7 @@ func (h *Handler) sealUserInfo(clientID string, claims map[string]any) (string, 
 }
 
 func (h *Handler) loadClient(id string) (*models.Client, error) {
+	defer telemetry.Step("oidc.Handler.loadClient")()
 	if h == nil || h.clients == nil || id == "" {
 		return nil, nil
 	}
@@ -52,6 +56,7 @@ func (h *Handler) loadClient(id string) (*models.Client, error) {
 }
 
 func (h *Handler) encryptNested(client *models.Client, signed, alg, enc string) (string, error) {
+	defer telemetry.Step("oidc.Handler.encryptNested")()
 	if strings.TrimSpace(alg) == "" && strings.TrimSpace(enc) == "" {
 		return signed, nil
 	}
@@ -77,6 +82,7 @@ func (h *Handler) encryptNested(client *models.Client, signed, alg, enc string) 
 }
 
 func checkEncPair(alg, enc string) error {
+	defer telemetry.Step("oidc.checkEncPair")()
 	if alg != encAlgRSAOAEP256 || enc != encA256GCM {
 		return fmt.Errorf("unsupported encryption alg %q enc %q", alg, enc)
 	}
@@ -84,6 +90,7 @@ func checkEncPair(alg, enc string) error {
 }
 
 func (h *Handler) encryptionKey(client *models.Client) (*jose.JSONWebKey, error) {
+	defer telemetry.Step("oidc.Handler.encryptionKey")()
 	raw := strings.TrimSpace(client.JWKS)
 	if raw == "" && strings.TrimSpace(client.JWKSUri) != "" {
 		if h.fetchSector == nil {

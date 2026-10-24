@@ -3,10 +3,12 @@ package repository
 import (
 	"database/sql"
 	"encoding/json"
-	"github.com/bravo68web/oauth-impl/internal/database"
 	"time"
 
+	"github.com/bravo68web/oauth-impl/internal/database"
+
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/google/uuid"
 )
 
@@ -15,10 +17,12 @@ type ConsentRepository struct {
 }
 
 func NewConsentRepository(db database.SQL) *ConsentRepository {
+	defer telemetry.Step("repository.NewConsentRepository")()
 	return &ConsentRepository{db: db}
 }
 
 func (r *ConsentRepository) Save(userID, clientID string, scopes []string) error {
+	defer telemetry.Step("repository.ConsentRepository.Save")()
 	scopesJSON, err := json.Marshal(scopes)
 	if err != nil {
 		return err
@@ -34,6 +38,7 @@ func (r *ConsentRepository) Save(userID, clientID string, scopes []string) error
 }
 
 func (r *ConsentRepository) Get(userID, clientID string) (*models.Consent, error) {
+	defer telemetry.Step("repository.ConsentRepository.Get")()
 	query := `SELECT id, user_id, client_id, scopes, granted_at, expires_at
 		FROM consents WHERE user_id = ? AND client_id = ?`
 
@@ -61,11 +66,13 @@ func (r *ConsentRepository) Get(userID, clientID string) (*models.Consent, error
 }
 
 func (r *ConsentRepository) Delete(userID, clientID string) error {
+	defer telemetry.Step("repository.ConsentRepository.Delete")()
 	_, err := r.db.Exec("DELETE FROM consents WHERE user_id = ? AND client_id = ?", userID, clientID)
 	return err
 }
 
 func (r *ConsentRepository) ListByUser(userID string) ([]*models.Consent, error) {
+	defer telemetry.Step("repository.ConsentRepository.ListByUser")()
 	query := `SELECT id, user_id, client_id, scopes, granted_at, expires_at
 		FROM consents WHERE user_id = ? ORDER BY granted_at DESC`
 

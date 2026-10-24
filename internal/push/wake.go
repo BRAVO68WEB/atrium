@@ -11,11 +11,13 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/go-jose/go-jose/v4"
 )
 
 // notify posts an opaque wake. A failure is ignored so the caller still succeeds.
 func (s *Service) notify(deviceID, reason, ref string) {
+	defer telemetry.Step("push.Service.notify")()
 	if s == nil || s.cfg == nil || (!s.cfg.Push.PingEnabled && !s.cfg.Push.PushEnabled) {
 		return
 	}
@@ -27,6 +29,7 @@ func (s *Service) notify(deviceID, reason, ref string) {
 }
 
 func (s *Service) deliver(address, reason, ref string) {
+	defer telemetry.Step("push.Service.deliver")()
 	opaque := map[string]string{"wake_reason": reason, "ref_id": ref}
 	if s.cfg.Push.PushEnabled {
 		relay := strings.TrimSpace(s.cfg.Push.RelayEndpoint)
@@ -49,6 +52,7 @@ func (s *Service) deliver(address, reason, ref string) {
 }
 
 func postWake(cfg *config.Config, target string, body map[string]string) bool {
+	defer telemetry.Step("push.postWake")()
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return false
@@ -63,6 +67,7 @@ func postWake(cfg *config.Config, target string, body map[string]string) bool {
 
 // SealPending encrypts the pending JSON to the device's current P-256 key.
 func (s *Service) SealPending(deviceID string, payload []byte) (string, error) {
+	defer telemetry.Step("push.Service.SealPending")()
 	var text string
 	if err := s.db.QueryRow(`SELECT jwk FROM push_devices WHERE id = ?`, deviceID).Scan(&text); err != nil {
 		return "", err
@@ -83,6 +88,7 @@ func (s *Service) SealPending(deviceID string, payload []byte) (string, error) {
 }
 
 func (s *Service) noteDelivery(deviceID, authReqID, mode string) {
+	defer telemetry.Step("push.Service.noteDelivery")()
 	if mode != "push" && mode != "poll" {
 		return
 	}
@@ -93,6 +99,7 @@ func (s *Service) noteDelivery(deviceID, authReqID, mode string) {
 }
 
 func deliveryModes(cfg *config.Config) []string {
+	defer telemetry.Step("push.deliveryModes")()
 	var modes []string
 	if cfg != nil && cfg.Push.PushEnabled {
 		modes = append(modes, "push")

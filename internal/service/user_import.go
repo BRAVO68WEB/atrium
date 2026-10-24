@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/passhash"
 	"github.com/google/uuid"
 )
@@ -61,6 +62,7 @@ type orgDirectory interface {
 // ImportUsers writes the document. dry checks every row and writes nothing.
 // One bad row does not roll back rows already written.
 func (s *UserService) ImportUsers(doc ImportDocument, dry bool, orgs orgDirectory) (ImportResult, error) {
+	defer telemetry.Step("service.UserService.ImportUsers")()
 	mode := strings.ToLower(strings.TrimSpace(doc.Mode))
 	if mode == "" {
 		mode = "create"
@@ -89,6 +91,7 @@ func (s *UserService) ImportUsers(doc ImportDocument, dry bool, orgs orgDirector
 }
 
 func (s *UserService) importRow(mode string, row ImportUser, dry bool, orgs orgDirectory) (string, error) {
+	defer telemetry.Step("service.UserService.importRow")()
 	row.Username = strings.TrimSpace(row.Username)
 	row.Email = normalizeEmail(row.Email)
 	row.PasswordHash = strings.TrimSpace(row.PasswordHash)
@@ -165,6 +168,7 @@ func (s *UserService) importRow(mode string, row ImportUser, dry bool, orgs orgD
 }
 
 func (s *UserService) importHash(row ImportUser) (string, error) {
+	defer telemetry.Step("service.UserService.importHash")()
 	if row.PasswordHash != "" {
 		if !passhash.Accepts(s.hasher, row.PasswordHash) {
 			return "", fmt.Errorf("password hash is not accepted by the server hasher")
@@ -187,6 +191,7 @@ func (s *UserService) importHash(row ImportUser) (string, error) {
 }
 
 func (s *UserService) applyImport(user *models.User, row ImportUser, hash string, orgs orgDirectory) error {
+	defer telemetry.Step("service.UserService.applyImport")()
 	user.Email = row.Email
 	user.PhoneNumber = row.PhoneNumber
 	user.GivenName = row.GivenName
@@ -215,6 +220,7 @@ func (s *UserService) applyImport(user *models.User, row ImportUser, hash string
 }
 
 func (s *UserService) checkOrgs(orgs orgDirectory, slugs []string) error {
+	defer telemetry.Step("service.UserService.checkOrgs")()
 	if len(slugs) == 0 {
 		return nil
 	}
@@ -234,6 +240,7 @@ func (s *UserService) checkOrgs(orgs orgDirectory, slugs []string) error {
 }
 
 func (s *UserService) addOrgs(orgs orgDirectory, userID string, slugs []string) error {
+	defer telemetry.Step("service.UserService.addOrgs")()
 	for _, slug := range slugs {
 		slug = strings.TrimSpace(slug)
 		err := orgs.AddMember(slug, userID, "member")
@@ -245,6 +252,7 @@ func (s *UserService) addOrgs(orgs orgDirectory, userID string, slugs []string) 
 }
 
 func duplicateMember(err error) bool {
+	defer telemetry.Step("service.duplicateMember")()
 	if err == nil {
 		return false
 	}
@@ -253,6 +261,7 @@ func duplicateMember(err error) bool {
 }
 
 func validTOTPSecret(secret string) bool {
+	defer telemetry.Step("service.validTOTPSecret")()
 	secret = strings.ToUpper(strings.TrimSpace(secret))
 	if len(secret) < 16 {
 		return false
@@ -266,6 +275,7 @@ func validTOTPSecret(secret string) bool {
 
 // ExportUsers returns an upsert document. Secrets are omitted unless includeSecrets is set.
 func (s *UserService) ExportUsers(includeSecrets bool, orgs orgDirectory) (ImportDocument, error) {
+	defer telemetry.Step("service.UserService.ExportUsers")()
 	users, err := s.userRepo.List()
 	if err != nil {
 		return ImportDocument{}, err

@@ -431,6 +431,9 @@ defaults on a public issuer.
 `security.dpop.proof_lifetime` and `nonce_lifetime` are seconds, not Go
 durations. `security.mfa.period` is the TOTP step in seconds.
 
+`log.format` is `text` or `json`. Leave it empty for a text line on
+stderr. `json` prints one JSON object per record.
+
 `telemetry.enabled` defaults to false. Turning it on requires
 `telemetry.otlp_endpoint`. An empty endpoint with tracing enabled is a
 startup error. See [Deploy](DEPLOY.md).

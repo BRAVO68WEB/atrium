@@ -10,10 +10,12 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/oidc"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
 func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.handlePasswordToken")()
 	clientID, clientSecret := presentedClient(r)
 
 	if clientID == "" {
@@ -21,7 +23,7 @@ func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, ok := h.requireClient(w, clientID, "", http.StatusUnauthorized)
+	client, ok := h.requireClient(r.Context(), w, clientID, "", http.StatusUnauthorized)
 	if !ok {
 		return
 	}
@@ -96,7 +98,7 @@ func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resource := r.Form.Get("resource")
-	accessToken, err := h.issueAccessTokenFor(clientID, user.ID, strings.Join(scopes, " "), tokenType, orgID, orgSlug, resource, "")
+	accessToken, err := h.issueAccessTokenFor(r.Context(), clientID, user.ID, strings.Join(scopes, " "), tokenType, orgID, orgSlug, resource, "")
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
 		return
@@ -144,7 +146,7 @@ func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 
 	var idToken string
 	if containsScope(scopes, "openid") && h.oidcHandler != nil {
-		idToken, err = h.oidcHandler.CreateIDToken(clientID, user.ID, "", scopes, oidc.IDTokenExtra{OrgID: orgID, OrgSlug: orgSlug})
+		idToken, err = h.oidcHandler.CreateIDToken(r.Context(), clientID, user.ID, "", scopes, oidc.IDTokenExtra{OrgID: orgID, OrgSlug: orgSlug})
 		if err != nil {
 			writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to create ID token")
 			return

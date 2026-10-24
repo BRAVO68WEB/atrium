@@ -7,11 +7,13 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/oidc"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // ValidateSubjectType checks public and pairwise client settings.
 // A pairwise client without a sector URI must use one redirect host.
 func ValidateSubjectType(client *models.Client) error {
+	defer telemetry.Step("service.ValidateSubjectType")()
 	if client == nil {
 		return fmt.Errorf("client is required")
 	}

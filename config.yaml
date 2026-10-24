@@ -17,6 +17,9 @@ org:
   enabled: false
   enabled_domain_based_autolookup: false
 
+log:
+  format: text
+
 telemetry:
   enabled: false
   service_name: oauth-server

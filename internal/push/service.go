@@ -19,6 +19,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/database"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -38,6 +39,7 @@ type Problem struct {
 func (p Problem) Error() string { return p.Detail }
 
 func problem(status int, slug, detail string) Problem {
+	defer telemetry.Step("push.problem")()
 	return Problem{Type: problemBase + slug, Title: slug, Status: status, Detail: detail}
 }
 
@@ -58,6 +60,7 @@ type nonceState struct {
 }
 
 func NewService(cfg *config.Config, db database.SQL, dpop *service.DPoPService) *Service {
+	defer telemetry.Step("push.NewService")()
 	return &Service{
 		db:    db,
 		cfg:   cfg,
@@ -69,10 +72,12 @@ func NewService(cfg *config.Config, db database.SQL, dpop *service.DPoPService) 
 }
 
 func (s *Service) issuer() string {
+	defer telemetry.Step("push.Service.issuer")()
 	return strings.TrimRight(s.cfg.Security.Issuer, "/")
 }
 
 func (s *Service) Discovery() map[string]any {
+	defer telemetry.Step("push.Service.Discovery")()
 	base := s.issuer()
 	modes := deliveryModes(s.cfg)
 	doc := map[string]any{
@@ -107,6 +112,7 @@ type Enrollment struct {
 }
 
 func (s *Service) IssueEnrollment(userID, clientID string, sign func(claims jwt.MapClaims) (string, error)) (Enrollment, error) {
+	defer telemetry.Step("push.Service.IssueEnrollment")()
 	jti := uuid.NewString()
 	exp := s.now().Add(time.Duration(s.cfg.Push.RegistrationTokenTTL) * time.Second)
 	claims := jwt.MapClaims{
@@ -154,6 +160,7 @@ type Registered struct {
 }
 
 func (s *Service) Register(ip string, body []byte, keyfunc jwt.Keyfunc) (Registered, error) {
+	defer telemetry.Step("push.Service.Register")()
 	if s.limited(ip) {
 		return Registered{}, problem(http.StatusTooManyRequests, "rate_limited", "too many registration attempts")
 	}
@@ -255,6 +262,7 @@ type Device struct {
 }
 
 func (s *Service) List(userID string) ([]Device, error) {
+	defer telemetry.Step("push.Service.List")()
 	rows, err := s.db.Query(`SELECT id, COALESCE(platform, ''), created_at, COALESCE(last_used_at, ''), interaction_types, status, COALESCE(is_primary, 0) FROM push_devices WHERE user_id = ? ORDER BY created_at`, userID)
 	if err != nil {
 		return nil, err
@@ -292,10 +300,12 @@ type deviceRow struct {
 }
 
 func (s *Service) authenticate(r *http.Request, deviceID, credential string) (deviceRow, error) {
+	defer telemetry.Step("push.Service.authenticate")()
 	return s.finishAuth(r, deviceID, credential, false)
 }
 
 func (s *Service) finishAuth(r *http.Request, deviceID, credential string, allowRevoked bool) (deviceRow, error) {
+	defer telemetry.Step("push.Service.finishAuth")()
 	var row deviceRow
 	err := s.db.QueryRow(`SELECT id, user_id, jwk, jkt, credential_hash, status, COALESCE(previous_jwk, ''), COALESCE(previous_jkt, ''), COALESCE(grace_until, '') FROM push_devices WHERE id = ?`, deviceID).Scan(
 		&row.id, &row.userID, &row.jwk, &row.jkt, &row.hash, &row.status, &row.previousJWK, &row.previousJKT, &row.graceUntil)
@@ -309,7 +319,7 @@ func (s *Service) finishAuth(r *http.Request, deviceID, credential string, allow
 	if s.dpop == nil || r.Header.Get("DPoP") == "" {
 		return deviceRow{}, problem(http.StatusUnauthorized, "dpop_required", "DPoP proof is required")
 	}
-	proof, err := s.dpop.ValidateDPoPProof(r.Header.Get("DPoP"), r.Method, requestURI(r), "")
+	proof, err := s.dpop.ValidateDPoPProof(r.Context(), r.Header.Get("DPoP"), r.Method, requestURI(r), "")
 	if err != nil || !s.acceptThumbprint(row, proof.JKT) {
 		return deviceRow{}, problem(http.StatusUnauthorized, "dpop_required", "DPoP proof does not match the device key")
 	}
@@ -317,6 +327,7 @@ func (s *Service) finishAuth(r *http.Request, deviceID, credential string, allow
 }
 
 func (s *Service) acceptThumbprint(row deviceRow, jkt string) bool {
+	defer telemetry.Step("push.Service.acceptThumbprint")()
 	if jkt == row.jkt {
 		if row.previousJKT != "" {
 			_, _ = s.db.Exec(`UPDATE push_devices SET previous_jwk = '', previous_jkt = '', grace_until = '' WHERE id = ?`, row.id)
@@ -331,6 +342,7 @@ func (s *Service) acceptThumbprint(row deviceRow, jkt string) bool {
 }
 
 func (s *Service) Revoke(r *http.Request, deviceID, credential string) (string, error) {
+	defer telemetry.Step("push.Service.Revoke")()
 	if s.deviceLimited(deviceID) {
 		return "", problem(http.StatusTooManyRequests, "rate_limited", "too many requests for this device")
 	}
@@ -350,6 +362,7 @@ func (s *Service) Revoke(r *http.Request, deviceID, credential string) (string, 
 
 // RevokeUser revokes every active device for an admin recovery.
 func (s *Service) RevokeUser(userID string) (int, error) {
+	defer telemetry.Step("push.Service.RevokeUser")()
 	rows, err := s.db.Query(`SELECT id FROM push_devices WHERE user_id = ? AND status = 'active'`, userID)
 	if err != nil {
 		return 0, err
@@ -379,6 +392,7 @@ func (s *Service) RevokeUser(userID string) (int, error) {
 
 // MakePrimary marks one active device and clears the flag on the others.
 func (s *Service) MakePrimary(userID, deviceID string) error {
+	defer telemetry.Step("push.Service.MakePrimary")()
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM push_devices WHERE id = ? AND user_id = ? AND status = 'active'`, deviceID, userID).Scan(&n); err != nil {
 		return err
@@ -401,6 +415,7 @@ type rotateRequest struct {
 }
 
 func (s *Service) Rotate(r *http.Request, body []byte, credential string) (Registered, string, error) {
+	defer telemetry.Step("push.Service.Rotate")()
 	var req rotateRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		return Registered{}, "", problem(http.StatusBadRequest, "invalid_public_key", "rotation body is invalid")
@@ -449,6 +464,7 @@ func (s *Service) Rotate(r *http.Request, body []byte, credential string) (Regis
 }
 
 func (s *Service) grace() time.Duration {
+	defer telemetry.Step("push.Service.grace")()
 	seconds := 300
 	if s.cfg != nil && s.cfg.Push.GracePeriodSeconds > 0 {
 		seconds = s.cfg.Push.GracePeriodSeconds
@@ -457,6 +473,7 @@ func (s *Service) grace() time.Duration {
 }
 
 func (s *Service) deviceLimited(deviceID string) bool {
+	defer telemetry.Step("push.Service.deviceLimited")()
 	if strings.TrimSpace(deviceID) == "" {
 		return false
 	}
@@ -464,6 +481,7 @@ func (s *Service) deviceLimited(deviceID string) bool {
 }
 
 func (s *Service) checkNonce(r *http.Request, deviceID string) error {
+	defer telemetry.Step("push.Service.checkNonce")()
 	got := strings.TrimSpace(r.Header.Get("Replay-Nonce"))
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -483,6 +501,7 @@ func (s *Service) checkNonce(r *http.Request, deviceID string) error {
 }
 
 func (s *Service) issueNonce(deviceID string) string {
+	defer telemetry.Step("push.Service.issueNonce")()
 	buf := make([]byte, 16)
 	_, _ = cryptoRand(buf)
 	value := base64.RawURLEncoding.EncodeToString(buf)
@@ -493,6 +512,7 @@ func (s *Service) issueNonce(deviceID string) string {
 }
 
 func (s *Service) limited(ip string) bool {
+	defer telemetry.Step("push.Service.limited")()
 	now := s.now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -512,11 +532,13 @@ func (s *Service) limited(ip string) bool {
 }
 
 func hashCredential(raw string) string {
+	defer telemetry.Step("push.hashCredential")()
 	sum := sha256.Sum256([]byte(raw))
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
 func contains(list []string, want string) bool {
+	defer telemetry.Step("push.contains")()
 	for _, item := range list {
 		if item == want {
 			return true
@@ -526,6 +548,7 @@ func contains(list []string, want string) bool {
 }
 
 func canonicalKey(raw map[string]any, dpop *service.DPoPService) (*ecdsa.PublicKey, string, string, error) {
+	defer telemetry.Step("push.canonicalKey")()
 	pub, err := publicFromMap(raw)
 	if err != nil {
 		return nil, "", "", err
@@ -542,6 +565,7 @@ func canonicalKey(raw map[string]any, dpop *service.DPoPService) (*ecdsa.PublicK
 }
 
 func publicFromJWKText(text string) (*ecdsa.PublicKey, error) {
+	defer telemetry.Step("push.publicFromJWKText")()
 	var raw map[string]any
 	if err := json.Unmarshal([]byte(text), &raw); err != nil {
 		return nil, err
@@ -550,6 +574,7 @@ func publicFromJWKText(text string) (*ecdsa.PublicKey, error) {
 }
 
 func publicFromMap(raw map[string]any) (*ecdsa.PublicKey, error) {
+	defer telemetry.Step("push.publicFromMap")()
 	if raw["kty"] != "EC" || raw["crv"] != "P-256" {
 		return nil, fmt.Errorf("not p-256")
 	}
@@ -574,6 +599,7 @@ func publicFromMap(raw map[string]any) (*ecdsa.PublicKey, error) {
 }
 
 func requestURI(r *http.Request) string {
+	defer telemetry.Step("push.requestURI")()
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
@@ -582,6 +608,7 @@ func requestURI(r *http.Request) string {
 }
 
 func clientIP(r *http.Request) string {
+	defer telemetry.Step("push.clientIP")()
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
@@ -590,5 +617,6 @@ func clientIP(r *http.Request) string {
 }
 
 func cryptoRand(buf []byte) (int, error) {
+	defer telemetry.Step("push.cryptoRand")()
 	return rand.Read(buf)
 }

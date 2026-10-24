@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"github.com/bravo68web/oauth-impl/internal/database"
 	"time"
+
+	"github.com/bravo68web/oauth-impl/internal/database"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type SocialLogin struct {
@@ -23,10 +25,12 @@ type SocialRepository struct {
 }
 
 func NewSocialRepository(db database.SQL) *SocialRepository {
+	defer telemetry.Step("repository.NewSocialRepository")()
 	return &SocialRepository{db: db}
 }
 
 func (r *SocialRepository) SaveLogin(row SocialLogin) error {
+	defer telemetry.Step("repository.SocialRepository.SaveLogin")()
 	raw, err := json.Marshal(row.Params)
 	if err != nil {
 		return err
@@ -39,6 +43,7 @@ func (r *SocialRepository) SaveLogin(row SocialLogin) error {
 
 // Consume marks a login row used and returns it. A missing, used, or other-provider state returns sql.ErrNoRows.
 func (r *SocialRepository) Consume(state, provider string) (SocialLogin, error) {
+	defer telemetry.Step("repository.SocialRepository.Consume")()
 	res, err := r.db.Exec(`UPDATE social_logins SET used = 1 WHERE state = ? AND provider = ? AND used = 0`, state, provider)
 	if err != nil {
 		return SocialLogin{}, err
@@ -70,17 +75,20 @@ func (r *SocialRepository) Consume(state, provider string) (SocialLogin, error) 
 }
 
 func (r *SocialRepository) FindIdentity(provider, subject string) (string, error) {
+	defer telemetry.Step("repository.SocialRepository.FindIdentity")()
 	var userID string
 	err := r.db.QueryRow(`SELECT user_id FROM social_identities WHERE provider = ? AND subject = ?`, provider, subject).Scan(&userID)
 	return userID, err
 }
 
 func (r *SocialRepository) InsertIdentity(provider, subject, userID, email string, created time.Time) error {
+	defer telemetry.Step("repository.SocialRepository.InsertIdentity")()
 	_, err := r.db.Exec(`INSERT INTO social_identities (provider, subject, user_id, email, created_at) VALUES (?, ?, ?, ?, ?)`,
 		provider, subject, userID, email, created.UTC().Format(time.RFC3339))
 	return err
 }
 
 func IsNotFound(err error) bool {
+	defer telemetry.Step("repository.IsNotFound")()
 	return errors.Is(err, sql.ErrNoRows)
 }

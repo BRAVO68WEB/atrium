@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -15,10 +16,12 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/oidc"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
 func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleAuthorize")()
 	clientID := r.URL.Query().Get("client_id")
 	redirectURI := r.URL.Query().Get("redirect_uri")
 	responseType := r.URL.Query().Get("response_type")
@@ -52,7 +55,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if clientID != "" {
-			client, code, _ := h.resolveClient(clientID, redirectURI)
+			client, code, _ := h.resolveClient(r.Context(), clientID, redirectURI)
 			if code == "" && client != nil && h.jarSvc != nil {
 				claims, err := h.jarSvc.ValidateRequestObject(request, client)
 				if err != nil {
@@ -169,7 +172,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, code, desc := h.resolveClient(clientID, redirectURI)
+	client, code, desc := h.resolveClient(r.Context(), clientID, redirectURI)
 	if code != "" {
 		writeOAuthError(w, http.StatusBadRequest, code, desc, state)
 		return
@@ -275,13 +278,14 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 			writeOAuthError(w, http.StatusFound, "interaction_required", "Organization selection required", state)
 			return
 		}
-		// Proceed directly
+		telemetry.Interaction("complete")
 		h.issueAuthorizationResponse(w, r, client, session, responseType, responseMode, redirectURI, scope, state, nonce, codeChallenge, codeChallengeMethod, resource, organization, requestedActor)
 		return
 	}
 
 	// prompt=login: force re-authentication
 	if prompt == "login" {
+		telemetry.Interaction("login")
 		h.clearSession(w, r)
 		loginURL := "/login?" + r.URL.RawQuery
 		if loginHint != "" {
@@ -293,6 +297,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	// Not authenticated: redirect to login
 	if session == nil || !session.Authenticated {
+		telemetry.Interaction("login")
 		loginURL := "/login?" + r.URL.RawQuery
 		if loginHint != "" {
 			loginURL += "&login_hint=" + url.QueryEscape(loginHint)
@@ -303,6 +308,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	// MFA check
 	if !session.MFAVerified && h.cfg.Security.MFA.Required {
+		telemetry.Interaction("mfa")
 		mfaURL := "/login/mfa?" + r.URL.RawQuery
 		http.Redirect(w, r, mfaURL, http.StatusFound)
 		return
@@ -314,6 +320,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if needs {
+		telemetry.Interaction("organization")
 		http.Redirect(w, r, "/organization?"+r.URL.RawQuery, http.StatusFound)
 		return
 	}
@@ -322,25 +329,29 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	// one-time grant so this request can finish without asking again.
 	if requestedActor != "" {
 		if !h.takeActorConsent(session.ID, clientID, requestedActor) {
+			telemetry.Interaction("consent")
 			http.Redirect(w, r, "/consent?"+r.URL.RawQuery, http.StatusFound)
 			return
 		}
 	} else if prompt == "consent" || !h.hasConsented(session.UserID, clientID, scope) {
+		telemetry.Interaction("consent")
 		consentURL := "/consent?" + r.URL.RawQuery
 		http.Redirect(w, r, consentURL, http.StatusFound)
 		return
 	}
 
+	telemetry.Interaction("complete")
 	h.issueAuthorizationResponse(w, r, client, session, responseType, responseMode, redirectURI, scope, state, nonce, codeChallenge, codeChallengeMethod, resource, organization, requestedActor)
 }
 
 // ApplyRequestObject fills empty authorize fields from a signed request.
 // The code challenge in that request wins over a query value.
 func (h *Handler) ApplyRequestObject(params map[string]string) {
+	defer telemetry.Step("oauth.Handler.ApplyRequestObject")()
 	if h == nil || h.jarSvc == nil || strings.TrimSpace(params["request"]) == "" {
 		return
 	}
-	client, _, _ := h.resolveClient(params["client_id"], params["redirect_uri"])
+	client, _, _ := h.resolveClient(context.Background(), params["client_id"], params["redirect_uri"])
 	if client == nil {
 		return
 	}
@@ -359,6 +370,7 @@ func (h *Handler) ApplyRequestObject(params map[string]string) {
 }
 
 func (h *Handler) issueAuthorizationResponse(w http.ResponseWriter, r *http.Request, client *models.Client, session *Session, responseType, responseMode, redirectURI, scope, state, nonce, codeChallenge, codeChallengeMethod, resource, organization, requestedActor string) {
+	defer telemetry.Step("oauth.Handler.issueAuthorizationResponse")()
 	scopes := crypto.NormalizeScopes(scope)
 	hasOpenID := containsScope(scopes, "openid")
 	var account *models.User
@@ -432,7 +444,7 @@ func (h *Handler) issueAuthorizationResponse(w http.ResponseWriter, r *http.Requ
 	}
 
 	if needsToken {
-		accessToken, err = h.issueAccessTokenFor(client.ID, session.UserID, scope, "Bearer", orgID, orgSlug, resource, "")
+		accessToken, err = h.issueAccessTokenFor(r.Context(), client.ID, session.UserID, scope, "Bearer", orgID, orgSlug, resource, "")
 		if err != nil {
 			writeOAuthError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token", state)
 			return
@@ -483,7 +495,7 @@ func (h *Handler) issueAuthorizationResponse(w http.ResponseWriter, r *http.Requ
 	}
 
 	if needsIDToken && hasOpenID && h.oidcHandler != nil {
-		idToken, err = h.oidcHandler.CreateIDToken(client.ID, session.UserID, nonce, scopes, oidc.IDTokenExtra{SID: session.ID, AuthTime: session.AuthTime, OrgID: orgID, OrgSlug: orgSlug})
+		idToken, err = h.oidcHandler.CreateIDToken(r.Context(), client.ID, session.UserID, nonce, scopes, oidc.IDTokenExtra{SID: session.ID, AuthTime: session.AuthTime, OrgID: orgID, OrgSlug: orgSlug})
 		if err != nil {
 			writeOAuthError(w, http.StatusInternalServerError, "server_error", "Failed to create ID token", state)
 			return

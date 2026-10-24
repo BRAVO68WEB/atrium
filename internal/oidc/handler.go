@@ -20,6 +20,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/database"
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type Handler struct {
@@ -30,12 +31,13 @@ type Handler struct {
 	users       *repository.UserRepository
 	tokens      *repository.TokenRepository
 	orgs        *repository.OrgRepository
-	checkDPoP   func(header, method, uri, accessToken string) (string, error)
+	checkDPoP   func(ctx context.Context, header, method, uri, accessToken string) (string, error)
 	fetchSector func(ctx context.Context, rawURL string) ([]byte, error)
 	sectorCache cache.Cache
 }
 
-func (h *Handler) SetDPoPCheck(fn func(header, method, uri, accessToken string) (string, error)) {
+func (h *Handler) SetDPoPCheck(fn func(ctx context.Context, header, method, uri, accessToken string) (string, error)) {
+	defer telemetry.Step("oidc.Handler.SetDPoPCheck")()
 	if h != nil {
 		h.checkDPoP = fn
 	}
@@ -64,6 +66,7 @@ type JWKS struct {
 }
 
 func NewHandler(db *database.DB, cfg *config.Config) (*Handler, error) {
+	defer telemetry.Step("oidc.NewHandler")()
 	var handle database.SQL
 	if db != nil {
 		handle = db
@@ -88,6 +91,7 @@ func NewHandler(db *database.DB, cfg *config.Config) (*Handler, error) {
 }
 
 func generateKid() string {
+	defer telemetry.Step("oidc.generateKid")()
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		// Fallback to timestamp-based ID
@@ -121,8 +125,9 @@ type IDTokenExtra struct {
 	OrgSlug  string
 }
 
-func (h *Handler) CreateIDToken(clientID, userID, nonce string, scopes []string, extra ...IDTokenExtra) (string, error) {
-	claims, err := h.identityClaims(clientID, userID, nonce, scopes, extra...)
+func (h *Handler) CreateIDToken(ctx context.Context, clientID, userID, nonce string, scopes []string, extra ...IDTokenExtra) (string, error) {
+	defer telemetry.Step("oidc.Handler.CreateIDToken")()
+	claims, err := h.identityClaims(ctx, clientID, userID, nonce, scopes, extra...)
 	if err != nil {
 		return "", err
 	}
@@ -134,8 +139,9 @@ func (h *Handler) CreateIDToken(clientID, userID, nonce string, scopes []string,
 	return h.sealIDToken(clientID, signed)
 }
 
-func (h *Handler) CreateIDTokenWithES256(clientID, userID, nonce string, scopes []string, extra ...IDTokenExtra) (string, error) {
-	claims, err := h.identityClaims(clientID, userID, nonce, scopes, extra...)
+func (h *Handler) CreateIDTokenWithES256(ctx context.Context, clientID, userID, nonce string, scopes []string, extra ...IDTokenExtra) (string, error) {
+	defer telemetry.Step("oidc.Handler.CreateIDTokenWithES256")()
+	claims, err := h.identityClaims(ctx, clientID, userID, nonce, scopes, extra...)
 	if err != nil {
 		return "", err
 	}
@@ -151,14 +157,15 @@ func (h *Handler) CreateIDTokenWithES256(clientID, userID, nonce string, scopes 
 // The profile is RFC 9068: typ at+jwt, aud is the resource or the issuer,
 // and client_id plus azp name the client. Callers still store the compact
 // token so revocation and UserInfo keep working.
-func (h *Handler) CreateAccessTokenJWT(clientID, userID, scope, _ string, lifetime time.Duration, orgID, orgSlug, resource, actor string) (string, error) {
+func (h *Handler) CreateAccessTokenJWT(ctx context.Context, clientID, userID, scope, _ string, lifetime time.Duration, orgID, orgSlug, resource, actor string) (string, error) {
+	defer telemetry.Step("oidc.Handler.CreateAccessTokenJWT")()
 	if h == nil || h.keySet == nil {
 		return "", fmt.Errorf("signing keys are not loaded")
 	}
 	if lifetime <= 0 {
 		lifetime = time.Hour
 	}
-	sub, err := h.SubjectFor(clientID, userID)
+	sub, err := h.SubjectFor(ctx, clientID, userID)
 	if err != nil {
 		return "", err
 	}
@@ -203,6 +210,7 @@ func (h *Handler) CreateAccessTokenJWT(clientID, userID, scope, _ string, lifeti
 
 // AccessTokenSubject verifies an access token this server signed and returns sub.
 func (h *Handler) AccessTokenSubject(raw string) (string, error) {
+	defer telemetry.Step("oidc.Handler.AccessTokenSubject")()
 	if h == nil || h.keySet == nil {
 		return "", fmt.Errorf("signing keys are not loaded")
 	}
@@ -232,12 +240,14 @@ func (h *Handler) AccessTokenSubject(raw string) (string, error) {
 }
 
 func signIDToken(method jwt.SigningMethod, kid string, key any, claims jwt.Claims) (string, error) {
+	defer telemetry.Step("oidc.signIDToken")()
 	token := jwt.NewWithClaims(method, claims)
 	token.Header["kid"] = kid
 	return token.SignedString(key)
 }
 
-func (h *Handler) identityClaims(clientID, userID, nonce string, scopes []string, extra ...IDTokenExtra) (jwt.Claims, error) {
+func (h *Handler) identityClaims(ctx context.Context, clientID, userID, nonce string, scopes []string, extra ...IDTokenExtra) (jwt.Claims, error) {
+	defer telemetry.Step("oidc.Handler.identityClaims")()
 	var ex IDTokenExtra
 	if len(extra) > 0 {
 		ex = extra[0]
@@ -251,7 +261,7 @@ func (h *Handler) identityClaims(clientID, userID, nonce string, scopes []string
 	if h.cfg != nil {
 		mappings = h.cfg.OIDC.ClaimMappings
 	}
-	sub, err := h.SubjectFor(clientID, userID)
+	sub, err := h.SubjectFor(ctx, clientID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -321,6 +331,7 @@ func (h *Handler) identityClaims(clientID, userID, nonce string, scopes []string
 }
 
 func (h *Handler) HandleJWKS(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oidc.Handler.HandleJWKS")()
 	jwks := h.keySet.ToJWKS()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "max-age=3600")
@@ -328,6 +339,7 @@ func (h *Handler) HandleJWKS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleUserInfo(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oidc.Handler.HandleUserInfo")()
 	scheme, tokenString := splitAuth(r.Header.Get("Authorization"))
 	if tokenString == "" {
 		writeOIDCError(w, http.StatusUnauthorized, "invalid_token", "Authorization header required")
@@ -363,7 +375,7 @@ func (h *Handler) HandleUserInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sub, err := h.SubjectFor(at.ClientID, user.ID)
+	sub, err := h.SubjectFor(r.Context(), at.ClientID, user.ID)
 	if err != nil {
 		writeOIDCError(w, http.StatusInternalServerError, "server_error", "Failed to resolve subject")
 		return
@@ -423,6 +435,7 @@ func (h *Handler) HandleUserInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func splitAuth(header string) (string, string) {
+	defer telemetry.Step("oidc.splitAuth")()
 	parts := strings.SplitN(header, " ", 2)
 	if len(parts) != 2 {
 		return "", ""
@@ -431,6 +444,7 @@ func splitAuth(header string) (string, string) {
 }
 
 func (h *Handler) userInfoDPoP(w http.ResponseWriter, r *http.Request, at *models.AccessToken, scheme string) bool {
+	defer telemetry.Step("oidc.Handler.userInfoDPoP")()
 	bound := at.TokenType == "DPoP" || at.DPoPJKT != ""
 	if h.clients != nil {
 		if client, err := h.clients.GetByID(at.ClientID); err == nil && client.DPoPBoundAccessTokens {
@@ -451,7 +465,7 @@ func (h *Handler) userInfoDPoP(w http.ResponseWriter, r *http.Request, at *model
 			proofScheme = "https"
 		}
 		uri := fmt.Sprintf("%s://%s%s", proofScheme, r.Host, r.URL.Path)
-		jkt, err := h.checkDPoP(r.Header.Get("DPoP"), r.Method, uri, at.Token)
+		jkt, err := h.checkDPoP(r.Context(), r.Header.Get("DPoP"), r.Method, uri, at.Token)
 		if err != nil {
 			writeOIDCError(w, http.StatusUnauthorized, "invalid_token", err.Error())
 			return false
@@ -470,6 +484,7 @@ func (h *Handler) userInfoDPoP(w http.ResponseWriter, r *http.Request, at *model
 }
 
 func (h *Handler) HandleDiscovery(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oidc.Handler.HandleDiscovery")()
 	issuer := h.cfg.Security.Issuer
 	if issuer == "" {
 		issuer = fmt.Sprintf("http://localhost:%d", h.cfg.Server.Port)
@@ -535,10 +550,12 @@ func (h *Handler) HandleDiscovery(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleASMetadata(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oidc.Handler.HandleASMetadata")()
 	h.HandleDiscovery(w, r)
 }
 
 func discoveryGrants(cfg *config.Config) []string {
+	defer telemetry.Step("oidc.discoveryGrants")()
 	var src []string
 	enabled := false
 	if cfg != nil {
@@ -560,6 +577,7 @@ func discoveryGrants(cfg *config.Config) []string {
 
 // SignRSA signs claims with the active RSA key. typ is the JOSE header type.
 func (h *Handler) SignRSA(claims jwt.MapClaims, typ string) (string, error) {
+	defer telemetry.Step("oidc.Handler.SignRSA")()
 	if h == nil || h.keySet == nil {
 		return "", fmt.Errorf("signing keys are not loaded")
 	}
@@ -576,6 +594,7 @@ func (h *Handler) SignRSA(claims jwt.MapClaims, typ string) (string, error) {
 }
 
 func (h *Handler) issuer() string {
+	defer telemetry.Step("oidc.Handler.issuer")()
 	if h.cfg.Security.Issuer != "" {
 		return h.cfg.Security.Issuer
 	}
@@ -583,6 +602,7 @@ func (h *Handler) issuer() string {
 }
 
 func (h *Handler) CreateLogoutToken(clientID, sub, sid string) (string, error) {
+	defer telemetry.Step("oidc.Handler.CreateLogoutToken")()
 	now := time.Now()
 	jtiRaw := make([]byte, 16)
 	if _, err := rand.Read(jtiRaw); err != nil {
@@ -611,6 +631,7 @@ func (h *Handler) CreateLogoutToken(clientID, sub, sid string) (string, error) {
 }
 
 func (h *Handler) ParseSignedToken(token string) (jwt.MapClaims, error) {
+	defer telemetry.Step("oidc.Handler.ParseSignedToken")()
 	claims := jwt.MapClaims{}
 	_, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (any, error) {
 		kid, _ := t.Header["kid"].(string)
@@ -641,6 +662,7 @@ func (h *Handler) ParseSignedToken(token string) (jwt.MapClaims, error) {
 }
 
 func writeOIDCError(w http.ResponseWriter, status int, code, description string) {
+	defer telemetry.Step("oidc.writeOIDCError")()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer error="%s", error_description="%s"`, code, description))
 	w.WriteHeader(status)
@@ -651,5 +673,6 @@ func writeOIDCError(w http.ResponseWriter, status int, code, description string)
 }
 
 func (h *Handler) GetKeySet() *KeySet {
+	defer telemetry.Step("oidc.Handler.GetKeySet")()
 	return h.keySet
 }

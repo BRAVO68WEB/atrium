@@ -9,6 +9,7 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/database"
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/google/uuid"
 )
 
@@ -17,10 +18,12 @@ type TokenRepository struct {
 }
 
 func NewTokenRepository(db database.SQL) *TokenRepository {
+	defer telemetry.Step("repository.NewTokenRepository")()
 	return &TokenRepository{db: db}
 }
 
 func (r *TokenRepository) SaveAccessToken(token *models.AccessToken) error {
+	defer telemetry.Step("repository.TokenRepository.SaveAccessToken")()
 	if token.IssuedAt.IsZero() {
 		token.IssuedAt = time.Now().UTC()
 	}
@@ -41,6 +44,7 @@ func (r *TokenRepository) SaveAccessToken(token *models.AccessToken) error {
 }
 
 func (r *TokenRepository) GetAccessToken(token string) (*models.AccessToken, error) {
+	defer telemetry.Step("repository.TokenRepository.GetAccessToken")()
 	query := `SELECT token, client_id, user_id, scopes, token_type, dpop_jkt, expires_at, revoked,
 		COALESCE(resource, ''), iat, COALESCE(jti, ''), COALESCE(org_id, ''), COALESCE(act, '')
 		FROM access_tokens WHERE token = ?`
@@ -69,11 +73,13 @@ func (r *TokenRepository) GetAccessToken(token string) (*models.AccessToken, err
 }
 
 func (r *TokenRepository) RevokeAccessToken(token string) error {
+	defer telemetry.Step("repository.TokenRepository.RevokeAccessToken")()
 	_, err := r.db.Exec("UPDATE access_tokens SET revoked = 1 WHERE token = ?", token)
 	return err
 }
 
 func (r *TokenRepository) SaveRefreshToken(token *models.RefreshToken) error {
+	defer telemetry.Step("repository.TokenRepository.SaveRefreshToken")()
 	if token.ID == "" {
 		token.ID = uuid.NewString()
 	}
@@ -96,6 +102,7 @@ func (r *TokenRepository) SaveRefreshToken(token *models.RefreshToken) error {
 }
 
 func scanRefresh(scan func(dest ...any) error) (*models.RefreshToken, error) {
+	defer telemetry.Step("repository.scanRefresh")()
 	rt := &models.RefreshToken{}
 	var scopes string
 	var id, family, userID sql.NullString
@@ -122,6 +129,7 @@ func scanRefresh(scan func(dest ...any) error) (*models.RefreshToken, error) {
 const refreshColumns = `COALESCE(id, ''), token, COALESCE(access_token, ''), client_id, user_id, scopes, COALESCE(family_id, ''), expires_at, revoked, COALESCE(resource, ''), iat, COALESCE(jti, ''), COALESCE(org_id, ''), COALESCE(act, '')`
 
 func compactJTI(token string) string {
+	defer telemetry.Step("repository.compactJTI")()
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return ""
@@ -140,23 +148,28 @@ func compactJTI(token string) string {
 }
 
 func (r *TokenRepository) GetRefreshToken(token string) (*models.RefreshToken, error) {
+	defer telemetry.Step("repository.TokenRepository.GetRefreshToken")()
 	return scanRefresh(r.db.QueryRow(`SELECT `+refreshColumns+` FROM refresh_tokens WHERE token = ?`, token).Scan)
 }
 
 func (r *TokenRepository) GetRefreshByID(id string) (*models.RefreshToken, error) {
+	defer telemetry.Step("repository.TokenRepository.GetRefreshByID")()
 	return scanRefresh(r.db.QueryRow(`SELECT `+refreshColumns+` FROM refresh_tokens WHERE id = ?`, id).Scan)
 }
 
 func (r *TokenRepository) RevokeRefreshToken(token string) error {
+	defer telemetry.Step("repository.TokenRepository.RevokeRefreshToken")()
 	_, err := r.db.Exec("UPDATE refresh_tokens SET revoked = 1 WHERE token = ?", token)
 	return err
 }
 
 func (r *TokenRepository) GetRefreshTokenByAccessToken(accessToken string) (*models.RefreshToken, error) {
+	defer telemetry.Step("repository.TokenRepository.GetRefreshTokenByAccessToken")()
 	return scanRefresh(r.db.QueryRow(`SELECT `+refreshColumns+` FROM refresh_tokens WHERE access_token = ?`, accessToken).Scan)
 }
 
 func (r *TokenRepository) RevokeFamily(familyID string) error {
+	defer telemetry.Step("repository.TokenRepository.RevokeFamily")()
 	if familyID == "" {
 		return nil
 	}
@@ -186,6 +199,7 @@ func (r *TokenRepository) RevokeFamily(familyID string) error {
 }
 
 func (r *TokenRepository) ListRefreshTokens(clientID, userID string) ([]*models.RefreshToken, error) {
+	defer telemetry.Step("repository.TokenRepository.ListRefreshTokens")()
 	query := `SELECT ` + refreshColumns + ` FROM refresh_tokens WHERE 1=1`
 	args := []any{}
 	if clientID != "" {
@@ -216,12 +230,14 @@ func (r *TokenRepository) ListRefreshTokens(clientID, userID string) ([]*models.
 }
 
 func (r *TokenRepository) RevokeAllForUser(userID string) error {
+	defer telemetry.Step("repository.TokenRepository.RevokeAllForUser")()
 	_, _ = r.db.Exec(`UPDATE access_tokens SET revoked = 1 WHERE user_id = ?`, userID)
 	_, err := r.db.Exec(`UPDATE refresh_tokens SET revoked = 1 WHERE user_id = ?`, userID)
 	return err
 }
 
 func (r *TokenRepository) RevokeOtherFamilies(userID, keepAccessToken string) error {
+	defer telemetry.Step("repository.TokenRepository.RevokeOtherFamilies")()
 	keepFamily := ""
 	if keepAccessToken != "" {
 		if rt, err := r.GetRefreshTokenByAccessToken(keepAccessToken); err == nil {
@@ -265,12 +281,14 @@ func (r *TokenRepository) RevokeOtherFamilies(userID, keepAccessToken string) er
 }
 
 func (r *TokenRepository) RevokeAllForClient(clientID, userID string) error {
+	defer telemetry.Step("repository.TokenRepository.RevokeAllForClient")()
 	_, _ = r.db.Exec("UPDATE access_tokens SET revoked = 1 WHERE client_id = ? AND user_id = ?", clientID, userID)
 	_, _ = r.db.Exec("UPDATE refresh_tokens SET revoked = 1 WHERE client_id = ? AND user_id = ?", clientID, userID)
 	return nil
 }
 
 func (r *TokenRepository) ListAccessTokens(clientID, userID string) ([]*models.AccessToken, error) {
+	defer telemetry.Step("repository.TokenRepository.ListAccessTokens")()
 	query := `SELECT token, client_id, user_id, scopes, token_type, dpop_jkt, expires_at, revoked
 		FROM access_tokens WHERE 1=1`
 	args := []interface{}{}

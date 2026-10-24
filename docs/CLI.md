@@ -105,6 +105,27 @@ It exits non-zero when any row has an error. `export` omits password
 hashes and TOTP secrets unless you pass `--include-secrets`. The file
 mode is `0600`. `init` does not call a remote server.
 
+### Backup
+
+```bash
+./bin/oauth-cli backup --output auth-backup.json
+./bin/oauth-cli restore auth-backup.json --dry-run
+./bin/oauth-cli restore auth-backup.json
+./bin/oauth-cli restore auth-backup.json --force
+```
+
+`backup` and `restore` call `GET /api/backup` and `POST /api/restore`.
+The file holds users, clients, organizations, consents, webhooks,
+social identities, push devices, pairwise subjects, and signing keys.
+It includes password hashes, client secrets, webhook secrets, TOTP
+secrets, and private keys. It does not include sessions or tokens.
+The written file mode is `0600`. A restore onto a server that already
+has a user, or a client other than the management client, is refused
+unless you pass `--force`. `--dry-run` prints the counts and writes
+nothing. Keep `config.yaml` and `internal/hashalgo/algo.go` next to
+the file. `oidc.pairwise_salt` is not inside the JSON. Pairwise
+subjects only match when that salt is unchanged.
+
 ### Tokens
 
 ```bash

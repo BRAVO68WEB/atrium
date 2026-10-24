@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"github.com/bravo68web/oauth-impl/internal/config"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const fetchLimit = 1 << 20
@@ -19,6 +22,7 @@ const fetchLimit = 1 << 20
 // FetchSafe performs an outbound GET or POST that cannot reach private networks.
 // Redirects are not followed. The body is capped at 1 MiB.
 func FetchSafe(ctx context.Context, cfg *config.Config, method, rawURL string, body io.Reader, header http.Header) ([]byte, int, error) {
+	defer telemetry.Step("service.FetchSafe")()
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Host == "" {
 		return nil, 0, fmt.Errorf("url is not absolute")
@@ -59,6 +63,19 @@ func FetchSafe(ctx context.Context, cfg *config.Config, method, rawURL string, b
 	if !isValidRedirectURL(cfg, rawURL) {
 		return nil, 0, fmt.Errorf("url is not allowed")
 	}
+	ctx, end := telemetry.Start(ctx, "http.client")
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("server.address", u.Hostname()),
+		attribute.String("http.request.method", method),
+	)
+	var httpStatus int
+	defer func() {
+		if httpStatus != 0 {
+			span.SetAttributes(attribute.Int("http.response.status_code", httpStatus))
+		}
+		end()
+	}()
 	req, err := http.NewRequestWithContext(ctx, method, rawURL, body)
 	if err != nil {
 		return nil, 0, err
@@ -72,6 +89,7 @@ func FetchSafe(ctx context.Context, cfg *config.Config, method, rawURL string, b
 	if err != nil {
 		return nil, 0, err
 	}
+	httpStatus = resp.StatusCode
 	defer func() { _ = resp.Body.Close() }()
 	payload, err := io.ReadAll(io.LimitReader(resp.Body, fetchLimit+1))
 	if err != nil {
@@ -85,6 +103,7 @@ func FetchSafe(ctx context.Context, cfg *config.Config, method, rawURL string, b
 
 // ValidateFetchTarget rejects URLs that FetchSafe would refuse, without dialing.
 func ValidateFetchTarget(cfg *config.Config, raw string) error {
+	defer telemetry.Step("service.ValidateFetchTarget")()
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {
 		return fmt.Errorf("url must be absolute http or https")
@@ -101,6 +120,7 @@ func ValidateFetchTarget(cfg *config.Config, raw string) error {
 // isValidRedirectURL reports whether an absolute URL may be requested.
 // The name is the check used immediately before the outbound call.
 func isValidRedirectURL(cfg *config.Config, rawURL string) bool {
+	defer telemetry.Step("service.isValidRedirectURL")()
 	parsed, err := url.Parse(rawURL)
 	if err != nil || parsed.Host == "" {
 		return false
@@ -109,6 +129,7 @@ func isValidRedirectURL(cfg *config.Config, rawURL string) bool {
 }
 
 func validateFetchURL(cfg *config.Config, u *url.URL) error {
+	defer telemetry.Step("service.validateFetchURL")()
 	switch u.Scheme {
 	case "https":
 		return nil
@@ -124,6 +145,7 @@ func validateFetchURL(cfg *config.Config, u *url.URL) error {
 }
 
 func resolveFetchIPs(ctx context.Context, cfg *config.Config, host string) ([]netip.Addr, error) {
+	defer telemetry.Step("service.resolveFetchIPs")()
 	if ip, err := netip.ParseAddr(host); err == nil {
 		if !ipAllowed(cfg, ip) {
 			return nil, fmt.Errorf("url host is not allowed")
@@ -149,6 +171,7 @@ func resolveFetchIPs(ctx context.Context, cfg *config.Config, host string) ([]ne
 }
 
 func ipAllowed(cfg *config.Config, ip netip.Addr) bool {
+	defer telemetry.Step("service.ipAllowed")()
 	if cfg != nil {
 		for _, raw := range cfg.Security.FetchAllowIPs {
 			if allowed, err := netip.ParseAddr(raw); err == nil && allowed == ip {
@@ -160,15 +183,18 @@ func ipAllowed(cfg *config.Config, ip netip.Addr) bool {
 }
 
 func isBlockedIP(ip netip.Addr) bool {
+	defer telemetry.Step("service.isBlockedIP")()
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || isMetadataIP(ip)
 }
 
 func isMetadataIP(ip netip.Addr) bool {
+	defer telemetry.Step("service.isMetadataIP")()
 	meta := netip.MustParseAddr("169.254.169.254")
 	return ip == meta
 }
 
 func isLoopbackHost(host string) bool {
+	defer telemetry.Step("service.isLoopbackHost")()
 	if host == "localhost" {
 		return true
 	}

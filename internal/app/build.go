@@ -4,7 +4,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -22,6 +21,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/database"
 	"github.com/bravo68web/oauth-impl/internal/handlers/oauth"
 	"github.com/bravo68web/oauth-impl/internal/hashalgo"
+	"github.com/bravo68web/oauth-impl/internal/log"
 	"github.com/bravo68web/oauth-impl/internal/mailer"
 	"github.com/bravo68web/oauth-impl/internal/oidc"
 	"github.com/bravo68web/oauth-impl/internal/push"
@@ -46,7 +46,7 @@ func (b *Built) Close() {
 
 // Build wires repositories, services, handlers, and route.NewRouter.
 // cfg is normalized here. q is the approval queue the caller opened.
-func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
+func Build(cfg *config.Config, db *database.DB, q queue.Queue, shared *redis.Client) (*Built, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
 	}
@@ -87,7 +87,7 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("password hasher: %s (%s)", hasher.ID(), hashalgo.CanonicalRel)
+	log.Info("password hasher", "id", hasher.ID(), "file", hashalgo.CanonicalRel)
 
 	conn := db
 	clientRepo := repository.NewClientRepository(conn)
@@ -119,7 +119,7 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 		return nil, fmt.Errorf("failed to create OIDC handler: %w", err)
 	}
 
-	store, redisClient, err := openCache(cfg)
+	store, redisClient, err := openCache(cfg, shared)
 	if err != nil {
 		return nil, err
 	}
@@ -150,9 +150,9 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 	mtlsSvc := service.NewMTLSService()
 	if cfg.Server.TLS.CRLFile != "" {
 		if err := mtlsSvc.SetCRLPath(cfg.Server.TLS.CRLFile); err != nil {
-			log.Printf("WARNING: Failed to load CRL: %v", err)
+			log.Warn("failed to load CRL", "err", err)
 		} else {
-			log.Printf("CRL loaded from %s", cfg.Server.TLS.CRLFile)
+			log.Info("CRL loaded", "path", cfg.Server.TLS.CRLFile)
 		}
 	}
 	jarSvc := service.NewJARService(cfg.Security.Issuer)
@@ -167,8 +167,8 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 	logoutSvc.SetFetchConfig(cfg)
 	accountSvc.SetWebhooks(hooks)
 	logoutSvc.SetWebhooks(hooks)
-	oidcHandler.SetDPoPCheck(func(header, method, uri, accessToken string) (string, error) {
-		proof, err := dpopSvc.ValidateDPoPProof(header, method, uri, accessToken)
+	oidcHandler.SetDPoPCheck(func(ctx context.Context, header, method, uri, accessToken string) (string, error) {
+		proof, err := dpopSvc.ValidateDPoPProof(ctx, header, method, uri, accessToken)
 		if err != nil || proof == nil {
 			if err == nil {
 				err = fmt.Errorf("DPoP proof required")
@@ -193,6 +193,7 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 	mgmtCtrl.SetWebhooks(hooks)
 	mgmtCtrl.SetAudit(auditLog)
 	mgmtCtrl.SetKeys(oidcHandler.GetKeySet(), cfg.OIDC.KeyRetain)
+	mgmtCtrl.SetBackup(service.NewBackup(conn, userRepo, clientRepo, repository.NewOrgRepository(conn), scopeRepo, resourceRepo, repository.NewWebhookRepository(conn), cfg.Management.ClientID, oidcHandler.GetKeySet()))
 	oauthHandler.SetAudit(auditLog)
 
 	webCtrl, err := controller.NewWebController(userSvc, totpSvc, accountSvc, cfg, root.TemplateFS, oauthHandler)
@@ -260,9 +261,15 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 	}, nil
 }
 
-func openCache(cfg *config.Config) (cache.Cache, *redis.Client, error) {
+// openCache returns the process cache. shared is the Redis client the
+// caller already opened for the queue or the cache. The returned client
+// is non-nil only when this function opened it and Build must close it.
+func openCache(cfg *config.Config, shared *redis.Client) (cache.Cache, *redis.Client, error) {
 	if cfg.Cache.Provider != "redis" {
 		return cache.NewMemory(), nil, nil
+	}
+	if shared != nil {
+		return cache.NewRedis(shared, cfg.Redis.Prefix), nil, nil
 	}
 	rdb, err := cache.NewClient(cfg.Redis)
 	if err != nil {

@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/bravo68web/oauth-impl/internal/config"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/redis/go-redis/v9"
 )
 
 // NewClient opens Redis. addr may be host:port or a redis:// URL.
 func NewClient(cfg config.RedisConfig) (*redis.Client, error) {
+	defer telemetry.Step("cache.NewClient")()
 	addr := strings.TrimSpace(cfg.Addr)
 	if addr == "" {
 		return nil, fmt.Errorf("redis.addr is required")
@@ -57,6 +59,7 @@ type RedisCache struct {
 }
 
 func NewRedis(rdb *redis.Client, prefix string) *RedisCache {
+	defer telemetry.Step("cache.NewRedis")()
 	prefix = strings.Trim(strings.TrimSpace(prefix), ":")
 	if prefix == "" {
 		prefix = "oauth"
@@ -65,10 +68,12 @@ func NewRedis(rdb *redis.Client, prefix string) *RedisCache {
 }
 
 func (c *RedisCache) key(name string) string {
+	defer telemetry.Step("cache.RedisCache.key")()
 	return c.prefix + ":" + name
 }
 
 func (c *RedisCache) Get(ctx context.Context, key string) ([]byte, bool, error) {
+	defer telemetry.Step("cache.RedisCache.Get")()
 	raw, err := c.rdb.Get(ctx, c.key(key)).Bytes()
 	if err == redis.Nil {
 		return nil, false, nil
@@ -80,9 +85,11 @@ func (c *RedisCache) Get(ctx context.Context, key string) ([]byte, bool, error) 
 }
 
 func (c *RedisCache) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
+	defer telemetry.Step("cache.RedisCache.Set")()
 	return c.rdb.Set(ctx, c.key(key), value, ttl).Err()
 }
 
 func (c *RedisCache) Add(ctx context.Context, key string, value []byte, ttl time.Duration) (bool, error) {
+	defer telemetry.Step("cache.RedisCache.Add")()
 	return c.rdb.SetNX(ctx, c.key(key), value, ttl).Result()
 }

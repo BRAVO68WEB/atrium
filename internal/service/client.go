@@ -10,6 +10,7 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
@@ -18,6 +19,7 @@ type ClientService struct {
 }
 
 func NewClientService(clientRepo *repository.ClientRepository) *ClientService {
+	defer telemetry.Step("service.NewClientService")()
 	return &ClientService{clientRepo: clientRepo}
 }
 
@@ -48,6 +50,7 @@ type CreateClientInput struct {
 }
 
 func (s *ClientService) CreateClient(input CreateClientInput) (*models.Client, error) {
+	defer telemetry.Step("service.ClientService.CreateClient")()
 	if input.Name == "" {
 		return nil, fmt.Errorf("name is required")
 	}
@@ -122,14 +125,17 @@ func (s *ClientService) CreateClient(input CreateClientInput) (*models.Client, e
 }
 
 func (s *ClientService) GetClient(id string) (*models.Client, error) {
+	defer telemetry.Step("service.ClientService.GetClient")()
 	return s.clientRepo.GetByID(id)
 }
 
 func (s *ClientService) ListClients() ([]*models.Client, error) {
+	defer telemetry.Step("service.ClientService.ListClients")()
 	return s.clientRepo.List()
 }
 
 func (s *ClientService) UpdateClient(client *models.Client) error {
+	defer telemetry.Step("service.ClientService.UpdateClient")()
 	if err := ValidateSubjectType(client); err != nil {
 		return err
 	}
@@ -138,10 +144,12 @@ func (s *ClientService) UpdateClient(client *models.Client) error {
 }
 
 func (s *ClientService) DeleteClient(id string) error {
+	defer telemetry.Step("service.ClientService.DeleteClient")()
 	return s.clientRepo.Delete(id)
 }
 
 func (s *ClientService) ValidateClient(clientID, clientSecret string) (*models.Client, error) {
+	defer telemetry.Step("service.ClientService.ValidateClient")()
 	if clientID == "" {
 		return nil, fmt.Errorf("client_id is required")
 	}
@@ -159,6 +167,7 @@ func (s *ClientService) ValidateClient(clientID, clientSecret string) (*models.C
 }
 
 func (s *ClientService) ValidateGrantType(client *models.Client, grantType string) error {
+	defer telemetry.Step("service.ClientService.ValidateGrantType")()
 	for _, gt := range client.GrantTypes {
 		if gt == grantType {
 			return nil
@@ -168,6 +177,7 @@ func (s *ClientService) ValidateGrantType(client *models.Client, grantType strin
 }
 
 func validClientID(id string) bool {
+	defer telemetry.Step("service.validClientID")()
 	if len(id) < 1 || len(id) > 128 {
 		return false
 	}
@@ -183,6 +193,7 @@ func validClientID(id string) bool {
 }
 
 func generateSecret() string {
+	defer telemetry.Step("service.generateSecret")()
 	secret, err := crypto.GenerateToken()
 	if err != nil {
 		return uuid.New().String()

@@ -1,6 +1,7 @@
 package oidc
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -33,7 +34,7 @@ func TestClaimMappingAndReservedSub(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	withProfile, err := handler.CreateIDToken("app", "user-1", "nonce", []string{"openid", "profile"})
+	withProfile, err := handler.CreateIDToken(context.Background(), "app", "user-1", "nonce", []string{"openid", "profile"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +48,7 @@ func TestClaimMappingAndReservedSub(t *testing.T) {
 	if claims["sub"] != "user-1" {
 		t.Fatalf("sub = %v", claims["sub"])
 	}
-	without, err := handler.CreateIDToken("app", "user-1", "", []string{"openid"})
+	without, err := handler.CreateIDToken(context.Background(), "app", "user-1", "", []string{"openid"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +69,7 @@ func TestSigningKeysSurviveRestartAndRotation(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, kid := first.GetKeySet().GetRSAKey()
-	token, err := first.CreateIDToken("app", "user-1", "", []string{"openid"})
+	token, err := first.CreateIDToken(context.Background(), "app", "user-1", "", []string{"openid"})
 	if err != nil {
 		t.Fatal(err)
 	}
