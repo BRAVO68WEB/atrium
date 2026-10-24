@@ -1,20 +1,27 @@
 // Package passhash hashes and verifies passwords.
 //
 // Operators choose an implementation in internal/hashalgo/algo.go.
-// The helpers here cover bcrypt, argon2id, and a fallback that can
-// verify an older hash while writing a new one.
+// The helpers here cover bcrypt, argon2id, and PBKDF2-HMAC
+// (SHA-256, SHA-512, SHA3-512, MD5, and a 16-byte SHA-256 key),
+// plus a fallback that can verify an older hash while writing a new one.
 package passhash
 
 import (
+	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/sha3"
+	"crypto/sha512"
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"hash"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 // DefaultBcryptCost matches bcrypt.DefaultCost so existing hashes verify.
@@ -105,6 +112,9 @@ func (h bcryptHasher) recognizes(encoded string) bool {
 		strings.HasPrefix(encoded, "$2y$")
 }
 
+// Recognizes reports a bcrypt modular-crypt hash.
+func (h bcryptHasher) Recognizes(encoded string) bool { return h.recognizes(encoded) }
+
 // Argon2id returns a hasher that writes PHC argon2id strings.
 func Argon2id(p Argon2Params) Hasher {
 	filled := DefaultArgon2
@@ -175,6 +185,9 @@ func (h argon2Hasher) recognizes(encoded string) bool {
 	return strings.HasPrefix(encoded, "$argon2id$")
 }
 
+// Recognizes reports a PHC argon2id hash.
+func (h argon2Hasher) Recognizes(encoded string) bool { return h.recognizes(encoded) }
+
 // Fallback hashes with primary and verifies with primary, then legacy.
 // NeedsRehash is true when primary would not have written the stored hash,
 // so a later login can replace a legacy encoding.
@@ -206,6 +219,11 @@ func (f fallbackHasher) Verify(encoded, password string) error {
 	return errMismatch
 }
 
+// Recognizes reports a hash the primary or the legacy hasher accepts.
+func (f fallbackHasher) Recognizes(encoded string) bool {
+	return Accepts(f.primary, encoded) || Accepts(f.legacy, encoded)
+}
+
 func (f fallbackHasher) NeedsRehash(encoded string) bool {
 	if re, ok := f.primary.(Rehasher); ok && re.NeedsRehash(encoded) {
 		return true
@@ -218,6 +236,31 @@ func (f fallbackHasher) NeedsRehash(encoded string) bool {
 
 type recognizer interface {
 	recognizes(encoded string) bool
+}
+
+// Recognizer is the method a hasher returned from internal/hashalgo/algo.go
+// implements when its encoding is not bcrypt or argon2id. User import stores
+// password_hash only when Accepts reports true.
+type Recognizer interface {
+	Recognizes(encoded string) bool
+}
+
+// Accepts reports whether hasher can verify encoded.
+// Built-in hashers accept their own prefixes. A fallback hasher accepts
+// either side. A custom hasher accepts an encoding only when it implements
+// Recognizer.
+func Accepts(h Hasher, encoded string) bool {
+	encoded = strings.TrimSpace(encoded)
+	if h == nil || encoded == "" {
+		return false
+	}
+	if r, ok := h.(Recognizer); ok {
+		return r.Recognizes(encoded)
+	}
+	if r, ok := h.(recognizer); ok {
+		return r.recognizes(encoded)
+	}
+	return false
 }
 
 type argon2Encoded struct {
@@ -299,4 +342,136 @@ func parseArgon2id(encoded string) (argon2Encoded, error) {
 		salt:        salt,
 		key:         key,
 	}, nil
+}
+
+// DefaultPBKDF2Iterations is the iteration count written by PBKDF2.
+// OWASP recommends at least 600000 for PBKDF2-HMAC-SHA256.
+const DefaultPBKDF2Iterations = 600_000
+
+// maxPBKDF2Iterations caps a stored hash so one row cannot pin a CPU.
+const maxPBKDF2Iterations = 10_000_000
+
+// PBKDF2Params selects a PBKDF2-HMAC construction. Zero fields use the defaults.
+type PBKDF2Params struct {
+	Iterations int
+	SaltLen    int
+	KeyLen     int
+}
+
+// MD5 returns PBKDF2-HMAC-MD5. The encoding is `$pbkdf2-md5$t=<iterations>$<salt>$<digest>`.
+func MD5() Hasher { return newPBKDF2("pbkdf2-md5", md5.New, PBKDF2Params{KeyLen: 16}) }
+
+// SHA256 returns PBKDF2-HMAC-SHA256. The encoding matches PBKDF2.
+func SHA256() Hasher { return PBKDF2(PBKDF2Params{}) }
+
+// SHA512 returns PBKDF2-HMAC-SHA512.
+func SHA512() Hasher { return newPBKDF2("pbkdf2-sha512", sha512.New, PBKDF2Params{KeyLen: 64}) }
+
+// SHA3512 returns PBKDF2-HMAC-SHA3-512.
+func SHA3512() Hasher {
+	return newPBKDF2("pbkdf2-sha3-512", newSHA3512, PBKDF2Params{KeyLen: 64})
+}
+
+func newSHA3512() hash.Hash { return sha3.New512() }
+
+// SHA2_128 returns PBKDF2-HMAC-SHA256 with a 16-byte key.
+// SHA-2 has no 128-bit hash.
+func SHA2_128() Hasher {
+	return newPBKDF2("pbkdf2-sha2-128", sha256.New, PBKDF2Params{KeyLen: 16})
+}
+
+// PBKDF2 returns a PBKDF2-HMAC-SHA256 hasher.
+// The encoding is `$pbkdf2-sha256$t=<iterations>$<salt>$<digest>`.
+func PBKDF2(p PBKDF2Params) Hasher {
+	return newPBKDF2("pbkdf2-sha256", sha256.New, p)
+}
+
+func newPBKDF2(id string, prf func() hash.Hash, p PBKDF2Params) pbkdf2Hasher {
+	if p.Iterations == 0 {
+		p.Iterations = DefaultPBKDF2Iterations
+	}
+	if p.SaltLen == 0 {
+		p.SaltLen = 16
+	}
+	if p.KeyLen == 0 {
+		p.KeyLen = 32
+	}
+	return pbkdf2Hasher{id: id, prf: prf, p: p}
+}
+
+type pbkdf2Hasher struct {
+	id  string
+	prf func() hash.Hash
+	p   PBKDF2Params
+}
+
+func (h pbkdf2Hasher) ID() string { return h.id }
+
+func (h pbkdf2Hasher) Hash(password string) (string, error) {
+	if h.p.Iterations < 1 || h.p.SaltLen < 8 || h.p.KeyLen < 16 || h.p.Iterations > maxPBKDF2Iterations {
+		return "", fmt.Errorf("invalid pbkdf2 parameters")
+	}
+	salt := make([]byte, h.p.SaltLen)
+	if _, err := rand.Read(salt); err != nil {
+		return "", fmt.Errorf("pbkdf2 salt: %w", err)
+	}
+	key := pbkdf2.Key([]byte(password), salt, h.p.Iterations, h.p.KeyLen, h.prf)
+	enc := base64.RawStdEncoding
+	return fmt.Sprintf("$%s$t=%d$%s$%s", h.id, h.p.Iterations, enc.EncodeToString(salt), enc.EncodeToString(key)), nil
+}
+
+func (h pbkdf2Hasher) Verify(encoded, password string) error {
+	parsed, err := h.parse(encoded)
+	if err != nil {
+		return errMismatch
+	}
+	sum := pbkdf2.Key([]byte(password), parsed.salt, parsed.iterations, len(parsed.key), h.prf)
+	if subtle.ConstantTimeCompare(sum, parsed.key) != 1 {
+		return errMismatch
+	}
+	return nil
+}
+
+func (h pbkdf2Hasher) NeedsRehash(encoded string) bool {
+	parsed, err := h.parse(encoded)
+	if err != nil {
+		return false
+	}
+	return parsed.iterations != h.p.Iterations || len(parsed.salt) != h.p.SaltLen || len(parsed.key) != h.p.KeyLen
+}
+
+func (h pbkdf2Hasher) Recognizes(encoded string) bool {
+	return strings.HasPrefix(encoded, "$"+h.id+"$")
+}
+
+func (h pbkdf2Hasher) recognizes(encoded string) bool { return h.Recognizes(encoded) }
+
+type pbkdf2Encoded struct {
+	iterations int
+	salt       []byte
+	key        []byte
+}
+
+func (h pbkdf2Hasher) parse(encoded string) (pbkdf2Encoded, error) {
+	parts := strings.Split(encoded, "$")
+	if len(parts) != 5 || parts[0] != "" || parts[1] != h.id {
+		return pbkdf2Encoded{}, errMismatch
+	}
+	var iterations int
+	if _, err := fmt.Sscanf(parts[2], "t=%d", &iterations); err != nil || fmt.Sprintf("t=%d", iterations) != parts[2] {
+		return pbkdf2Encoded{}, errMismatch
+	}
+	if iterations < 1 || iterations > maxPBKDF2Iterations {
+		return pbkdf2Encoded{}, errMismatch
+	}
+	enc := base64.RawStdEncoding
+	salt, err := enc.DecodeString(parts[3])
+	if err != nil || len(salt) == 0 {
+		return pbkdf2Encoded{}, errMismatch
+	}
+	key, err := enc.DecodeString(parts[4])
+	if err != nil || len(key) < 16 {
+		return pbkdf2Encoded{}, errMismatch
+	}
+	return pbkdf2Encoded{iterations: iterations, salt: salt, key: key}, nil
 }

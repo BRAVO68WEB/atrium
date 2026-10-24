@@ -262,6 +262,8 @@ func mountManagement(mgmt chi.Router, r *Router) {
 	mgmt.Route("/users", func(r3 chi.Router) {
 		r3.Get("/", r.managementCtrl.HandleListUsers)
 		r3.Post("/", r.managementCtrl.HandleCreateUser)
+		r3.Post("/import", r.managementCtrl.HandleImportUsers)
+		r3.Get("/export", r.managementCtrl.HandleExportUsers)
 		r3.Post("/{userID}/mfa/enable", r.managementCtrl.HandleMFAEnable)
 		r3.Post("/{userID}/mfa/verify", r.managementCtrl.HandleMFAVerify)
 		r3.Get("/{userID}/mfa/status", r.managementCtrl.HandleMFAStatus)

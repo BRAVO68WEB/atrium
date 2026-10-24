@@ -33,8 +33,20 @@ Both tools share these flags:
 | `--client-secret` | empty | Management client secret |
 | `--config` | `config.yaml` | File that holds `management.client_id` and `management.client_secret` |
 
-When the flags are empty, the tool reads `management` from `--config`.
+When the flags are empty, the tool reads credentials in this order:
+`OAUTH_CLI_CLIENT_ID` and `OAUTH_CLI_CLIENT_SECRET`, then `--config`.
+A remote file can be only `server`, `client_id`, and `client_secret`.
+A server `config.yaml` still works through `management.client_id` and
+`management.client_secret`. The CLI does not open a database.
 It then asks `POST /oauth/token` for a token with scope `management`.
+`OAUTH_CLI_SERVER` sets the issuer when you do not pass `--server`.
+
+```bash
+oauth-cli --server https://auth.example.com \
+  --client-id "$OAUTH_CLI_CLIENT_ID" \
+  --client-secret "$OAUTH_CLI_CLIENT_SECRET" \
+  user list
+```
 
 `oauth-mobile` also has `--interval` (default 5 seconds) for `poll`.
 
@@ -82,7 +94,16 @@ the grants used by conformance tools, including `password`.
 ./bin/oauth-cli user password <id> --password "a new secret"
 ./bin/oauth-cli user disable <id>
 ./bin/oauth-cli user enable <id>
+./bin/oauth-cli user import users.json
+./bin/oauth-cli user import users.json --mode upsert --dry-run
+./bin/oauth-cli user export --output users.json
+./bin/oauth-cli user export --include-secrets --output users.json
 ```
+
+`import` reads the same JSON document as `POST /api/users/import`.
+It exits non-zero when any row has an error. `export` omits password
+hashes and TOTP secrets unless you pass `--include-secrets`. The file
+mode is `0600`. `init` does not call a remote server.
 
 ### Tokens
 

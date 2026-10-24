@@ -51,6 +51,14 @@ func newRootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&mgmtClientID, "client-id", "", "Management client ID")
 	rootCmd.PersistentFlags().StringVar(&mgmtClientSecret, "client-secret", "", "Management client secret")
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "config.yaml", "Config file used for management credentials")
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		syncMgmt()
+		mgmt.ServerExplicit = cmd.Flags().Changed("server")
+		_ = mgmt.Resolve(mgmt.ServerExplicit)
+		if mgmt.ServerURL != "" {
+			serverURL = mgmt.ServerURL
+		}
+	}
 
 	rootCmd.AddCommand(
 		initCmd(),

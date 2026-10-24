@@ -269,6 +269,13 @@ argon2id` writes an argon2id hasher that still verifies old bcrypt
 hashes and rehashes on the next successful login. The stock argon2id
 settings use 64 MiB of memory. Lower `Memory` in the file when login
 stalls. Startup exits when the on-disk file differs from the binary.
+A custom hasher implements `Recognizes(encoded string) bool` when its
+stored form is not one of the built-in prefixes. User import stores
+`password_hash` only when that method, or a built-in prefix, accepts
+the string. `MD5`, `SHA256`, `SHA512`, `SHA3512`, `SHA2_128`, and
+`PBKDF2` are PBKDF2-HMAC constructions. `SHA2_128` uses a 16-byte
+SHA-256 key because SHA-2 has no 128-bit hash. New passwords should
+stay on bcrypt or argon2id.
 
 ## Mail templates
 
