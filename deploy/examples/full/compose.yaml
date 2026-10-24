@@ -1,0 +1,63 @@
+name: oauth-full
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: oauth
+      POSTGRES_PASSWORD: oauth
+      POSTGRES_DB: oauth
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oauth -d oauth"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7.4-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: oauth
+      RABBITMQ_DEFAULT_PASS: oauth
+    ports:
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  otel-collector:
+    image: otel/opentelemetry-collector:0.139.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+  oauth-server:
+    build:
+      context: ../../..
+      dockerfile: deploy/examples/full/Dockerfile
+      args:
+        VERSION: 0.1.1-pbkdf2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    command: ["-config", "/config/config.yaml"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+      - ./email:/email:ro
+volumes:
+  pgdata:

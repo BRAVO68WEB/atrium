@@ -1,0 +1,28 @@
+name: oauth-image
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: oauth
+      POSTGRES_PASSWORD: oauth
+      POSTGRES_DB: oauth
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oauth -d oauth"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+  oauth-server:
+    image: ghcr.io/bravo68web/oauth-impl:0.1.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["-config", "/config/config.yaml"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+volumes:
+  pgdata:

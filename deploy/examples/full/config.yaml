@@ -1,0 +1,41 @@
+server:
+  host: 0.0.0.0
+  port: 8080
+database:
+  driver: postgres
+  dsn: postgres://oauth:oauth@postgres:5432/oauth?sslmode=disable
+  migrations: true
+redis:
+  addr: redis:6379
+  prefix: oauth
+cache:
+  provider: redis
+queue:
+  type: redis
+notify:
+  type: rabbitmq
+  rabbitmq:
+    url: amqp://oauth:oauth@rabbitmq:5672/
+    exchange: oauth.notify
+    queue: oauth.notify
+telemetry:
+  enabled: true
+  service_name: oauth-server
+  otlp_endpoint: http://otel-collector:4318/v1/traces
+  insecure: true
+  sample_ratio: 1
+smtp:
+  enabled: false
+  host: mailpit
+  port: 1025
+  from: oauth@localhost
+  starttls: false
+  implicit_tls: false
+email:
+  templates_dir: /email
+security:
+  issuer: http://localhost:8080
+  hash_algo: internal/hashalgo/algo.go
+management:
+  client_id: management
+  client_secret: change-me

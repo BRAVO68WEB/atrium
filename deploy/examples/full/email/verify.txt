@@ -1,0 +1,4 @@
+Subject: Confirm your email
+Confirm {{.Email}} for {{.Username}}.
+
+{{.Link}}

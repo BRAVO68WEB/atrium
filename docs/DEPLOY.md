@@ -169,6 +169,32 @@ http://localhost:8089/s/11111111-2222-3333-4444-555555555555.
 result. The browser suite still uses its own receivers and does not
 call Mailpit or webhook-tester.
 
+## Compose examples
+
+`deploy/compose.yaml` builds the tree you have checked out, with
+Postgres and Mailpit.
+
+`deploy/examples/image/compose.yaml` runs the published `0.1.1` image
+with the same two services. That image contains the stock bcrypt
+hasher. Mounting a different `algo.go` does not change it.
+
+`deploy/examples/full/compose.yaml` builds an image whose hasher is
+`internal/hashalgo/examples/pbkdf2-sha256`. New passwords are
+PBKDF2-HMAC-SHA256 at 600000 iterations, and a stored bcrypt hash still
+verifies. The stack also runs Postgres, Redis for the cache and the
+CIBA queue, RabbitMQ for webhook and mail retries, an OpenTelemetry
+collector, Mailpit, and the five files in `deploy/examples/full/email`.
+
+```bash
+docker compose -f deploy/examples/image/compose.yaml up
+docker compose -f deploy/examples/full/compose.yaml up --build
+```
+
+The full server is at http://localhost:8080. Mailpit is at
+http://localhost:8025. RabbitMQ management is at
+http://localhost:15672 with user `oauth` and password `oauth`. The
+collector prints spans to its own log.
+
 ## Logs and traces
 
 Each request writes one log record. The fields are `method`, `route`,
