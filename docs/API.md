@@ -26,6 +26,14 @@ routes. Dynamic registration drops the `management` scope. A
 client-credentials request can only receive scopes already stored on
 the client.
 
+`POST /api/users/import` and `GET /api/users/export` move accounts.
+The body is `{ "mode": "create", "users": [ ... ] }`. `mode` may be
+`upsert`. A row sets `password` or `password_hash`, not both. A hash
+is stored when the server hasher accepts it: bcrypt, argon2id, or
+`Recognizes` on the hasher from `internal/hashalgo/algo.go`.
+`?dry_run=true` writes nothing. Export omits secrets unless
+`include_secrets=true`. Sessions and tokens are not in the file.
+
 Public account routes are `POST /api/account/register`,
 `POST /api/account/password/forgot`, `POST /api/account/password/reset`,
 and `POST /api/account/email/verify`.

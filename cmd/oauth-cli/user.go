@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"text/tabwriter"
@@ -154,7 +155,27 @@ func userCmd() *cobra.Command {
 		RunE:  func(cmd *cobra.Command, args []string) error { return patchUserDisabled(args[0], false) },
 	}
 
-	cmd.AddCommand(listCmd, createCmd, getCmd, passwordCmd, disableCmd, enableCmd)
+	importCmd := &cobra.Command{
+		Use:   "import [file]",
+		Short: "Import users from a JSON file",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return importUsers(cmd, args[0])
+		},
+	}
+	importCmd.Flags().String("mode", "", "create or upsert; overrides the file")
+	importCmd.Flags().Bool("dry-run", false, "Check the file and write nothing")
+	exportCmd := &cobra.Command{
+		Use:   "export",
+		Short: "Export users as an import document",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return exportUsers(cmd)
+		},
+	}
+	exportCmd.Flags().StringP("output", "o", "", "Write the document to this file")
+	exportCmd.Flags().Bool("include-secrets", false, "Include password hashes and TOTP secrets")
+
+	cmd.AddCommand(listCmd, createCmd, getCmd, passwordCmd, disableCmd, enableCmd, importCmd, exportCmd)
 	return cmd
 }
 
@@ -179,4 +200,81 @@ func patchUserDisabled(userID string, disabled bool) error {
 		fmt.Println("User enabled")
 	}
 	return nil
+}
+
+func importUsers(cmd *cobra.Command, path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return fmt.Errorf("import file: %w", err)
+	}
+	if mode, _ := cmd.Flags().GetString("mode"); mode != "" {
+		doc["mode"] = mode
+	}
+	body, err := json.Marshal(doc)
+	if err != nil {
+		return err
+	}
+	endpoint := serverURL + "/api/users/import"
+	if dry, _ := cmd.Flags().GetBool("dry-run"); dry {
+		endpoint += "?dry_run=true"
+	}
+	resp, err := apiPost(endpoint, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var result importResult
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("import response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("import failed: %s", resp.Status)
+	}
+	fmt.Printf("created: %d\nupdated: %d\nerrors: %d\n", result.Created, result.Updated, len(result.Errors))
+	for _, row := range result.Errors {
+		fmt.Printf("%d %s: %s\n", row.Index, row.Username, row.Error)
+	}
+	if len(result.Errors) > 0 {
+		return fmt.Errorf("import failed for %d users", len(result.Errors))
+	}
+	return nil
+}
+
+func exportUsers(cmd *cobra.Command) error {
+	endpoint := serverURL + "/api/users/export"
+	if secrets, _ := cmd.Flags().GetBool("include-secrets"); secrets {
+		endpoint += "?include_secrets=true"
+	}
+	resp, err := apiGet(endpoint)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("export failed: %s", resp.Status)
+	}
+	output, _ := cmd.Flags().GetString("output")
+	if output == "" {
+		fmt.Println(string(raw))
+		return nil
+	}
+	return os.WriteFile(output, raw, 0o600)
+}
+
+type importResult struct {
+	Created int `json:"created"`
+	Updated int `json:"updated"`
+	Errors  []struct {
+		Index    int    `json:"index"`
+		Username string `json:"username"`
+		Error    string `json:"error"`
+	} `json:"errors"`
 }

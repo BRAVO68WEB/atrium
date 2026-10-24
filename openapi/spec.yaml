@@ -1543,6 +1543,41 @@ paths:
                 error: invalid_request
                 error_description: "username already exists"
 
+  /api/users/import:
+    post:
+      tags: [Management]
+      summary: Import users
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: dry_run
+          in: query
+          schema: { type: boolean }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode: { type: string, enum: [create, upsert] }
+                users: { type: array, items: { type: object } }
+      responses:
+        "200":
+          description: Import counts and row errors
+
+  /api/users/export:
+    get:
+      tags: [Management]
+      summary: Export users
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: include_secrets
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Import document
+
   /api/users/{userID}:
     get:
       tags: [Management]

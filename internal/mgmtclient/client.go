@@ -8,18 +8,17 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-
-	"github.com/bravo68web/oauth-impl/internal/config"
 )
 
 // Client is one management API caller. Token is cached until ClearToken.
 type Client struct {
-	ServerURL    string
-	ClientID     string
-	ClientSecret string
-	ConfigPath   string
-	HTTP         *http.Client
-	token        string
+	ServerURL      string
+	ClientID       string
+	ClientSecret   string
+	ConfigPath     string
+	ServerExplicit bool
+	HTTP           *http.Client
+	token          string
 }
 
 // ClearToken forgets the cached access token.
@@ -65,26 +64,7 @@ func (c *Client) Token() (string, error) {
 }
 
 func (c *Client) ensureCreds() error {
-	if c.ClientID != "" && c.ClientSecret != "" {
-		return nil
-	}
-	path := c.ConfigPath
-	if path == "" {
-		path = "config.yaml"
-	}
-	cfg, err := config.Load(path)
-	if err == nil {
-		if c.ClientID == "" {
-			c.ClientID = cfg.Management.ClientID
-		}
-		if c.ClientSecret == "" {
-			c.ClientSecret = cfg.Management.ClientSecret
-		}
-	}
-	if c.ClientID == "" || c.ClientSecret == "" {
-		return fmt.Errorf("management client credentials required (--client-id and --client-secret, or management.* in config.yaml)")
-	}
-	return nil
+	return c.Resolve(c.ServerExplicit)
 }
 
 func (c *Client) http() *http.Client {

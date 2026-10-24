@@ -269,6 +269,10 @@ argon2id` writes an argon2id hasher that still verifies old bcrypt
 hashes and rehashes on the next successful login. The stock argon2id
 settings use 64 MiB of memory. Lower `Memory` in the file when login
 stalls. Startup exits when the on-disk file differs from the binary.
+A custom hasher implements `Recognizes(encoded string) bool` when its
+stored form is not bcrypt or argon2id. User import stores
+`password_hash` only when that method, or a built-in prefix, accepts
+the string.
 
 ## Mail templates
 

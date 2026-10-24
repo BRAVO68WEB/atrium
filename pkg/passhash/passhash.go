@@ -105,6 +105,9 @@ func (h bcryptHasher) recognizes(encoded string) bool {
 		strings.HasPrefix(encoded, "$2y$")
 }
 
+// Recognizes reports a bcrypt modular-crypt hash.
+func (h bcryptHasher) Recognizes(encoded string) bool { return h.recognizes(encoded) }
+
 // Argon2id returns a hasher that writes PHC argon2id strings.
 func Argon2id(p Argon2Params) Hasher {
 	filled := DefaultArgon2
@@ -175,6 +178,9 @@ func (h argon2Hasher) recognizes(encoded string) bool {
 	return strings.HasPrefix(encoded, "$argon2id$")
 }
 
+// Recognizes reports a PHC argon2id hash.
+func (h argon2Hasher) Recognizes(encoded string) bool { return h.recognizes(encoded) }
+
 // Fallback hashes with primary and verifies with primary, then legacy.
 // NeedsRehash is true when primary would not have written the stored hash,
 // so a later login can replace a legacy encoding.
@@ -206,6 +212,11 @@ func (f fallbackHasher) Verify(encoded, password string) error {
 	return errMismatch
 }
 
+// Recognizes reports a hash the primary or the legacy hasher accepts.
+func (f fallbackHasher) Recognizes(encoded string) bool {
+	return Accepts(f.primary, encoded) || Accepts(f.legacy, encoded)
+}
+
 func (f fallbackHasher) NeedsRehash(encoded string) bool {
 	if re, ok := f.primary.(Rehasher); ok && re.NeedsRehash(encoded) {
 		return true
@@ -218,6 +229,31 @@ func (f fallbackHasher) NeedsRehash(encoded string) bool {
 
 type recognizer interface {
 	recognizes(encoded string) bool
+}
+
+// Recognizer is the method a hasher returned from internal/hashalgo/algo.go
+// implements when its encoding is not bcrypt or argon2id. User import stores
+// password_hash only when Accepts reports true.
+type Recognizer interface {
+	Recognizes(encoded string) bool
+}
+
+// Accepts reports whether hasher can verify encoded.
+// Built-in bcrypt and argon2id hashers accept their own prefixes.
+// A fallback hasher accepts either side. A custom hasher accepts an encoding
+// only when it implements Recognizer.
+func Accepts(h Hasher, encoded string) bool {
+	encoded = strings.TrimSpace(encoded)
+	if h == nil || encoded == "" {
+		return false
+	}
+	if r, ok := h.(Recognizer); ok {
+		return r.Recognizes(encoded)
+	}
+	if r, ok := h.(recognizer); ok {
+		return r.recognizes(encoded)
+	}
+	return false
 }
 
 type argon2Encoded struct {
