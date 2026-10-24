@@ -10,6 +10,7 @@ import (
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/sha3"
 	"crypto/sha512"
 	"crypto/subtle"
 	"encoding/base64"
@@ -21,7 +22,6 @@ import (
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/pbkdf2"
-	"golang.org/x/crypto/sha3"
 )
 
 // DefaultBcryptCost matches bcrypt.DefaultCost so existing hashes verify.

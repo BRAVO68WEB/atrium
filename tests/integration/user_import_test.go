@@ -44,27 +44,19 @@ func TestUserImportRoundTrip(t *testing.T) {
 	if resp.StatusCode != 200 || imported["created"] != float64(1) {
 		t.Fatalf("import %d %v", resp.StatusCode, imported)
 	}
-	status, issued := postForm(t, ts.URL+"/oauth/token", "", "", mapForm(map[string]string{
+	client := createAPIClient(t, ts.URL, token, map[string]any{
+		"name":        "Password",
+		"grant_types": []string{"password"},
+		"scopes":      []string{"openid"},
+	})
+	status, issued := postForm(t, ts.URL+"/oauth/token", client["id"].(string), client["secret"].(string), mapForm(map[string]string{
 		"grant_type": "password",
 		"username":   "ada",
 		"password":   "correct horse",
 		"scope":      "openid",
 	}))
 	if status != 200 {
-		client := createAPIClient(t, ts.URL, token, map[string]any{
-			"name":        "Password",
-			"grant_types": []string{"password"},
-			"scopes":      []string{"openid"},
-		})
-		status, issued = postForm(t, ts.URL+"/oauth/token", client["id"].(string), client["secret"].(string), mapForm(map[string]string{
-			"grant_type": "password",
-			"username":   "ada",
-			"password":   "correct horse",
-			"scope":      "openid",
-		}))
-		if status != 200 {
-			t.Fatalf("login %d %v", status, issued)
-		}
+		t.Fatalf("login %d %v", status, issued)
 	}
 	exportReq, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/users/export", nil)
 	exportReq.Header.Set("Authorization", "Bearer "+token)
