@@ -13,10 +13,12 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/oidc"
 	"github.com/bravo68web/oauth-impl/internal/queue"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
 func (h *Handler) HandleDeviceAuthorization(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleDeviceAuthorization")()
 	if err := r.ParseForm(); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error":             "invalid_request",
@@ -163,6 +165,7 @@ func (h *Handler) HandleDeviceAuthorization(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *Handler) HandleDeviceToken(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleDeviceToken")()
 	if err := r.ParseForm(); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_request", "Failed to parse request")
 		return
@@ -282,6 +285,7 @@ func (h *Handler) HandleDeviceToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleDeviceVerification(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleDeviceVerification")()
 	if err := r.ParseForm(); err != nil && r.Method == http.MethodPost {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
@@ -351,6 +355,7 @@ func (h *Handler) HandleDeviceVerification(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *Handler) renderDevice(w http.ResponseWriter, r *http.Request, userCode, errMsg, clientName string, scopes []string) {
+	defer telemetry.Step("oauth.Handler.renderDevice")()
 	data := map[string]any{
 		"Error":      errMsg,
 		"UserCode":   userCode,
@@ -375,6 +380,7 @@ func (h *Handler) renderDevice(w http.ResponseWriter, r *http.Request, userCode,
 }
 
 func (h *Handler) renderDeviceDone(w http.ResponseWriter, approved bool) {
+	defer telemetry.Step("oauth.Handler.renderDeviceDone")()
 	data := map[string]any{"Done": true, "Approved": approved, "Error": "", "Confirm": false}
 	h.brandTheme.Apply(data, "Device Authorization", "Device authorization", "")
 	if h.pages != nil {

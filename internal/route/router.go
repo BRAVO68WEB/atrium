@@ -87,7 +87,6 @@ func NewRouter(
 func (r *Router) setupMiddleware() {
 	r.mux.Use(telemetry.Middleware)
 	r.mux.Use(middleware.RequestID)
-	r.mux.Use(middleware.Logger)
 	r.mux.Use(middleware.Recoverer)
 	r.mux.Use(middleware.Timeout(60 * time.Second))
 

@@ -20,6 +20,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 const (
@@ -54,6 +55,7 @@ var webhookEvents = map[string]struct{}{
 }
 
 func KnownWebhookEvents() []string {
+	defer telemetry.Step("service.KnownWebhookEvents")()
 	return []string{
 		EventLogin,
 		EventLoginFailed,
@@ -76,12 +78,14 @@ type WebhookDispatcher struct {
 }
 
 func (d *WebhookDispatcher) SetFetchConfig(cfg *config.Config) {
+	defer telemetry.Step("service.WebhookDispatcher.SetFetchConfig")()
 	if d != nil {
 		d.fetch = cfg
 	}
 }
 
 func NewWebhookDispatcher(repo *repository.WebhookRepository) *WebhookDispatcher {
+	defer telemetry.Step("service.NewWebhookDispatcher")()
 	return &WebhookDispatcher{
 		repo: repo,
 		http: &http.Client{
@@ -102,6 +106,7 @@ type WebhookInput struct {
 }
 
 func (d *WebhookDispatcher) Create(in WebhookInput) (*models.Webhook, error) {
+	defer telemetry.Step("service.WebhookDispatcher.Create")()
 	if err := d.checkURL(in.URL); err != nil {
 		return nil, err
 	}
@@ -138,6 +143,7 @@ func (d *WebhookDispatcher) Create(in WebhookInput) (*models.Webhook, error) {
 }
 
 func (d *WebhookDispatcher) Update(id string, in WebhookInput) (*models.Webhook, error) {
+	defer telemetry.Step("service.WebhookDispatcher.Update")()
 	hook, err := d.repo.Get(id)
 	if err != nil {
 		return nil, err
@@ -171,18 +177,22 @@ func (d *WebhookDispatcher) Update(id string, in WebhookInput) (*models.Webhook,
 }
 
 func (d *WebhookDispatcher) List() ([]*models.Webhook, error) {
+	defer telemetry.Step("service.WebhookDispatcher.List")()
 	return d.repo.List()
 }
 
 func (d *WebhookDispatcher) Get(id string) (*models.Webhook, error) {
+	defer telemetry.Step("service.WebhookDispatcher.Get")()
 	return d.repo.Get(id)
 }
 
 func (d *WebhookDispatcher) Delete(id string) error {
+	defer telemetry.Step("service.WebhookDispatcher.Delete")()
 	return d.repo.Delete(id)
 }
 
 func (d *WebhookDispatcher) Test(id string) error {
+	defer telemetry.Step("service.WebhookDispatcher.Test")()
 	hook, err := d.repo.Get(id)
 	if err != nil {
 		return err
@@ -192,6 +202,7 @@ func (d *WebhookDispatcher) Test(id string) error {
 }
 
 func (d *WebhookDispatcher) Emit(event string, data map[string]any) {
+	defer telemetry.Step("service.WebhookDispatcher.Emit")()
 	if d == nil || d.repo == nil {
 		return
 	}
@@ -212,6 +223,7 @@ func (d *WebhookDispatcher) Emit(event string, data map[string]any) {
 }
 
 func payload(event string, data map[string]any) []byte {
+	defer telemetry.Step("service.payload")()
 	if data == nil {
 		data = map[string]any{}
 	}
@@ -228,6 +240,7 @@ func payload(event string, data map[string]any) []byte {
 }
 
 func (d *WebhookDispatcher) post(hook *models.Webhook, event string, body []byte) error {
+	defer telemetry.Step("service.WebhookDispatcher.post")()
 	req, err := http.NewRequest(http.MethodPost, hook.URL, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -265,6 +278,7 @@ func (d *WebhookDispatcher) post(hook *models.Webhook, event string, body []byte
 }
 
 func (d *WebhookDispatcher) checkURL(raw string) error {
+	defer telemetry.Step("service.WebhookDispatcher.checkURL")()
 	if d != nil && d.fetch != nil {
 		return ValidateFetchTarget(d.fetch, raw)
 	}
@@ -272,6 +286,7 @@ func (d *WebhookDispatcher) checkURL(raw string) error {
 }
 
 func validateWebhookURL(raw string) error {
+	defer telemetry.Step("service.validateWebhookURL")()
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 		return fmt.Errorf("webhook url must be an absolute http or https URL")
@@ -280,6 +295,7 @@ func validateWebhookURL(raw string) error {
 }
 
 func normalizeEvents(events []string) ([]string, error) {
+	defer telemetry.Step("service.normalizeEvents")()
 	if len(events) == 0 {
 		return nil, fmt.Errorf("at least one event is required")
 	}
@@ -300,6 +316,7 @@ func normalizeEvents(events []string) ([]string, error) {
 }
 
 func randomSecret() (string, error) {
+	defer telemetry.Step("service.randomSecret")()
 	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
 		return "", err

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/bravo68web/oauth-impl/internal/config"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // View is the template value at .Brand. Colors are hex only.
@@ -42,6 +43,7 @@ type Theme struct {
 // Prepare reads branding from cfg. A nil config uses the built-in defaults.
 // custom.css is detected once; adding the file later needs a restart.
 func Prepare(cfg *config.Config) Theme {
+	defer telemetry.Step("branding.Prepare")()
 	if cfg != nil {
 		cfg.Normalize()
 	}
@@ -78,6 +80,7 @@ func Prepare(cfg *config.Config) Theme {
 }
 
 func usernameLabel(cfg *config.Config, label string) string {
+	defer telemetry.Step("branding.usernameLabel")()
 	if cfg != nil && cfg.Security.LoginIdentifier == "email" && (label == "" || label == "Username") {
 		return "Email"
 	}
@@ -88,6 +91,7 @@ func usernameLabel(cfg *config.Config, label string) string {
 }
 
 func loginAutocomplete(cfg *config.Config) string {
+	defer telemetry.Step("branding.loginAutocomplete")()
 	if cfg != nil && cfg.Security.LoginIdentifier == "email" {
 		return "email"
 	}
@@ -96,6 +100,7 @@ func loginAutocomplete(cfg *config.Config) string {
 
 // LoginTitle is the login page heading after defaults are applied.
 func (t Theme) LoginTitle() string {
+	defer telemetry.Step("branding.Theme.LoginTitle")()
 	if t.loginTitle == "" {
 		return "Sign In"
 	}
@@ -104,6 +109,7 @@ func (t Theme) LoginTitle() string {
 
 // Apply copies the startup theme onto data["Brand"].
 func (t Theme) Apply(data map[string]any, pageTitle, heading, clientName string) {
+	defer telemetry.Step("branding.Theme.Apply")()
 	if data == nil {
 		return
 	}
@@ -119,6 +125,7 @@ func (t Theme) Apply(data map[string]any, pageTitle, heading, clientName string)
 }
 
 func safeColor(value, fallback string) string {
+	defer telemetry.Step("branding.safeColor")()
 	if value == "" {
 		return fallback
 	}
@@ -129,6 +136,7 @@ func safeColor(value, fallback string) string {
 }
 
 func configColorOK(value string) bool {
+	defer telemetry.Step("branding.configColorOK")()
 	if (len(value) != 4 && len(value) != 7) || value[0] != '#' {
 		return false
 	}
@@ -145,6 +153,7 @@ func configColorOK(value string) bool {
 }
 
 func assetURL(name string) string {
+	defer telemetry.Step("branding.assetURL")()
 	if !safeAssetName(name) || config.BrandAssetType(name) == "" {
 		return ""
 	}
@@ -152,5 +161,6 @@ func assetURL(name string) string {
 }
 
 func safeAssetName(name string) bool {
+	defer telemetry.Step("branding.safeAssetName")()
 	return name != "" && name != "." && name != ".." && name == filepath.Base(name) && !strings.ContainsAny(name, `/\`)
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/cache"
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 const idJAGLifetime = 5 * time.Minute
@@ -39,6 +40,7 @@ func (e *GrantFailure) Error() string {
 }
 
 func fail(status int, code, description string) error {
+	defer telemetry.Step("service.fail")()
 	return &GrantFailure{Status: status, Code: code, Description: description}
 }
 
@@ -58,6 +60,7 @@ type XAA struct {
 }
 
 func NewXAA(cfg *config.Config, users *repository.UserRepository, store cache.Cache) *XAA {
+	defer telemetry.Step("service.NewXAA")()
 	return &XAA{
 		cfg:   cfg,
 		users: users,
@@ -72,6 +75,7 @@ func NewXAA(cfg *config.Config, users *repository.UserRepository, store cache.Ca
 // Issue verifies raw, signs an ID-JAG, then records that raw was used.
 // verify and sign are the server's ID-token parser and RSA signer.
 func (s *XAA) Issue(ctx context.Context, clientID, raw, audience, scope string, verify func(string) (jwt.MapClaims, error), sign func(jwt.MapClaims, string) (string, error)) (string, string, int, error) {
+	defer telemetry.Step("service.XAA.Issue")()
 	if s == nil || s.cfg == nil || !s.cfg.XAA.Enabled {
 		return "", "", 0, fail(400, "invalid_request", "Cross-app access is disabled")
 	}
@@ -150,6 +154,7 @@ func (s *XAA) Issue(ctx context.Context, clientID, raw, audience, scope string, 
 
 // Redeem checks an ID-JAG and resolves the verified local user.
 func (s *XAA) Redeem(ctx context.Context, clientID, assertion string) (*RedeemedGrant, error) {
+	defer telemetry.Step("service.XAA.Redeem")()
 	if s == nil || s.cfg == nil || !s.cfg.XAA.Enabled {
 		return nil, fail(400, "unsupported_grant_type", "Cross-app access is disabled")
 	}
@@ -238,6 +243,7 @@ func (s *XAA) Redeem(ctx context.Context, clientID, assertion string) (*Redeemed
 }
 
 func (s *XAA) localUser(email string) (string, error) {
+	defer telemetry.Step("service.XAA.localUser")()
 	if email == "" || s.users == nil {
 		return "", fail(400, "invalid_grant", "No verified user for that email")
 	}
@@ -255,6 +261,7 @@ func (s *XAA) localUser(email string) (string, error) {
 }
 
 func (s *XAA) trust(clientID, audience string) (config.XAATrust, bool) {
+	defer telemetry.Step("service.XAA.trust")()
 	for _, row := range s.cfg.XAA.Trusts {
 		if row.ClientID == clientID && sameIssuer(row.Audience, audience) {
 			return row, true
@@ -264,6 +271,7 @@ func (s *XAA) trust(clientID, audience string) (config.XAATrust, bool) {
 }
 
 func (s *XAA) idp(issuer string) (config.XAAIdentityProvider, bool) {
+	defer telemetry.Step("service.XAA.idp")()
 	for _, row := range s.cfg.XAA.IDPs {
 		if sameIssuer(row.Issuer, issuer) {
 			return row, true
@@ -273,6 +281,7 @@ func (s *XAA) idp(issuer string) (config.XAAIdentityProvider, bool) {
 }
 
 func (s *XAA) issuer() string {
+	defer telemetry.Step("service.XAA.issuer")()
 	if s != nil && s.cfg != nil && s.cfg.Security.Issuer != "" {
 		return s.cfg.Security.Issuer
 	}
@@ -280,6 +289,7 @@ func (s *XAA) issuer() string {
 }
 
 func (s *XAA) consume(ctx context.Context, key string, until time.Time, replay string) error {
+	defer telemetry.Step("service.XAA.consume")()
 	if s.store == nil {
 		return fail(500, "server_error", "Replay cache is not configured")
 	}
@@ -301,6 +311,7 @@ func (s *XAA) consume(ctx context.Context, key string, until time.Time, replay s
 }
 
 func scopesFromPolicy(requested string, allowed []string) ([]string, error) {
+	defer telemetry.Step("service.scopesFromPolicy")()
 	scopes, err := AllowedScopes(requested, allowed)
 	if err != nil || len(scopes) == 0 {
 		return nil, fail(400, "invalid_scope", "Scope is not allowed")
@@ -309,10 +320,12 @@ func scopesFromPolicy(requested string, allowed []string) ([]string, error) {
 }
 
 func sameIssuer(left, right string) bool {
+	defer telemetry.Step("service.sameIssuer")()
 	return strings.TrimRight(strings.TrimSpace(left), "/") == strings.TrimRight(strings.TrimSpace(right), "/")
 }
 
 func claimString(claims jwt.MapClaims, key string) string {
+	defer telemetry.Step("service.claimString")()
 	if claims == nil {
 		return ""
 	}
@@ -321,6 +334,7 @@ func claimString(claims jwt.MapClaims, key string) string {
 }
 
 func claimTime(value any) (time.Time, bool) {
+	defer telemetry.Step("service.claimTime")()
 	switch n := value.(type) {
 	case float64:
 		return time.Unix(int64(n), 0), true
@@ -340,6 +354,7 @@ func claimTime(value any) (time.Time, bool) {
 }
 
 func audMatch(claims jwt.MapClaims, want string, match func(have, want string) bool) bool {
+	defer telemetry.Step("service.audMatch")()
 	if claims == nil || match == nil {
 		return false
 	}
@@ -363,6 +378,7 @@ func audMatch(claims jwt.MapClaims, want string, match func(have, want string) b
 }
 
 func scopeText(value any) (string, error) {
+	defer telemetry.Step("service.scopeText")()
 	if value == nil {
 		return "", nil
 	}
@@ -374,11 +390,13 @@ func scopeText(value any) (string, error) {
 }
 
 func tokenKey(raw string) string {
+	defer telemetry.Step("service.tokenKey")()
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
 }
 
 func randomID() (string, error) {
+	defer telemetry.Step("service.randomID")()
 	buf := make([]byte, 16)
 	if _, err := rand.Read(buf); err != nil {
 		return "", err
@@ -387,6 +405,7 @@ func randomID() (string, error) {
 }
 
 func jwtTyp(raw string) string {
+	defer telemetry.Step("service.jwtTyp")()
 	header, err := jwtPart(raw, 0)
 	if err != nil {
 		return ""
@@ -396,6 +415,7 @@ func jwtTyp(raw string) string {
 }
 
 func jwtPart(raw string, index int) (jwt.MapClaims, error) {
+	defer telemetry.Step("service.jwtPart")()
 	parts := strings.Split(raw, ".")
 	if len(parts) < index+1 {
 		return nil, fmt.Errorf("malformed jwt")
@@ -417,6 +437,7 @@ type rsaJWK struct {
 }
 
 func parseRSAJWKS(body []byte) ([]rsaJWK, error) {
+	defer telemetry.Step("service.parseRSAJWKS")()
 	var doc struct {
 		Keys []struct {
 			Kty string `json:"kty"`
@@ -445,6 +466,7 @@ func parseRSAJWKS(body []byte) ([]rsaJWK, error) {
 }
 
 func rsaPublic(nText, eText string) (*rsa.PublicKey, error) {
+	defer telemetry.Step("service.rsaPublic")()
 	nBytes, err := decodeB64(nText)
 	if err != nil {
 		return nil, err
@@ -462,6 +484,7 @@ func rsaPublic(nText, eText string) (*rsa.PublicKey, error) {
 }
 
 func rsaKey(keys []rsaJWK, kid string) *rsa.PublicKey {
+	defer telemetry.Step("service.rsaKey")()
 	if kid != "" {
 		for _, key := range keys {
 			if key.kid == kid {
@@ -477,6 +500,7 @@ func rsaKey(keys []rsaJWK, kid string) *rsa.PublicKey {
 }
 
 func decodeB64(value string) ([]byte, error) {
+	defer telemetry.Step("service.decodeB64")()
 	value = strings.TrimSpace(value)
 	if decoded, err := base64.RawURLEncoding.DecodeString(value); err == nil {
 		return decoded, nil

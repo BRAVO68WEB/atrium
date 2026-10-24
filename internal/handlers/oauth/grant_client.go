@@ -7,9 +7,11 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 func (h *Handler) handleClientCredentialsToken(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.handleClientCredentialsToken")()
 	clientID, clientSecret := presentedClient(r)
 
 	if clientID == "" {

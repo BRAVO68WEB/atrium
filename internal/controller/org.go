@@ -9,16 +9,19 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/auth"
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/go-chi/chi/v5"
 )
 
 func (c *ManagementController) SetOrgs(orgs *service.OrgService) {
+	defer telemetry.Step("controller.ManagementController.SetOrgs")()
 	if c != nil {
 		c.orgs = orgs
 	}
 }
 
 func (c *ManagementController) requireOrgs(w http.ResponseWriter, r *http.Request) (*models.Client, bool) {
+	defer telemetry.Step("controller.ManagementController.requireOrgs")()
 	if c == nil || c.orgs == nil || !c.orgs.Enabled() {
 		writeError(w, http.StatusForbidden, "org_disabled", "organizations are disabled")
 		return nil, false
@@ -37,6 +40,7 @@ func (c *ManagementController) requireOrgs(w http.ResponseWriter, r *http.Reques
 }
 
 func (c *ManagementController) orgAllowed(w http.ResponseWriter, client *models.Client, org *models.Organization) bool {
+	defer telemetry.Step("controller.ManagementController.orgAllowed")()
 	if client.OrgID == "" || client.OrgID == org.ID {
 		return true
 	}
@@ -45,6 +49,7 @@ func (c *ManagementController) orgAllowed(w http.ResponseWriter, client *models.
 }
 
 func (c *ManagementController) HandleCreateOrg(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleCreateOrg")()
 	client, ok := c.requireOrgs(w, r)
 	if !ok {
 		return
@@ -73,6 +78,7 @@ func (c *ManagementController) HandleCreateOrg(w http.ResponseWriter, r *http.Re
 }
 
 func (c *ManagementController) HandleListOrgs(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListOrgs")()
 	client, ok := c.requireOrgs(w, r)
 	if !ok {
 		return
@@ -95,6 +101,7 @@ func (c *ManagementController) HandleListOrgs(w http.ResponseWriter, r *http.Req
 }
 
 func (c *ManagementController) HandleGetOrg(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleGetOrg")()
 	client, ok := c.requireOrgs(w, r)
 	if !ok {
 		return
@@ -111,6 +118,7 @@ func (c *ManagementController) HandleGetOrg(w http.ResponseWriter, r *http.Reque
 }
 
 func (c *ManagementController) HandleAddOrgDomain(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleAddOrgDomain")()
 	client, org, ok := c.loadManagedOrg(w, r)
 	if !ok {
 		return
@@ -139,6 +147,7 @@ func (c *ManagementController) HandleAddOrgDomain(w http.ResponseWriter, r *http
 }
 
 func (c *ManagementController) HandleAddOrgMember(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleAddOrgMember")()
 	_, org, ok := c.loadManagedOrg(w, r)
 	if !ok {
 		return
@@ -167,6 +176,7 @@ func (c *ManagementController) HandleAddOrgMember(w http.ResponseWriter, r *http
 }
 
 func (c *ManagementController) loadManagedOrg(w http.ResponseWriter, r *http.Request) (*models.Client, *models.Organization, bool) {
+	defer telemetry.Step("controller.ManagementController.loadManagedOrg")()
 	client, ok := c.requireOrgs(w, r)
 	if !ok {
 		return nil, nil, false
@@ -183,6 +193,7 @@ func (c *ManagementController) loadManagedOrg(w http.ResponseWriter, r *http.Req
 }
 
 func defaultRole(role string) string {
+	defer telemetry.Step("controller.defaultRole")()
 	if role == "" {
 		return "member"
 	}

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -21,25 +22,34 @@ type Handler struct {
 }
 
 func NewHandler(svc *Service, clients *repository.ClientRepository, sign func(jwt.MapClaims) (string, error), keyfunc jwt.Keyfunc, session func(*http.Request) (string, bool)) *Handler {
+	defer telemetry.Step("push.NewHandler")()
 	return &Handler{svc: svc, clients: clients, sign: sign, keyfunc: keyfunc, session: session}
 }
 
-func (h *Handler) Service() *Service { return h.svc }
+func (h *Handler) Service() *Service {
+	defer telemetry.Step(
 
-// SetComplete records the CIBA decision after the device poll succeeds.
+		// SetComplete records the CIBA decision after the device poll succeeds.
+		"push.Handler.Service")()
+	return h.svc
+}
+
 func (h *Handler) SetComplete(fn func(authReqID, userID string, approve bool) error) {
+	defer telemetry.Step("push.Handler.SetComplete")()
 	if h != nil {
 		h.complete = fn
 	}
 }
 
 func (h *Handler) Discovery(w http.ResponseWriter, _ *http.Request) {
+	defer telemetry.Step("push.Handler.Discovery")()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(h.svc.Discovery())
 }
 
 func (h *Handler) Enroll(w http.ResponseWriter, r *http.Request) (Enrollment, bool) {
+	defer telemetry.Step("push.Handler.Enroll")()
 	userID, ok := h.session(r)
 	if !ok {
 		return Enrollment{}, false
@@ -59,6 +69,7 @@ func (h *Handler) Enroll(w http.ResponseWriter, r *http.Request) (Enrollment, bo
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("push.Handler.Register")()
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
 	registered, err := h.svc.Register(clientIP(r), body, h.keyfunc)
 	if err != nil {
@@ -72,6 +83,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Devices(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("push.Handler.Devices")()
 	userID, ok := h.session(r)
 	if !ok {
 		writeProblem(w, problem(http.StatusUnauthorized, "login_required", "sign in to list devices"))
@@ -89,6 +101,7 @@ func (h *Handler) Devices(w http.ResponseWriter, r *http.Request) {
 
 // Primary marks the signed-in user's chosen device.
 func (h *Handler) Primary(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("push.Handler.Primary")()
 	userID, ok := h.session(r)
 	if !ok {
 		writeProblem(w, problem(http.StatusUnauthorized, "login_required", "sign in to choose a device"))
@@ -111,6 +124,7 @@ func (h *Handler) Primary(w http.ResponseWriter, r *http.Request) {
 
 // EnrollUser issues a registration token for an admin recovery.
 func (h *Handler) EnrollUser(userID string) (Enrollment, error) {
+	defer telemetry.Step("push.Handler.EnrollUser")()
 	if h == nil || h.svc == nil {
 		return Enrollment{}, problem(http.StatusNotFound, "not_found", "push is disabled")
 	}
@@ -118,6 +132,7 @@ func (h *Handler) EnrollUser(userID string) (Enrollment, error) {
 }
 
 func (h *Handler) Revoke(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("push.Handler.Revoke")()
 	if err := r.ParseForm(); err != nil {
 		writeProblem(w, problem(http.StatusBadRequest, "invalid_request", "form is invalid"))
 		return
@@ -132,6 +147,7 @@ func (h *Handler) Revoke(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Pending(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("push.Handler.Pending")()
 	deviceID := r.URL.Query().Get("device_id")
 	list, nonce, err := h.svc.PollPending(r, deviceID, bearerOrForm(r))
 	if err != nil {
@@ -161,6 +177,7 @@ func (h *Handler) Pending(w http.ResponseWriter, r *http.Request) {
 }
 
 func wantsJose(r *http.Request) bool {
+	defer telemetry.Step("push.wantsJose")()
 	for _, part := range strings.Split(r.Header.Get("Accept"), ",") {
 		media := strings.TrimSpace(strings.Split(part, ";")[0])
 		if media == "application/jose" {
@@ -171,6 +188,7 @@ func wantsJose(r *http.Request) bool {
 }
 
 func (h *Handler) Decide(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("push.Handler.Decide")()
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
 	var req struct {
 		DeviceID     string `json:"device_id"`
@@ -206,6 +224,7 @@ func (h *Handler) Decide(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Rotate(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("push.Handler.Rotate")()
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
 	registered, nonce, err := h.svc.Rotate(r, body, bearerOrForm(r))
 	if err != nil {
@@ -219,6 +238,7 @@ func (h *Handler) Rotate(w http.ResponseWriter, r *http.Request) {
 }
 
 func bearerOrForm(r *http.Request) string {
+	defer telemetry.Step("push.bearerOrForm")()
 	header := r.Header.Get("Authorization")
 	if len(header) > 7 && strings.EqualFold(header[:7], "bearer ") {
 		return strings.TrimSpace(header[7:])
@@ -227,6 +247,7 @@ func bearerOrForm(r *http.Request) string {
 }
 
 func writeErr(w http.ResponseWriter, err error) {
+	defer telemetry.Step("push.writeErr")()
 	if item, ok := err.(Problem); ok {
 		writeProblem(w, item)
 		return
@@ -235,6 +256,7 @@ func writeErr(w http.ResponseWriter, err error) {
 }
 
 func writeProblem(w http.ResponseWriter, item Problem) {
+	defer telemetry.Step("push.writeProblem")()
 	w.Header().Set("Content-Type", "application/problem+json")
 	if item.Status == http.StatusTooManyRequests {
 		w.Header().Set("Retry-After", "60")

@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // TokenService lists and revokes access tokens for the management API.
@@ -12,13 +13,16 @@ type TokenService struct {
 }
 
 func NewTokenService(tokenRepo *repository.TokenRepository) *TokenService {
+	defer telemetry.Step("service.NewTokenService")()
 	return &TokenService{tokenRepo: tokenRepo}
 }
 
 func (s *TokenService) RevokeToken(token string) error {
+	defer telemetry.Step("service.TokenService.RevokeToken")()
 	return s.tokenRepo.RevokeAccessToken(token)
 }
 
 func (s *TokenService) ListTokens(clientID, userID string) ([]*models.AccessToken, error) {
+	defer telemetry.Step("service.TokenService.ListTokens")()
 	return s.tokenRepo.ListAccessTokens(clientID, userID)
 }

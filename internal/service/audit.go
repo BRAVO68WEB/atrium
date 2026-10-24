@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type AuditLog struct {
@@ -14,10 +15,12 @@ type AuditLog struct {
 }
 
 func NewAuditLog(repo *repository.AuditRepository) *AuditLog {
+	defer telemetry.Step("service.NewAuditLog")()
 	return &AuditLog{repo: repo}
 }
 
 func (a *AuditLog) Write(actorType, actorID, action, targetType, targetID string, r *http.Request, meta map[string]any) {
+	defer telemetry.Step("service.AuditLog.Write")()
 	if a == nil || a.repo == nil {
 		return
 	}
@@ -36,6 +39,7 @@ func (a *AuditLog) Write(actorType, actorID, action, targetType, targetID string
 }
 
 func scrubAudit(meta map[string]any) map[string]any {
+	defer telemetry.Step("service.scrubAudit")()
 	out := map[string]any{}
 	for key, value := range meta {
 		lower := strings.ToLower(key)
@@ -48,6 +52,7 @@ func scrubAudit(meta map[string]any) map[string]any {
 }
 
 func (a *AuditLog) List(action, actorID string, since time.Time) ([]repository.AuditRow, error) {
+	defer telemetry.Step("service.AuditLog.List")()
 	if a == nil || a.repo == nil {
 		return nil, nil
 	}

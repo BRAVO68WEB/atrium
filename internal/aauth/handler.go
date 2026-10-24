@@ -8,6 +8,7 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/database"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -20,6 +21,7 @@ type Handler struct {
 // New loads the Ed25519 key and prepares discovery. cfg.AAuth.Enabled must
 // already be true and the issuers normalized.
 func New(cfg *config.Config, db database.SQL) (*Handler, error) {
+	defer telemetry.Step("aauth.New")()
 	key, err := loadOrCreateKey(db)
 	if err != nil {
 		return nil, err
@@ -34,6 +36,7 @@ type document struct {
 }
 
 func (h *Handler) documents() []document {
+	defer telemetry.Step("aauth.Handler.documents")()
 	aa := h.cfg.AAuth
 	return []document{
 		{issuer: aa.APIssuer, name: "aauth-agent.json", body: map[string]any{
@@ -58,6 +61,7 @@ func (h *Handler) documents() []document {
 // Mount registers discovery on mux. The same JWKS is served once per
 // distinct issuer path.
 func (h *Handler) Mount(mux *chi.Mux) {
+	defer telemetry.Step("aauth.Handler.Mount")()
 	if h == nil || mux == nil {
 		return
 	}
@@ -77,6 +81,7 @@ func (h *Handler) Mount(mux *chi.Mux) {
 }
 
 func (h *Handler) serveJWKS(w http.ResponseWriter, _ *http.Request) {
+	defer telemetry.Step("aauth.Handler.serveJWKS")()
 	writeJSON(w, map[string]any{
 		"keys": []map[string]string{{
 			"kty": "OKP",
@@ -90,12 +95,14 @@ func (h *Handler) serveJWKS(w http.ResponseWriter, _ *http.Request) {
 }
 
 func writeJSON(w http.ResponseWriter, body any) {
+	defer telemetry.Step("aauth.writeJSON")()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(body)
 }
 
 func issuerPath(issuer string) string {
+	defer telemetry.Step("aauth.issuerPath")()
 	parsed, err := url.Parse(issuer)
 	if err != nil {
 		return ""
@@ -104,13 +111,16 @@ func issuerPath(issuer string) string {
 }
 
 func wellKnownPath(issuer, name string) string {
+	defer telemetry.Step("aauth.wellKnownPath")()
 	return issuerPath(issuer) + "/.well-known/" + name
 }
 
 func jwksPath(issuer string) string {
+	defer telemetry.Step("aauth.jwksPath")()
 	return issuerPath(issuer) + "/aauth/jwks"
 }
 
 func joinIssuer(issuer, path string) string {
+	defer telemetry.Step("aauth.joinIssuer")()
 	return strings.TrimRight(issuer, "/") + path
 }

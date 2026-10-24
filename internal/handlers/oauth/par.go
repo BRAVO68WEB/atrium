@@ -8,10 +8,12 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
 func (h *Handler) HandlePAR(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandlePAR")()
 	if err := r.ParseForm(); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error":             "invalid_request",

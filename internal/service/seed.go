@@ -9,9 +9,11 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 func SeedManagementClient(repo *repository.ClientRepository, cfg *config.Config) error {
+	defer telemetry.Step("service.SeedManagementClient")()
 	if cfg == nil {
 		return nil
 	}

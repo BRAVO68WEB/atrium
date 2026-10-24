@@ -14,10 +14,12 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/push"
 	"github.com/bravo68web/oauth-impl/internal/queue"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
 func (h *Handler) HandleBCAuthorize(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleBCAuthorize")()
 	if err := r.ParseForm(); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error":             "invalid_request",
@@ -196,6 +198,7 @@ func (h *Handler) HandleBCAuthorize(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleCIBAToken(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleCIBAToken")()
 	if err := r.ParseForm(); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_request", "Failed to parse request")
 		return
@@ -308,6 +311,7 @@ func (h *Handler) HandleCIBAToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleCIBAStatus(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleCIBAStatus")()
 	authReqID := r.URL.Query().Get("auth_req_id")
 	if authReqID == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
@@ -332,6 +336,7 @@ func (h *Handler) HandleCIBAStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleCIBAListPending(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleCIBAListPending")()
 	_ = r
 	requests, err := h.cibaRepo.GetPending()
 	if err != nil {
@@ -348,6 +353,7 @@ func (h *Handler) HandleCIBAListPending(w http.ResponseWriter, r *http.Request) 
 }
 
 func cibaID(r *http.Request) string {
+	defer telemetry.Step("oauth.cibaID")()
 	if id := r.URL.Query().Get("auth_req_id"); id != "" {
 		return id
 	}
@@ -355,6 +361,7 @@ func cibaID(r *http.Request) string {
 }
 
 func requestValue(r *http.Request, queryName, jsonName string) string {
+	defer telemetry.Step("oauth.requestValue")()
 	if value := strings.TrimSpace(r.URL.Query().Get(queryName)); value != "" {
 		return value
 	}
@@ -367,6 +374,7 @@ func requestValue(r *http.Request, queryName, jsonName string) string {
 
 // CompleteCIBA records the device owner's decision for a pending request.
 func (h *Handler) CompleteCIBA(authReqID, userID string, approve bool) error {
+	defer telemetry.Step("oauth.Handler.CompleteCIBA")()
 	if _, err := h.cibaRepo.GetByID(authReqID); err != nil {
 		return err
 	}
@@ -383,6 +391,7 @@ func (h *Handler) CompleteCIBA(authReqID, userID string, approve bool) error {
 }
 
 func (h *Handler) HandleCIBAApprove(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleCIBAApprove")()
 	authReqID := cibaID(r)
 	userID := requestValue(r, "user_id", "user_id")
 
@@ -420,6 +429,7 @@ func (h *Handler) HandleCIBAApprove(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleCIBADeny(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleCIBADeny")()
 	authReqID := cibaID(r)
 	reason := requestValue(r, "reason", "reason")
 

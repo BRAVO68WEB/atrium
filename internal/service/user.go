@@ -13,6 +13,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/passhash"
 )
 
@@ -29,6 +30,7 @@ type UserService struct {
 }
 
 func NewUserService(userRepo *repository.UserRepository, totpSvc *TOTPService, cfg *config.SecurityConfig, hasher passhash.Hasher) *UserService {
+	defer telemetry.Step("service.NewUserService")()
 	if hasher == nil {
 		panic("passhash.Hasher is required")
 	}
@@ -53,6 +55,7 @@ type NewUser struct {
 }
 
 func (s *UserService) CreateUser(username, password, email, phone string) (*models.User, error) {
+	defer telemetry.Step("service.UserService.CreateUser")()
 	return s.InsertUser(NewUser{
 		Username: username,
 		Password: password,
@@ -62,6 +65,7 @@ func (s *UserService) CreateUser(username, password, email, phone string) (*mode
 }
 
 func (s *UserService) InsertUser(in NewUser) (*models.User, error) {
+	defer telemetry.Step("service.UserService.InsertUser")()
 	in.Email = normalizeEmail(in.Email)
 	if in.Username == "" || in.Password == "" {
 		return nil, fmt.Errorf("username and password are required")
@@ -110,19 +114,25 @@ func (s *UserService) InsertUser(in NewUser) (*models.User, error) {
 }
 
 func (s *UserService) GetUser(id string) (*models.User, error) {
+	defer telemetry.Step("service.UserService.GetUser")()
 	return s.userRepo.GetByID(id)
 }
 
 func (s *UserService) GetUserByUsername(username string) (*models.User, error) {
+	defer telemetry.Step("service.UserService.GetUserByUsername")()
 	return s.userRepo.GetByUsername(username)
 }
 
 func (s *UserService) ListUsers() ([]*models.User, error) {
+	defer telemetry.Step("service.UserService.ListUsers")(
+
+	// FindByLogin looks up the account named by security.login_identifier.
+	)
 	return s.userRepo.List()
 }
 
-// FindByLogin looks up the account named by security.login_identifier.
 func (s *UserService) FindByLogin(identifier string) (*models.User, error) {
+	defer telemetry.Step("service.UserService.FindByLogin")()
 	identifier = strings.TrimSpace(identifier)
 	if identifier == "" {
 		return nil, fmt.Errorf("invalid credentials")
@@ -134,6 +144,7 @@ func (s *UserService) FindByLogin(identifier string) (*models.User, error) {
 }
 
 func (s *UserService) loginIdentifier() string {
+	defer telemetry.Step("service.UserService.loginIdentifier")()
 	if s == nil || s.cfg == nil || s.cfg.LoginIdentifier == "" {
 		return "username"
 	}
@@ -141,10 +152,12 @@ func (s *UserService) loginIdentifier() string {
 }
 
 func normalizeEmail(email string) string {
+	defer telemetry.Step("service.normalizeEmail")()
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
 func (s *UserService) reserveEmail(userID, email string) error {
+	defer telemetry.Step("service.UserService.reserveEmail")()
 	email = normalizeEmail(email)
 	if email == "" {
 		if s.loginIdentifier() == "email" {
@@ -166,10 +179,12 @@ func (s *UserService) reserveEmail(userID, email string) error {
 }
 
 func emailConflict(err error) bool {
+	defer telemetry.Step("service.emailConflict")()
 	return err != nil && strings.Contains(err.Error(), "idx_users_email_lower")
 }
 
 func (s *UserService) Authenticate(username, password string) (*models.User, error) {
+	defer telemetry.Step("service.UserService.Authenticate")()
 	if username == "" || password == "" {
 		return nil, fmt.Errorf("invalid credentials")
 	}
@@ -191,6 +206,7 @@ func (s *UserService) Authenticate(username, password string) (*models.User, err
 }
 
 func (s *UserService) maybeRehash(user *models.User, password string) {
+	defer telemetry.Step("service.UserService.maybeRehash")()
 	re, ok := s.hasher.(passhash.Rehasher)
 	if !ok || !re.NeedsRehash(user.PasswordHash) {
 		return
@@ -208,6 +224,7 @@ func (s *UserService) maybeRehash(user *models.User, password string) {
 }
 
 func (s *UserService) AuthenticateWithMFA(username, password, totpCode string) (*models.User, bool, error) {
+	defer telemetry.Step("service.UserService.AuthenticateWithMFA")()
 	user, err := s.Authenticate(username, password)
 	if err != nil {
 		return nil, false, err
@@ -235,10 +252,12 @@ func (s *UserService) AuthenticateWithMFA(username, password, totpCode string) (
 }
 
 func (s *UserService) SetAttributes(id string, attrs map[string]string) error {
+	defer telemetry.Step("service.UserService.SetAttributes")()
 	return s.userRepo.SetAttributes(id, attrs)
 }
 
 func (s *UserService) UpdateProfile(user *models.User) error {
+	defer telemetry.Step("service.UserService.UpdateProfile")()
 	if user == nil {
 		return fmt.Errorf("user is required")
 	}
@@ -256,6 +275,7 @@ func (s *UserService) UpdateProfile(user *models.User) error {
 }
 
 func (s *UserService) SetPassword(id, password string) error {
+	defer telemetry.Step("service.UserService.SetPassword")()
 	if password == "" {
 		return fmt.Errorf("password is required")
 	}
@@ -276,6 +296,7 @@ func (s *UserService) SetPassword(id, password string) error {
 }
 
 func (s *UserService) ChangePassword(id, current, next string) error {
+	defer telemetry.Step("service.UserService.ChangePassword")()
 	if next == "" {
 		return fmt.Errorf("password is required")
 	}
@@ -290,5 +311,6 @@ func (s *UserService) ChangePassword(id, current, next string) error {
 }
 
 func (s *UserService) TouchLastLogin(id string) {
+	defer telemetry.Step("service.UserService.TouchLastLogin")()
 	_ = s.userRepo.TouchLastLogin(id, time.Now())
 }

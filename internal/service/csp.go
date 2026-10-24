@@ -1,11 +1,16 @@
 package service
 
-import "strings"
+import (
+	"strings"
 
-// ContentSecurityPolicy is the browser policy. Provider hosts are added only
-// while bot protection is configured. img-src allows https so an
-// organization logo_url can load.
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	// ContentSecurityPolicy is the browser policy. Provider hosts are added only
+	// while bot protection is configured. img-src allows https so an
+	// organization logo_url can load.
+)
+
 func ContentSecurityPolicy(provider string) string {
+	defer telemetry.Step("service.ContentSecurityPolicy")()
 	script := []string{"'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"}
 	connect := []string{"'self'", "https://cdn.jsdelivr.net"}
 	var frame []string

@@ -21,6 +21,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/queue"
 	"github.com/bravo68web/oauth-impl/internal/repository"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
@@ -62,6 +63,7 @@ type DeviceLogin interface {
 }
 
 func (h *Handler) SetDeviceLogin(login DeviceLogin) {
+	defer telemetry.Step("oauth.Handler.SetDeviceLogin")()
 	if h != nil {
 		h.deviceLogin = login
 	}
@@ -100,6 +102,7 @@ func NewHandler(
 	logout *service.LogoutService,
 	logins LoginRecorder,
 ) *Handler {
+	defer telemetry.Step("oauth.NewHandler")()
 	return &Handler{
 		clientRepo:   clientRepo,
 		userRepo:     userRepo,
@@ -126,12 +129,14 @@ func NewHandler(
 }
 
 func (h *Handler) SetOrgs(orgs *service.OrgService) {
+	defer telemetry.Step("oauth.Handler.SetOrgs")()
 	if h != nil {
 		h.orgs = orgs
 	}
 }
 
 func (h *Handler) ClientName(id string) string {
+	defer telemetry.Step("oauth.Handler.ClientName")()
 	if h == nil || h.clientRepo == nil || id == "" {
 		return ""
 	}
@@ -144,6 +149,7 @@ func (h *Handler) ClientName(id string) string {
 
 // ClientRedirectURIs returns the redirect URIs registered for a client.
 func (h *Handler) ClientRedirectURIs(id string) []string {
+	defer telemetry.Step("oauth.Handler.ClientRedirectURIs")()
 	if h == nil || id == "" {
 		return nil
 	}
@@ -157,6 +163,7 @@ func (h *Handler) ClientRedirectURIs(id string) []string {
 }
 
 func (h *Handler) xaa() *service.XAA {
+	defer telemetry.Step("oauth.Handler.xaa")()
 	if h == nil {
 		return nil
 	}
@@ -164,16 +171,19 @@ func (h *Handler) xaa() *service.XAA {
 }
 
 func (h *Handler) SetCache(c cache.Cache) {
+	defer telemetry.Step("oauth.Handler.SetCache")()
 	if h != nil && c != nil {
 		h.cimd = c
 	}
 }
 
 func (h *Handler) SetTemplates(t *template.Template) {
+	defer telemetry.Step("oauth.Handler.SetTemplates")()
 	h.pages = t
 }
 
 func (h *Handler) SetWebhooks(d *service.WebhookDispatcher) {
+	defer telemetry.Step("oauth.Handler.SetWebhooks")()
 	h.hooks = d
 }
 
@@ -189,6 +199,7 @@ var validResponseTypes = map[string]bool{
 }
 
 func (h *Handler) getSession(r *http.Request) *Session {
+	defer telemetry.Step("oauth.Handler.getSession")()
 	cookie, err := r.Cookie("session_id")
 	if err != nil || h.sessions == nil {
 		return nil
@@ -208,18 +219,22 @@ func (h *Handler) getSession(r *http.Request) *Session {
 }
 
 func (h *Handler) GetSession(r *http.Request) *Session {
+	defer telemetry.Step("oauth.Handler.GetSession")()
 	return h.getSession(r)
 }
 
 func (h *Handler) SetSession(w http.ResponseWriter, userID, username string) {
+	defer telemetry.Step("oauth.Handler.SetSession")()
 	h.SetSessionWithMFA(w, userID, username, true)
 }
 
 func (h *Handler) SetSessionWithMFA(w http.ResponseWriter, userID, username string, mfaVerified bool) {
+	defer telemetry.Step("oauth.Handler.SetSessionWithMFA")()
 	h.SetSessionRequest(w, nil, userID, username, mfaVerified)
 }
 
 func (h *Handler) SetSessionRequest(w http.ResponseWriter, r *http.Request, userID, username string, mfaVerified bool) {
+	defer telemetry.Step("oauth.Handler.SetSessionRequest")()
 	if h.sessions == nil {
 		return
 	}
@@ -240,6 +255,7 @@ func (h *Handler) SetSessionRequest(w http.ResponseWriter, r *http.Request, user
 }
 
 func (h *Handler) MarkSessionMFA(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.MarkSessionMFA")()
 	cookie, err := r.Cookie("session_id")
 	if err != nil || h.sessions == nil {
 		return
@@ -249,6 +265,7 @@ func (h *Handler) MarkSessionMFA(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) writeSessionCookie(w http.ResponseWriter, sessionID string) {
+	defer telemetry.Step("oauth.Handler.writeSessionCookie")()
 	maxAge := int(h.cfg.Security.SessionLifetime.Seconds())
 	if maxAge <= 0 {
 		maxAge = 8 * 3600
@@ -265,6 +282,7 @@ func (h *Handler) writeSessionCookie(w http.ResponseWriter, sessionID string) {
 }
 
 func (h *Handler) hasConsented(userID, clientID, scope string) bool {
+	defer telemetry.Step("oauth.Handler.hasConsented")()
 	consent, err := h.consentRepo.Get(userID, clientID)
 	if err != nil {
 		return false
@@ -279,6 +297,7 @@ func (h *Handler) hasConsented(userID, clientID, scope string) bool {
 }
 
 func (h *Handler) clearSession(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.clearSession")()
 	cookie, err := r.Cookie("session_id")
 	if err != nil {
 		return
@@ -300,10 +319,12 @@ func (h *Handler) clearSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ClearSession(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.ClearSession")()
 	h.clearSession(w, r)
 }
 
 func (h *Handler) GetPARParams(requestURI string) (map[string]string, error) {
+	defer telemetry.Step("oauth.Handler.GetPARParams")()
 	par, err := h.parRepo.GetByRequestURI(requestURI)
 	if err != nil {
 		return nil, err
@@ -317,10 +338,12 @@ func (h *Handler) GetPARParams(requestURI string) (map[string]string, error) {
 
 // SaveConsent persists the user's consent for a client
 func (h *Handler) SaveConsent(userID, clientID string, scopes []string) error {
+	defer telemetry.Step("oauth.Handler.SaveConsent")()
 	return h.consentRepo.Save(userID, clientID, scopes)
 }
 
 func (h *Handler) HandleToken(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleToken")()
 	if err := r.ParseForm(); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_request", "Failed to parse request")
 		return
@@ -333,6 +356,7 @@ func (h *Handler) HandleToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	grantType := r.Form.Get("grant_type")
+	defer telemetry.Step("oauth.grant")()
 
 	switch grantType {
 	case "authorization_code":
@@ -361,6 +385,7 @@ func (h *Handler) HandleToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleRevoke(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleRevoke")()
 	if err := r.ParseForm(); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_request", "Failed to parse request")
 		return
@@ -411,6 +436,7 @@ func (h *Handler) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 // A token issued to someone else is treated as not found so the response
 // does not reveal that the token exists.
 func (h *Handler) ownedToken(clientID, token, hint string) string {
+	defer telemetry.Step("oauth.Handler.ownedToken")()
 	hint = strings.ToLower(strings.TrimSpace(hint))
 	order := []string{"refresh_token", "access_token"}
 	if hint == "access_token" {
@@ -442,6 +468,7 @@ func (h *Handler) ownedToken(clientID, token, hint string) string {
 }
 
 func (h *Handler) HandleIntrospect(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleIntrospect")()
 	if err := r.ParseForm(); err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_request", "Failed to parse request")
 		return
@@ -475,6 +502,7 @@ func (h *Handler) HandleIntrospect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleRegister")()
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method_not_allowed"})
 		return
@@ -583,6 +611,7 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func isValidRedirectURI(uri string, allowedURIs []string) bool {
+	defer telemetry.Step("oauth.isValidRedirectURI")()
 	if uri == "" {
 		return false
 	}
@@ -597,6 +626,7 @@ func isValidRedirectURI(uri string, allowedURIs []string) bool {
 // responseHas reports whether responseType contains part as a whole token.
 // "id_token" does not contain the access-token response type "token".
 func responseHas(responseType, part string) bool {
+	defer telemetry.Step("oauth.responseHas")()
 	for _, item := range strings.Fields(responseType) {
 		if item == part {
 			return true
@@ -609,6 +639,7 @@ func responseHas(responseType, part string) bool {
 // responseType. An empty grant list still permits every response type so
 // clients created before grant_types was stored keep working.
 func clientAllowsResponseType(grants []string, responseType string) bool {
+	defer telemetry.Step("oauth.clientAllowsResponseType")()
 	if len(grants) == 0 {
 		return true
 	}
@@ -637,6 +668,7 @@ func clientAllowsResponseType(grants []string, responseType string) bool {
 }
 
 func isValidURI(uri string) bool {
+	defer telemetry.Step("oauth.isValidURI")()
 	if IsOutOfBandRedirect(uri) {
 		return true
 	}
@@ -651,10 +683,12 @@ func isValidURI(uri string) bool {
 }
 
 func (h *Handler) issueAccessToken(clientID, userID, scope, tokenType string) (string, error) {
+	defer telemetry.Step("oauth.Handler.issueAccessToken")()
 	return h.issueAccessTokenFor(clientID, userID, scope, tokenType, "", "", "", "")
 }
 
 func (h *Handler) issueAccessTokenFor(clientID, userID, scope, tokenType, orgID, orgSlug, resource, actor string) (string, error) {
+	defer telemetry.Step("oauth.Handler.issueAccessTokenFor")()
 	format := ""
 	var lifetime time.Duration
 	if h.cfg != nil {
@@ -671,11 +705,13 @@ func (h *Handler) issueAccessTokenFor(clientID, userID, scope, tokenType, orgID,
 }
 
 func actorGrantKey(sessionID, clientID, actor string) string {
+	defer telemetry.Step("oauth.actorGrantKey")()
 	return sessionID + "\n" + clientID + "\n" + actor
 }
 
 // GrantActorConsent remembers that this browser session just approved an actor.
 func (h *Handler) GrantActorConsent(sessionID, clientID, actor string) {
+	defer telemetry.Step("oauth.Handler.GrantActorConsent")()
 	if h == nil || sessionID == "" || clientID == "" || actor == "" {
 		return
 	}
@@ -688,6 +724,7 @@ func (h *Handler) GrantActorConsent(sessionID, clientID, actor string) {
 }
 
 func (h *Handler) takeActorConsent(sessionID, clientID, actor string) bool {
+	defer telemetry.Step("oauth.Handler.takeActorConsent")()
 	if h == nil || sessionID == "" {
 		return false
 	}
@@ -705,6 +742,7 @@ func (h *Handler) takeActorConsent(sessionID, clientID, actor string) bool {
 // actorSubject returns the subject of an access token issued by this server.
 // A token with no user names its client. A JWT must also verify.
 func (h *Handler) actorSubject(raw string) (string, error) {
+	defer telemetry.Step("oauth.Handler.actorSubject")()
 	if h == nil || h.tokenRepo == nil || strings.TrimSpace(raw) == "" {
 		return "", fmt.Errorf("invalid actor token")
 	}
@@ -733,6 +771,7 @@ func (h *Handler) actorSubject(raw string) (string, error) {
 }
 
 func (h *Handler) needsOrgChoice(client *models.Client, userID, requested string) (bool, error) {
+	defer telemetry.Step("oauth.Handler.needsOrgChoice")()
 	if h == nil || h.orgs == nil {
 		return false, nil
 	}
@@ -742,6 +781,7 @@ func (h *Handler) needsOrgChoice(client *models.Client, userID, requested string
 // NeedsOrgChoice reports whether /organization should be shown for this
 // authorize request. clientID is loaded when it names a real client.
 func (h *Handler) NeedsOrgChoice(clientID, userID, requested string) (bool, error) {
+	defer telemetry.Step("oauth.Handler.NeedsOrgChoice")()
 	var client *models.Client
 	if h != nil && clientID != "" {
 		if loaded, code, _ := h.resolveClient(clientID, ""); code == "" {
@@ -752,6 +792,7 @@ func (h *Handler) NeedsOrgChoice(clientID, userID, requested string) (bool, erro
 }
 
 func (h *Handler) UserOrgs(userID string) ([]*models.Organization, error) {
+	defer telemetry.Step("oauth.Handler.UserOrgs")()
 	if h == nil || h.orgs == nil {
 		return nil, nil
 	}
@@ -759,6 +800,7 @@ func (h *Handler) UserOrgs(userID string) ([]*models.Organization, error) {
 }
 
 func (h *Handler) orgSlug(orgID string) string {
+	defer telemetry.Step("oauth.Handler.orgSlug")()
 	if h == nil || h.orgs == nil || orgID == "" {
 		return ""
 	}
@@ -770,6 +812,7 @@ func (h *Handler) orgSlug(orgID string) string {
 }
 
 func (h *Handler) applyOrg(client *models.Client, user *models.User, requested string) (string, string, string, string) {
+	defer telemetry.Step("oauth.Handler.applyOrg")()
 	if h == nil || h.orgs == nil {
 		if strings.TrimSpace(requested) != "" {
 			return "", "", "invalid_request", "organizations are disabled"
@@ -794,6 +837,7 @@ func (h *Handler) applyOrg(client *models.Client, user *models.User, requested s
 }
 
 func mustGenerateToken() string {
+	defer telemetry.Step("oauth.mustGenerateToken")()
 	token, err := crypto.GenerateToken()
 	if err != nil {
 		return uuid.New().String()
@@ -802,7 +846,10 @@ func mustGenerateToken() string {
 }
 
 func hasDuplicateParams(r *http.Request) bool {
+	defer
 	// Check URL query parameters
+	telemetry.Step("oauth.hasDuplicateParams")()
+
 	urlValues := r.URL.Query()
 	for key := range urlValues {
 		if len(urlValues[key]) > 1 {
@@ -823,6 +870,7 @@ func hasDuplicateParams(r *http.Request) bool {
 }
 
 func writeOAuthError(w http.ResponseWriter, status int, code, description, state string) {
+	defer telemetry.Step("oauth.writeOAuthError")()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	response := map[string]string{
@@ -836,6 +884,7 @@ func writeOAuthError(w http.ResponseWriter, status int, code, description, state
 }
 
 func writeTokenError(w http.ResponseWriter, status int, code, description string) {
+	defer telemetry.Step("oauth.writeTokenError")()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
@@ -847,6 +896,7 @@ func writeTokenError(w http.ResponseWriter, status int, code, description string
 }
 
 func writeTokenResponse(w http.ResponseWriter, accessToken, refreshToken string, expiresIn int, tokenType, scope string) {
+	defer telemetry.Step("oauth.writeTokenResponse")()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
@@ -870,6 +920,7 @@ func writeTokenResponse(w http.ResponseWriter, accessToken, refreshToken string,
 }
 
 func writeOIDCTokenResponse(w http.ResponseWriter, accessToken, refreshToken, idToken string, expiresIn int, tokenType, scope string) {
+	defer telemetry.Step("oauth.writeOIDCTokenResponse")()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
@@ -897,6 +948,7 @@ func writeOIDCTokenResponse(w http.ResponseWriter, accessToken, refreshToken, id
 }
 
 func containsScope(scopes []string, target string) bool {
+	defer telemetry.Step("oauth.containsScope")()
 	for _, s := range scopes {
 		if s == target {
 			return true
@@ -906,6 +958,7 @@ func containsScope(scopes []string, target string) bool {
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
+	defer telemetry.Step("oauth.writeJSON")()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)

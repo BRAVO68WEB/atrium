@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // Cache stores short-lived values. Add reports whether the key was newly stored.
@@ -25,10 +27,12 @@ type MemoryCache struct {
 }
 
 func NewMemory() *MemoryCache {
+	defer telemetry.Step("cache.NewMemory")()
 	return &MemoryCache{items: map[string]memoryEntry{}}
 }
 
 func (c *MemoryCache) Get(_ context.Context, key string) ([]byte, bool, error) {
+	defer telemetry.Step("cache.MemoryCache.Get")()
 	if c == nil {
 		return nil, false, nil
 	}
@@ -43,6 +47,7 @@ func (c *MemoryCache) Get(_ context.Context, key string) ([]byte, bool, error) {
 }
 
 func (c *MemoryCache) Set(_ context.Context, key string, value []byte, ttl time.Duration) error {
+	defer telemetry.Step("cache.MemoryCache.Set")()
 	if c == nil {
 		return nil
 	}
@@ -53,6 +58,7 @@ func (c *MemoryCache) Set(_ context.Context, key string, value []byte, ttl time.
 }
 
 func (c *MemoryCache) Add(_ context.Context, key string, value []byte, ttl time.Duration) (bool, error) {
+	defer telemetry.Step("cache.MemoryCache.Add")()
 	if c == nil {
 		return false, nil
 	}
@@ -66,6 +72,7 @@ func (c *MemoryCache) Add(_ context.Context, key string, value []byte, ttl time.
 }
 
 func deadline(ttl time.Duration) time.Time {
+	defer telemetry.Step("cache.deadline")()
 	if ttl <= 0 {
 		return time.Time{}
 	}
@@ -73,5 +80,6 @@ func deadline(ttl time.Duration) time.Time {
 }
 
 func expired(at time.Time) bool {
+	defer telemetry.Step("cache.expired")()
 	return !at.IsZero() && !time.Now().Before(at)
 }

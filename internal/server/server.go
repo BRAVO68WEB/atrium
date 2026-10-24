@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +14,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/app"
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/database"
+	"github.com/bravo68web/oauth-impl/internal/log"
 	"github.com/bravo68web/oauth-impl/internal/queue"
 )
 
@@ -58,9 +58,9 @@ func (s *Server) Stop() error {
 
 func (s *Server) StartWithGracefulShutdown() {
 	go func() {
-		log.Printf("Starting OAuth server on %s://%s:%d", "http", s.cfg.Server.Host, s.cfg.Server.Port)
+		log.Info("starting OAuth server", "host", s.cfg.Server.Host, "port", s.cfg.Server.Port)
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed: %v", err)
+			log.Fatal("server failed", "err", err)
 		}
 	}()
 
@@ -68,16 +68,16 @@ func (s *Server) StartWithGracefulShutdown() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	log.Info("shutting down server")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := s.server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		log.Fatal("server forced to shutdown", "err", err)
 	}
 	if s.close != nil {
 		s.close()
 	}
 
-	log.Println("Server exited")
+	log.Info("server exited")
 }

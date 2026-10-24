@@ -6,16 +6,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/bravo68web/oauth-impl/internal/config"
+	applog "github.com/bravo68web/oauth-impl/internal/log"
 	"github.com/felixge/httpsnoop"
+	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -59,6 +61,7 @@ func Setup(ctx context.Context, cfg *config.TelemetryConfig) (func(context.Conte
 		sdktrace.WithResource(resource.NewSchemaless(attribute.String("service.name", name))),
 	)
 	otel.SetTracerProvider(provider)
+	SetRecording(true)
 	return provider.Shutdown, nil
 }
 
@@ -66,6 +69,12 @@ func Setup(ctx context.Context, cfg *config.TelemetryConfig) (func(context.Conte
 // logs the trace and span ids after the handler returns.
 func Middleware(next http.Handler) http.Handler {
 	named := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		span := trace.SpanFromContext(r.Context())
+		var release func()
+		if span.IsRecording() {
+			release = Bind(r.Context())
+		}
 		var snippet bytes.Buffer
 		status := http.StatusOK
 		sawHeader := false
@@ -91,28 +100,61 @@ func Middleware(next http.Handler) http.Handler {
 			},
 		})
 		next.ServeHTTP(wrapped, r)
-		span := trace.SpanFromContext(r.Context())
-		if !span.IsRecording() {
-			return
+		if release != nil {
+			release()
 		}
-		attrs := make([]attribute.KeyValue, 0, 4)
-		if id := clientID(r); id != "" {
-			attrs = append(attrs, attribute.String("client_id", id))
+		route := r.URL.Path
+		if rc := chi.RouteContext(r.Context()); rc != nil && rc.RoutePattern() != "" {
+			route = rc.RoutePattern()
+			span.SetName(route)
 		}
+		client := clientID(r)
+		grant := ""
 		if r.Form != nil {
-			if grant := r.Form.Get("grant_type"); grant != "" {
+			grant = r.Form.Get("grant_type")
+		}
+		org := r.URL.Query().Get("organization")
+		if org == "" && r.Form != nil {
+			org = r.Form.Get("organization")
+		}
+		code := oauthError(snippet.Bytes())
+		if span.IsRecording() {
+			attrs := make([]attribute.KeyValue, 0, 4)
+			if client != "" {
+				attrs = append(attrs, attribute.String("client_id", client))
+			}
+			if grant != "" {
 				attrs = append(attrs, attribute.String("grant_type", grant))
 			}
+			if org != "" {
+				attrs = append(attrs, attribute.String("org_id", org))
+			}
+			if code != "" {
+				attrs = append(attrs, attribute.String("oauth.error", code))
+			}
+			span.SetAttributes(attrs...)
+			if status >= 500 {
+				span.SetStatus(codes.Error, http.StatusText(status))
+			}
 		}
-		if org := r.URL.Query().Get("organization"); org != "" {
-			attrs = append(attrs, attribute.String("org_id", org))
+		traceID, spanID := "", ""
+		if span.IsRecording() {
+			sc := span.SpanContext()
+			traceID = sc.TraceID().String()
+			spanID = sc.SpanID().String()
 		}
-		if code := oauthError(snippet.Bytes()); code != "" {
-			attrs = append(attrs, attribute.String("oauth.error", code))
-		}
-		span.SetAttributes(attrs...)
-		sc := span.SpanContext()
-		log.Printf("%s %s status=%d trace_id=%s span_id=%s", r.Method, r.URL.Path, status, sc.TraceID(), sc.SpanID())
+		applog.Info("request",
+			"method", r.Method,
+			"route", route,
+			"status", status,
+			"duration_ms", time.Since(started).Milliseconds(),
+			"client_id", client,
+			"grant_type", grant,
+			"org_id", org,
+			"oauth.error", code,
+			"trace_id", traceID,
+			"span_id", spanID,
+		)
 	})
 	return otelhttp.NewMiddleware("http.request",
 		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
@@ -184,11 +226,6 @@ func rememberPrefix(dst *bytes.Buffer, p []byte) {
 // Tracer is the process tracer. Tests and handlers use it when they need a child span.
 func Tracer() trace.Tracer {
 	return otel.Tracer(tracerName)
-}
-
-// Start is a small wrapper so callers do not import the OTEL trace package for a child span.
-func Start(ctx context.Context, name string) (context.Context, trace.Span) {
-	return Tracer().Start(ctx, name)
 }
 
 // ShutdownTimeout bounds provider flush during process exit.

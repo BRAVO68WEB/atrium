@@ -1,11 +1,16 @@
 package repository
 
-import "fmt"
+import (
+	"fmt"
 
-// bit scans an INTEGER 0/1 column. SQLite may return a bool and Postgres an int64.
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	// bit scans an INTEGER 0/1 column. SQLite may return a bool and Postgres an int64.
+)
+
 type bit int
 
 func (b *bit) Scan(src any) error {
+	defer telemetry.Step("repository.bit.Scan")()
 	switch v := src.(type) {
 	case bool:
 		if v {
@@ -39,4 +44,4 @@ func (b *bit) Scan(src any) error {
 	return nil
 }
 
-func (b bit) Bool() bool { return b != 0 }
+func (b bit) Bool() bool { defer telemetry.Step("repository.bit.Bool")(); return b != 0 }

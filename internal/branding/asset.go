@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/bravo68web/oauth-impl/internal/config"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 var errTooLarge = errors.New("asset exceeds 1MiB")
@@ -18,6 +19,7 @@ var errTooLarge = errors.New("asset exceeds 1MiB")
 // cannot run script. Callers that set a global CSP first still lose that
 // header, because this handler replaces it before writing the body.
 func AssetHandler(cfg *config.Config) http.HandlerFunc {
+	defer telemetry.Step("branding.AssetHandler")()
 	return func(w http.ResponseWriter, r *http.Request) {
 		dir := ""
 		if cfg != nil {
@@ -47,6 +49,7 @@ func AssetHandler(cfg *config.Config) http.HandlerFunc {
 
 // AssetExists reports whether name is a file the asset handler would serve.
 func AssetExists(dir, name string) bool {
+	defer telemetry.Step("branding.AssetExists")()
 	f, _, err := openAsset(dir, name)
 	if err != nil {
 		return false
@@ -56,6 +59,7 @@ func AssetExists(dir, name string) bool {
 }
 
 func openAsset(dir, name string) (io.ReadCloser, string, error) {
+	defer telemetry.Step("branding.openAsset")()
 	if !safeAssetName(name) {
 		return nil, "", os.ErrNotExist
 	}
@@ -97,6 +101,7 @@ type rootedFile struct {
 }
 
 func (f *rootedFile) Close() error {
+	defer telemetry.Step("branding.rootedFile.Close")()
 	err := f.ReadCloser.Close()
 	if closeErr := f.root.Close(); err == nil {
 		err = closeErr

@@ -19,6 +19,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/push"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type WebController struct {
@@ -35,22 +36,26 @@ type WebController struct {
 }
 
 func (c *WebController) SetPush(h *push.Handler) {
+	defer telemetry.Step("controller.WebController.SetPush")()
 	if c != nil {
 		c.push = h
 	}
 }
 
 func (c *WebController) SetAudit(a *service.AuditLog) {
+	defer telemetry.Step("controller.WebController.SetAudit")()
 	if c != nil {
 		c.audit = a
 	}
 }
 
 func (c *WebController) Templates() *template.Template {
+	defer telemetry.Step("controller.WebController.Templates")()
 	return c.templates
 }
 
 func ParseTemplates(templateFS embed.FS, overlayDir string) (*template.Template, error) {
+	defer telemetry.Step("controller.ParseTemplates")()
 	funcMap := template.FuncMap{
 		"split": strings.Split,
 		"scopeLabel": func(scope string) string {
@@ -105,6 +110,7 @@ func ParseTemplates(templateFS embed.FS, overlayDir string) (*template.Template,
 }
 
 func NewWebController(userSvc *service.UserService, totpSvc *service.TOTPService, account *service.AccountService, cfg *config.Config, templateFS embed.FS, oauthHandler *oauth.Handler) (*WebController, error) {
+	defer telemetry.Step("controller.NewWebController")()
 	overlay := ""
 	if cfg != nil {
 		overlay = cfg.Branding.Templates
@@ -126,16 +132,19 @@ func NewWebController(userSvc *service.UserService, totpSvc *service.TOTPService
 }
 
 func (c *WebController) SetSocial(s *service.SocialService) {
+	defer telemetry.Step("controller.WebController.SetSocial")()
 	if c != nil {
 		c.social = s
 	}
 }
 
 func (c *WebController) ServeBrandAsset(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.ServeBrandAsset")()
 	branding.AssetHandler(c.cfg).ServeHTTP(w, r)
 }
 
 func (c *WebController) renderPage(w http.ResponseWriter, r *http.Request, page, pageTitle, heading string, params map[string]string, extra map[string]any) {
+	defer telemetry.Step("controller.WebController.renderPage")()
 	if extra == nil {
 		extra = map[string]any{}
 	}
@@ -175,11 +184,15 @@ func (c *WebController) renderPage(w http.ResponseWriter, r *http.Request, page,
 }
 
 func (c *WebController) getSession(r *http.Request) *oauth.Session {
+	defer telemetry.Step("controller.WebController.getSession")(
+
+	// buildAuthorizeURL constructs /oauth/authorize URL with all OAuth params
+	)
 	return c.oauthHandler.GetSession(r)
 }
 
-// buildAuthorizeURL constructs /oauth/authorize URL with all OAuth params
 func (c *WebController) redirectAfterLogin(w http.ResponseWriter, r *http.Request, params map[string]string) {
+	defer telemetry.Step("controller.WebController.redirectAfterLogin")()
 	next := SafeNext(params["next"])
 	if isLocalURL(next) {
 		http.Redirect(w, r, next, http.StatusFound)
@@ -189,6 +202,7 @@ func (c *WebController) redirectAfterLogin(w http.ResponseWriter, r *http.Reques
 }
 
 func (c *WebController) clientRedirects(clientID string) []string {
+	defer telemetry.Step("controller.WebController.clientRedirects")()
 	if c == nil || c.oauthHandler == nil {
 		return nil
 	}
@@ -197,6 +211,7 @@ func (c *WebController) clientRedirects(clientID string) []string {
 
 // isValidRedirectURL reports whether a redirect target is https, or http on localhost.
 func isValidRedirectURL(raw string) bool {
+	defer telemetry.Step("controller.isValidRedirectURL")()
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Host == "" || parsed.User != nil {
 		return false
@@ -214,6 +229,7 @@ func isValidRedirectURL(raw string) bool {
 
 // isValidRedirectURI reports whether uri is one of the client's registered redirect URIs.
 func isValidRedirectURI(uri string, allowed []string) bool {
+	defer telemetry.Step("controller.isValidRedirectURI")()
 	if uri == "" || strings.ContainsAny(uri, "\r\n\\") {
 		return false
 	}
@@ -227,6 +243,7 @@ func isValidRedirectURI(uri string, allowed []string) bool {
 
 // isLocalURL allows only the same-origin paths SafeNext returns.
 func isLocalURL(raw string) bool {
+	defer telemetry.Step("controller.isLocalURL")()
 	if raw == "" || strings.HasPrefix(raw, "//") || strings.Contains(raw, "\\") {
 		return false
 	}
@@ -238,6 +255,7 @@ func isLocalURL(raw string) bool {
 }
 
 func (c *WebController) buildAuthorizeURL(params map[string]string) string {
+	defer telemetry.Step("controller.WebController.buildAuthorizeURL")()
 	parts := []string{}
 	for k, v := range params {
 		if v != "" && k != "next" {
@@ -249,6 +267,7 @@ func (c *WebController) buildAuthorizeURL(params map[string]string) string {
 
 // extractOAuthParams extracts OAuth params from request
 func extractOAuthParams(r *http.Request) map[string]string {
+	defer telemetry.Step("controller.extractOAuthParams")()
 	return map[string]string{
 		"client_id":             r.URL.Query().Get("client_id"),
 		"redirect_uri":          r.URL.Query().Get("redirect_uri"),
@@ -272,6 +291,7 @@ func extractOAuthParams(r *http.Request) map[string]string {
 
 // extractOAuthParamsFromForm extracts OAuth params from POST form
 func extractOAuthParamsFromForm(r *http.Request) map[string]string {
+	defer telemetry.Step("controller.extractOAuthParamsFromForm")()
 	return map[string]string{
 		"client_id":             r.FormValue("client_id"),
 		"redirect_uri":          r.FormValue("redirect_uri"),
@@ -295,6 +315,7 @@ func extractOAuthParamsFromForm(r *http.Request) map[string]string {
 
 // oauthTemplateData creates template data with OAuth params
 func oauthTemplateData(params map[string]string, extra map[string]interface{}) map[string]interface{} {
+	defer telemetry.Step("controller.oauthTemplateData")()
 	data := map[string]interface{}{
 		"ClientID":            params["client_id"],
 		"RedirectURI":         params["redirect_uri"],
@@ -325,6 +346,7 @@ func oauthTemplateData(params map[string]string, extra map[string]interface{}) m
 // ──────────────────────────────────────────────
 
 func (c *WebController) HandlePushEnroll(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandlePushEnroll")()
 	if c == nil || c.push == nil {
 		http.NotFound(w, r)
 		return
@@ -350,6 +372,7 @@ func (c *WebController) HandlePushEnroll(w http.ResponseWriter, r *http.Request)
 }
 
 func (c *WebController) HandlePushApprove(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandlePushApprove")()
 	if c == nil || c.push == nil {
 		http.NotFound(w, r)
 		return
@@ -408,6 +431,7 @@ func (c *WebController) HandlePushApprove(w http.ResponseWriter, r *http.Request
 }
 
 func (c *WebController) HandleLoginPage(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleLoginPage")()
 	params := extractOAuthParams(r)
 	c.renderPage(w, r, "login.html", "Login", "Sign In", params, map[string]any{
 		"Error":     "",
@@ -416,6 +440,7 @@ func (c *WebController) HandleLoginPage(w http.ResponseWriter, r *http.Request) 
 }
 
 func (c *WebController) HandleLogin(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleLogin")()
 	_ = r.ParseForm()
 	if !csrfOK(r) {
 		rejectCSRF(w)
@@ -443,6 +468,7 @@ func (c *WebController) HandleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *WebController) finishLogin(w http.ResponseWriter, r *http.Request, user *models.User, params map[string]string) {
+	defer telemetry.Step("controller.WebController.finishLogin")()
 	if c.cfg != nil && c.cfg.Security.MFA.Required && c.totpSvc != nil {
 		mfaEnabled, _ := c.totpSvc.IsMFAEnabled(user.ID)
 		c.oauthHandler.SetSessionRequest(w, r, user.ID, user.Username, false)
@@ -465,6 +491,7 @@ func (c *WebController) finishLogin(w http.ResponseWriter, r *http.Request, user
 }
 
 func (c *WebController) botOK(w http.ResponseWriter, r *http.Request, username string) bool {
+	defer telemetry.Step("controller.WebController.botOK")()
 	if c == nil || c.cfg == nil || c.cfg.Security.BotProtection.Provider == "" {
 		return true
 	}
@@ -484,6 +511,7 @@ func (c *WebController) botOK(w http.ResponseWriter, r *http.Request, username s
 }
 
 func paramsQuery(params map[string]string) string {
+	defer telemetry.Step("controller.paramsQuery")()
 	q := url.Values{}
 	for k, v := range params {
 		if v != "" {
@@ -494,6 +522,7 @@ func paramsQuery(params map[string]string) string {
 }
 
 func (c *WebController) HandleSocialStart(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleSocialStart")()
 	if c.social == nil {
 		http.NotFound(w, r)
 		return
@@ -513,6 +542,7 @@ func (c *WebController) HandleSocialStart(w http.ResponseWriter, r *http.Request
 }
 
 func (c *WebController) HandleSocialCallback(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleSocialCallback")()
 	if c.social == nil {
 		http.NotFound(w, r)
 		return
@@ -550,6 +580,7 @@ func (c *WebController) HandleSocialCallback(w http.ResponseWriter, r *http.Requ
 }
 
 func writeHTMLStatus(w http.ResponseWriter, status int, title, message string) {
+	defer telemetry.Step("controller.writeHTMLStatus")()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_, _ = fmt.Fprintf(w, "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>%s</title></head><body><h1>%s</h1><p>%s</p><p><a href=\"/login\">Sign in</a></p></body></html>", title, title, message)
@@ -560,6 +591,7 @@ func writeHTMLStatus(w http.ResponseWriter, status int, title, message string) {
 // ──────────────────────────────────────────────
 
 func (c *WebController) HandleMFA(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleMFA")()
 	_ = r.ParseForm()
 	if !csrfOK(r) {
 		rejectCSRF(w)
@@ -597,6 +629,7 @@ func (c *WebController) HandleMFA(w http.ResponseWriter, r *http.Request) {
 // ──────────────────────────────────────────────
 
 func (c *WebController) HandleMFAEnrollPage(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleMFAEnrollPage")()
 	session := c.getSession(r)
 	if session == nil || !session.Authenticated {
 		http.Redirect(w, r, "/login?"+r.URL.RawQuery, http.StatusFound)
@@ -623,6 +656,7 @@ func (c *WebController) HandleMFAEnrollPage(w http.ResponseWriter, r *http.Reque
 }
 
 func (c *WebController) HandleMFAEnrollVerify(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleMFAEnrollVerify")()
 	_ = r.ParseForm()
 	if !csrfOK(r) {
 		rejectCSRF(w)
@@ -665,16 +699,19 @@ func (c *WebController) HandleMFAEnrollVerify(w http.ResponseWriter, r *http.Req
 // ──────────────────────────────────────────────
 
 func (c *WebController) registrationDisabled() bool {
+	defer telemetry.Step("controller.WebController.registrationDisabled")()
 	return c != nil && c.cfg != nil && c.cfg.Security.DisableRegistration
 }
 
 func writeRegistrationDisabled(w http.ResponseWriter) {
+	defer telemetry.Step("controller.writeRegistrationDisabled")()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusForbidden)
 	_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Registration disabled</title></head><body><h1>Registration is disabled</h1><p><a href="/login">Sign in</a></p></body></html>`))
 }
 
 func (c *WebController) HandleRegisterPage(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleRegisterPage")()
 	if c.registrationDisabled() {
 		writeRegistrationDisabled(w)
 		return
@@ -686,6 +723,7 @@ func (c *WebController) HandleRegisterPage(w http.ResponseWriter, r *http.Reques
 }
 
 func (c *WebController) HandleRegister(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleRegister")()
 	if c.registrationDisabled() {
 		writeRegistrationDisabled(w)
 		return
@@ -739,6 +777,7 @@ func (c *WebController) HandleRegister(w http.ResponseWriter, r *http.Request) {
 // ──────────────────────────────────────────────
 
 func (c *WebController) HandleOrgSelectPage(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleOrgSelectPage")()
 	session := c.getSession(r)
 	if session == nil || !session.Authenticated {
 		http.Redirect(w, r, "/login?"+r.URL.RawQuery, http.StatusFound)
@@ -767,6 +806,7 @@ func (c *WebController) HandleOrgSelectPage(w http.ResponseWriter, r *http.Reque
 }
 
 func (c *WebController) HandleOrgSelect(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleOrgSelect")()
 	_ = r.ParseForm()
 	if !csrfOK(r) {
 		rejectCSRF(w)
@@ -800,6 +840,7 @@ func (c *WebController) HandleOrgSelect(w http.ResponseWriter, r *http.Request) 
 }
 
 func (c *WebController) renderOrganization(w http.ResponseWriter, r *http.Request, params map[string]string, username string, orgs []*models.Organization, message string) {
+	defer telemetry.Step("controller.WebController.renderOrganization")()
 	if orgs == nil {
 		orgs = []*models.Organization{}
 	}
@@ -813,6 +854,7 @@ func (c *WebController) renderOrganization(w http.ResponseWriter, r *http.Reques
 // postedOrganization returns the last non-empty organization value.
 // The shared hidden field is submitted before the selected radio button.
 func postedOrganization(r *http.Request) string {
+	defer telemetry.Step("controller.postedOrganization")()
 	chosen := ""
 	for _, value := range r.Form["organization"] {
 		value = strings.TrimSpace(value)
@@ -824,6 +866,7 @@ func postedOrganization(r *http.Request) string {
 }
 
 func (c *WebController) oauthParams(r *http.Request, fromForm bool) map[string]string {
+	defer telemetry.Step("controller.WebController.oauthParams")()
 	params := extractOAuthParams(r)
 	if fromForm {
 		params = extractOAuthParamsFromForm(r)
@@ -845,6 +888,7 @@ func (c *WebController) oauthParams(r *http.Request, fromForm bool) map[string]s
 // ──────────────────────────────────────────────
 
 func (c *WebController) HandleConsentPage(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleConsentPage")()
 	session := c.getSession(r)
 	if session == nil || !session.Authenticated {
 		http.Redirect(w, r, "/login?"+r.URL.RawQuery, http.StatusFound)
@@ -879,6 +923,7 @@ func (c *WebController) HandleConsentPage(w http.ResponseWriter, r *http.Request
 }
 
 func (c *WebController) HandleConsent(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleConsent")()
 	_ = r.ParseForm()
 	if !csrfOK(r) {
 		rejectCSRF(w)
@@ -956,6 +1001,7 @@ func (c *WebController) HandleConsent(w http.ResponseWriter, r *http.Request) {
 
 // stripPromptValue removes one space-delimited prompt token.
 func stripPromptValue(prompt, drop string) string {
+	defer telemetry.Step("controller.stripPromptValue")()
 	if prompt == "" || drop == "" {
 		return prompt
 	}

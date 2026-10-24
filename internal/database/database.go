@@ -5,20 +5,28 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bravo68web/oauth-impl/internal/config"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
 )
 
+// Row is one query result. Scan runs the query.
+type Row interface {
+	Scan(dest ...any) error
+}
+
 // SQL is the query handle repositories use. Postgres placeholders are rewritten.
 type SQL interface {
 	Exec(query string, args ...any) (sql.Result, error)
 	Query(query string, args ...any) (*sql.Rows, error)
-	QueryRow(query string, args ...any) *sql.Row
+	QueryRow(query string, args ...any) Row
 	Dialect() string
 }
 
@@ -99,15 +107,50 @@ func openPostgres(dsn string) (*DB, error) {
 }
 
 func (db *DB) Exec(query string, args ...any) (sql.Result, error) {
-	return db.conn.Exec(db.prepare(query), args...)
+	done := telemetry.QuerySpan(db.driver, query, len(args))
+	result, err := db.conn.ExecContext(telemetry.Context(), db.prepare(query), args...)
+	done(err)
+	return result, err
 }
 
 func (db *DB) Query(query string, args ...any) (*sql.Rows, error) {
-	return db.conn.Query(db.prepare(query), args...)
+	done := telemetry.QuerySpan(db.driver, query, len(args))
+	rows, err := db.conn.QueryContext(telemetry.Context(), db.prepare(query), args...)
+	done(err)
+	return rows, err
 }
 
-func (db *DB) QueryRow(query string, args ...any) *sql.Row {
-	return db.conn.QueryRow(db.prepare(query), args...)
+func (db *DB) QueryRow(query string, args ...any) Row {
+	done := telemetry.QuerySpan(db.driver, query, len(args))
+	row := &tracedRow{
+		row:  db.conn.QueryRowContext(telemetry.Context(), db.prepare(query), args...),
+		done: done,
+	}
+	runtime.SetFinalizer(row, func(row *tracedRow) { row.finish(nil) })
+	return row
+}
+
+// tracedRow ends the query span when Scan runs. QueryRow itself does not
+// talk to the database. Scan does.
+type tracedRow struct {
+	row  *sql.Row
+	done func(error)
+	once sync.Once
+}
+
+func (r *tracedRow) Scan(dest ...any) error {
+	err := r.row.Scan(dest...)
+	r.finish(err)
+	return err
+}
+
+func (r *tracedRow) finish(err error) {
+	r.once.Do(func() {
+		runtime.SetFinalizer(r, nil)
+		if r.done != nil {
+			r.done(err)
+		}
+	})
 }
 
 func (db *DB) Close() error {

@@ -8,10 +8,12 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
 func (h *Handler) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.handleRefreshToken")()
 	refreshTokenStr := r.Form.Get("refresh_token")
 	if refreshTokenStr == "" {
 		writeTokenError(w, http.StatusBadRequest, "invalid_request", "refresh_token is required")

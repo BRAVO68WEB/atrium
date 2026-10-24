@@ -14,6 +14,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/push"
 	"github.com/bravo68web/oauth-impl/internal/repository"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type ManagementController struct {
@@ -37,24 +38,28 @@ type ManagementController struct {
 }
 
 func (c *ManagementController) SetPush(h *push.Handler) {
+	defer telemetry.Step("controller.ManagementController.SetPush")()
 	if c != nil {
 		c.push = h
 	}
 }
 
 func (c *ManagementController) SetGrants(g *service.GrantService) {
+	defer telemetry.Step("controller.ManagementController.SetGrants")()
 	if c != nil {
 		c.grants = g
 	}
 }
 
 func (c *ManagementController) SetAudit(a *service.AuditLog) {
+	defer telemetry.Step("controller.ManagementController.SetAudit")()
 	if c != nil {
 		c.audit = a
 	}
 }
 
 func (c *ManagementController) SetKeys(keys *oidc.KeySet, retain time.Duration) {
+	defer telemetry.Step("controller.ManagementController.SetKeys")()
 	if c != nil {
 		c.keys = keys
 		c.keyRetain = retain
@@ -62,6 +67,7 @@ func (c *ManagementController) SetKeys(keys *oidc.KeySet, retain time.Duration) 
 }
 
 func (c *ManagementController) SetWebhooks(d *service.WebhookDispatcher) {
+	defer telemetry.Step("controller.ManagementController.SetWebhooks")()
 	c.hooks = d
 }
 
@@ -77,6 +83,7 @@ func NewManagementController(
 	sessions *service.SessionService,
 	tokenRepo *repository.TokenRepository,
 ) *ManagementController {
+	defer telemetry.Step("controller.NewManagementController")()
 	return &ManagementController{
 		clientSvc:    clientSvc,
 		userSvc:      userSvc,
@@ -92,12 +99,14 @@ func NewManagementController(
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
+	defer telemetry.Step("controller.writeJSON")()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
 }
 
 func writeProfileError(w http.ResponseWriter, err error) bool {
+	defer telemetry.Step("controller.writeProfileError")()
 	switch {
 	case errors.Is(err, service.ErrEmailRequired):
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
@@ -111,6 +120,7 @@ func writeProfileError(w http.ResponseWriter, err error) bool {
 }
 
 func writeError(w http.ResponseWriter, status int, code, description string) {
+	defer telemetry.Step("controller.writeError")()
 	writeJSON(w, status, map[string]string{
 		"error":             code,
 		"error_description": description,
@@ -120,6 +130,7 @@ func writeError(w http.ResponseWriter, status int, code, description string) {
 // ─── Client Management ────────────────────────────────────
 
 func (c *ManagementController) HandleListClients(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListClients")()
 	clients, err := c.clientSvc.ListClients()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to list clients")
@@ -129,6 +140,7 @@ func (c *ManagementController) HandleListClients(w http.ResponseWriter, r *http.
 }
 
 func (c *ManagementController) HandleCreateClient(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleCreateClient")()
 	var req struct {
 		ID                                         string   `json:"id"`
 		Name                                       string   `json:"name"`
@@ -195,6 +207,7 @@ func (c *ManagementController) HandleCreateClient(w http.ResponseWriter, r *http
 }
 
 func (c *ManagementController) HandleGetClient(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleGetClient")()
 	clientID := chi.URLParam(r, "clientID")
 	client, err := c.clientSvc.GetClient(clientID)
 	if err != nil {
@@ -205,6 +218,7 @@ func (c *ManagementController) HandleGetClient(w http.ResponseWriter, r *http.Re
 }
 
 func (c *ManagementController) HandleUpdateClient(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleUpdateClient")()
 	clientID := chi.URLParam(r, "clientID")
 	existing, err := c.clientSvc.GetClient(clientID)
 	if err != nil {
@@ -307,6 +321,7 @@ func (c *ManagementController) HandleUpdateClient(w http.ResponseWriter, r *http
 }
 
 func (c *ManagementController) HandleDeleteClient(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleDeleteClient")()
 	clientID := chi.URLParam(r, "clientID")
 	if err := c.clientSvc.DeleteClient(clientID); err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to delete client")
@@ -319,6 +334,7 @@ func (c *ManagementController) HandleDeleteClient(w http.ResponseWriter, r *http
 // ─── User Management ──────────────────────────────────────
 
 func (c *ManagementController) HandleListUsers(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListUsers")()
 	users, err := c.userSvc.ListUsers()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to list users")
@@ -328,6 +344,7 @@ func (c *ManagementController) HandleListUsers(w http.ResponseWriter, r *http.Re
 }
 
 func (c *ManagementController) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleCreateUser")()
 	var req struct {
 		Username      string            `json:"username"`
 		Password      string            `json:"password"`
@@ -376,6 +393,7 @@ func (c *ManagementController) HandleCreateUser(w http.ResponseWriter, r *http.R
 }
 
 func (c *ManagementController) HandlePatchUser(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandlePatchUser")()
 	user, err := c.userSvc.GetUser(chi.URLParam(r, "userID"))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "not_found", "User not found")
@@ -413,6 +431,7 @@ func (c *ManagementController) HandlePatchUser(w http.ResponseWriter, r *http.Re
 }
 
 func (c *ManagementController) HandleSetPassword(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleSetPassword")()
 	var req struct {
 		Password string `json:"password"`
 	}
@@ -433,6 +452,7 @@ func (c *ManagementController) HandleSetPassword(w http.ResponseWriter, r *http.
 }
 
 func (c *ManagementController) HandleListUserSessions(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListUserSessions")()
 	sessions, err := c.sessions.List(chi.URLParam(r, "userID"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to list sessions")
@@ -442,6 +462,7 @@ func (c *ManagementController) HandleListUserSessions(w http.ResponseWriter, r *
 }
 
 func (c *ManagementController) HandleRevokeUserSession(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleRevokeUserSession")()
 	userID := chi.URLParam(r, "userID")
 	sid := chi.URLParam(r, "sid")
 	if err := c.account.RevokeSession(userID, sid); err != nil {
@@ -453,6 +474,7 @@ func (c *ManagementController) HandleRevokeUserSession(w http.ResponseWriter, r 
 }
 
 func (c *ManagementController) HandleUserLoginAnalytics(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleUserLoginAnalytics")()
 	window, err := loginWindow(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
@@ -467,6 +489,7 @@ func (c *ManagementController) HandleUserLoginAnalytics(w http.ResponseWriter, r
 }
 
 func (c *ManagementController) HandleGlobalLoginAnalytics(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleGlobalLoginAnalytics")()
 	window, err := loginWindow(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
@@ -481,6 +504,7 @@ func (c *ManagementController) HandleGlobalLoginAnalytics(w http.ResponseWriter,
 }
 
 func (c *ManagementController) HandleUserActivity(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleUserActivity")()
 	events, err := c.account.Activity(chi.URLParam(r, "userID"), 50)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to list activity")
@@ -490,6 +514,7 @@ func (c *ManagementController) HandleUserActivity(w http.ResponseWriter, r *http
 }
 
 func (c *ManagementController) HandleListRefreshTokens(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListRefreshTokens")()
 	tokens, err := c.tokenRepo.ListRefreshTokens(r.URL.Query().Get("client_id"), r.URL.Query().Get("user_id"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to list refresh tokens")
@@ -499,6 +524,7 @@ func (c *ManagementController) HandleListRefreshTokens(w http.ResponseWriter, r 
 }
 
 func (c *ManagementController) HandleRevokeRefreshToken(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleRevokeRefreshToken")()
 	rt, err := c.tokenRepo.GetRefreshByID(chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "not_found", "Refresh token not found")
@@ -513,6 +539,7 @@ func (c *ManagementController) HandleRevokeRefreshToken(w http.ResponseWriter, r
 }
 
 func (c *ManagementController) HandleGetUser(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleGetUser")()
 	userID := chi.URLParam(r, "userID")
 	user, err := c.userSvc.GetUser(userID)
 	if err != nil {
@@ -525,6 +552,7 @@ func (c *ManagementController) HandleGetUser(w http.ResponseWriter, r *http.Requ
 // ─── Token Management ─────────────────────────────────────
 
 func (c *ManagementController) HandleListTokens(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListTokens")()
 	clientID := r.URL.Query().Get("client_id")
 	userID := r.URL.Query().Get("user_id")
 
@@ -537,6 +565,7 @@ func (c *ManagementController) HandleListTokens(w http.ResponseWriter, r *http.R
 }
 
 func (c *ManagementController) HandleRevokeToken(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleRevokeToken")()
 	token := chi.URLParam(r, "token")
 	if err := c.tokenSvc.RevokeToken(token); err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to revoke token")
@@ -549,6 +578,7 @@ func (c *ManagementController) HandleRevokeToken(w http.ResponseWriter, r *http.
 // ─── MFA Management ───────────────────────────────────────
 
 func (c *ManagementController) HandleMFAEnable(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleMFAEnable")()
 	userID := chi.URLParam(r, "userID")
 
 	user, err := c.userSvc.GetUser(userID)
@@ -571,6 +601,7 @@ func (c *ManagementController) HandleMFAEnable(w http.ResponseWriter, r *http.Re
 }
 
 func (c *ManagementController) HandleMFAVerify(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleMFAVerify")()
 	userID := chi.URLParam(r, "userID")
 
 	var req struct {
@@ -596,6 +627,7 @@ func (c *ManagementController) HandleMFAVerify(w http.ResponseWriter, r *http.Re
 }
 
 func (c *ManagementController) HandleMFAStatus(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleMFAStatus")()
 	userID := chi.URLParam(r, "userID")
 
 	enabled, err := c.totpSvc.IsMFAEnabled(userID)
@@ -611,6 +643,7 @@ func (c *ManagementController) HandleMFAStatus(w http.ResponseWriter, r *http.Re
 }
 
 func (c *ManagementController) HandleMFADisable(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleMFADisable")()
 	userID := chi.URLParam(r, "userID")
 
 	if err := c.totpSvc.DisableMFA(userID); err != nil {
@@ -624,6 +657,7 @@ func (c *ManagementController) HandleMFADisable(w http.ResponseWriter, r *http.R
 // ─── Scope Management ────────────────────────────────────
 
 func (c *ManagementController) HandleListScopes(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListScopes")()
 	scopes, err := c.scopeRepo.List()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to list scopes")
@@ -633,6 +667,7 @@ func (c *ManagementController) HandleListScopes(w http.ResponseWriter, r *http.R
 }
 
 func (c *ManagementController) HandleCreateScope(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleCreateScope")()
 	var req struct {
 		Name           string `json:"name"`
 		Description    string `json:"description"`
@@ -666,6 +701,7 @@ func (c *ManagementController) HandleCreateScope(w http.ResponseWriter, r *http.
 }
 
 func (c *ManagementController) HandleGetScope(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleGetScope")()
 	name := chi.URLParam(r, "name")
 
 	scope, err := c.scopeRepo.Get(name)
@@ -678,6 +714,7 @@ func (c *ManagementController) HandleGetScope(w http.ResponseWriter, r *http.Req
 }
 
 func (c *ManagementController) HandleDeleteScope(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleDeleteScope")()
 	name := chi.URLParam(r, "name")
 
 	if err := c.scopeRepo.Delete(name); err != nil {
@@ -691,6 +728,7 @@ func (c *ManagementController) HandleDeleteScope(w http.ResponseWriter, r *http.
 // ─── Resource Management ────────────────────────────────────
 
 func (c *ManagementController) HandleListResources(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListResources")()
 	resources, err := c.resourceRepo.List()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to list resources")
@@ -700,6 +738,7 @@ func (c *ManagementController) HandleListResources(w http.ResponseWriter, r *htt
 }
 
 func (c *ManagementController) HandleCreateResource(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleCreateResource")()
 	var req struct {
 		URI         string   `json:"uri"`
 		Name        string   `json:"name"`
@@ -733,6 +772,7 @@ func (c *ManagementController) HandleCreateResource(w http.ResponseWriter, r *ht
 }
 
 func (c *ManagementController) HandleGetResource(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleGetResource")()
 	uri := chi.URLParam(r, "uri")
 
 	resource, err := c.resourceRepo.Get(uri)
@@ -745,6 +785,7 @@ func (c *ManagementController) HandleGetResource(w http.ResponseWriter, r *http.
 }
 
 func (c *ManagementController) HandleUpdateResource(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleUpdateResource")()
 	uri := chi.URLParam(r, "uri")
 
 	existing, err := c.resourceRepo.Get(uri)
@@ -783,6 +824,7 @@ func (c *ManagementController) HandleUpdateResource(w http.ResponseWriter, r *ht
 }
 
 func (c *ManagementController) HandleDeleteResource(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleDeleteResource")()
 	uri := chi.URLParam(r, "uri")
 
 	if err := c.resourceRepo.Delete(uri); err != nil {
@@ -794,6 +836,7 @@ func (c *ManagementController) HandleDeleteResource(w http.ResponseWriter, r *ht
 }
 
 func (c *ManagementController) HandleListResourceScopes(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListResourceScopes")()
 	uri := chi.URLParam(r, "uri")
 
 	scopes, err := c.scopeRepo.ListByResource(uri)
@@ -808,6 +851,7 @@ func (c *ManagementController) HandleListResourceScopes(w http.ResponseWriter, r
 // ─── Consent Management ────────────────────────────────────
 
 func (c *ManagementController) HandleListConsents(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListConsents")()
 	userID := r.URL.Query().Get("user_id")
 	if userID == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request", "user_id is required")
@@ -824,6 +868,7 @@ func (c *ManagementController) HandleListConsents(w http.ResponseWriter, r *http
 }
 
 func (c *ManagementController) HandleRevokeConsent(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleRevokeConsent")()
 	userID := r.URL.Query().Get("user_id")
 	clientID := r.URL.Query().Get("client_id")
 
@@ -848,6 +893,7 @@ func (c *ManagementController) HandleRevokeConsent(w http.ResponseWriter, r *htt
 }
 
 func (c *ManagementController) HandleListWebhooks(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListWebhooks")()
 	if c.hooks == nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Webhooks are not configured")
 		return
@@ -861,6 +907,7 @@ func (c *ManagementController) HandleListWebhooks(w http.ResponseWriter, r *http
 }
 
 func (c *ManagementController) HandleCreateWebhook(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleCreateWebhook")()
 	var req webhookBody
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
@@ -878,6 +925,7 @@ func (c *ManagementController) HandleCreateWebhook(w http.ResponseWriter, r *htt
 }
 
 func (c *ManagementController) HandleGetWebhook(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleGetWebhook")()
 	hook, err := c.hooks.Get(chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "not_found", "Webhook not found")
@@ -887,6 +935,7 @@ func (c *ManagementController) HandleGetWebhook(w http.ResponseWriter, r *http.R
 }
 
 func (c *ManagementController) HandleUpdateWebhook(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleUpdateWebhook")()
 	var req webhookBody
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
@@ -908,6 +957,7 @@ func (c *ManagementController) HandleUpdateWebhook(w http.ResponseWriter, r *htt
 }
 
 func (c *ManagementController) HandleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleDeleteWebhook")()
 	id := chi.URLParam(r, "id")
 	if err := c.hooks.Delete(id); err != nil {
 		writeError(w, http.StatusNotFound, "not_found", "Webhook not found")
@@ -918,6 +968,7 @@ func (c *ManagementController) HandleDeleteWebhook(w http.ResponseWriter, r *htt
 }
 
 func (c *ManagementController) HandleTestWebhook(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleTestWebhook")()
 	if err := c.hooks.Test(chi.URLParam(r, "id")); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "not_found", "Webhook not found")
@@ -930,6 +981,7 @@ func (c *ManagementController) HandleTestWebhook(w http.ResponseWriter, r *http.
 }
 
 func (c *ManagementController) HandleListAudit(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListAudit")()
 	window, err := loginWindow(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
@@ -951,6 +1003,7 @@ func (c *ManagementController) HandleListAudit(w http.ResponseWriter, r *http.Re
 }
 
 func (c *ManagementController) HandleRotateKeys(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleRotateKeys")()
 	if c.keys == nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Signing keys are not configured")
 		return
@@ -968,6 +1021,7 @@ func (c *ManagementController) HandleRotateKeys(w http.ResponseWriter, r *http.R
 }
 
 func (c *ManagementController) HandleRevokeUserDevices(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleRevokeUserDevices")()
 	if c.push == nil {
 		writeError(w, http.StatusNotFound, "not_found", "Push devices are disabled")
 		return
@@ -987,6 +1041,7 @@ func (c *ManagementController) HandleRevokeUserDevices(w http.ResponseWriter, r 
 }
 
 func (c *ManagementController) HandleEnrollUserDevice(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleEnrollUserDevice")()
 	if c.push == nil {
 		writeError(w, http.StatusNotFound, "not_found", "Push devices are disabled")
 		return

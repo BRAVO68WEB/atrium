@@ -16,6 +16,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type JARService struct {
@@ -23,6 +24,7 @@ type JARService struct {
 }
 
 func NewJARService(issuer string) *JARService {
+	defer telemetry.Step("service.NewJARService")()
 	return &JARService{issuer: issuer}
 }
 
@@ -58,7 +60,10 @@ type JWKS struct {
 }
 
 func (s *JARService) ValidateRequestObject(requestJWT string, client *models.Client) (map[string]string, error) {
+	defer
 	// Parse JWT without verification first to get header
+	telemetry.Step("service.JARService.ValidateRequestObject")()
+
 	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
 	token, _, err := parser.ParseUnverified(requestJWT, &RequestObjectClaims{})
 	if err != nil {
@@ -156,6 +161,7 @@ func (s *JARService) ValidateRequestObject(requestJWT string, client *models.Cli
 }
 
 func jarAlgOK(alg string) bool {
+	defer telemetry.Step("service.jarAlgOK")()
 	switch alg {
 	case "RS256", "RS384", "RS512", "ES256", "ES384", "ES512":
 		return true
@@ -165,7 +171,10 @@ func jarAlgOK(alg string) bool {
 }
 
 func (s *JARService) resolveClientKey(client *models.Client, header map[string]interface{}) (interface{}, error) {
+	defer
 	// Try inline JWKS first
+	telemetry.Step("service.JARService.resolveClientKey")()
+
 	if client.JWKS != "" {
 		return s.getKeyFromJWKS(client.JWKS, header)
 	}
@@ -179,6 +188,7 @@ func (s *JARService) resolveClientKey(client *models.Client, header map[string]i
 }
 
 func (s *JARService) getKeyFromJWKS(jwksJSON string, header map[string]interface{}) (interface{}, error) {
+	defer telemetry.Step("service.JARService.getKeyFromJWKS")()
 	var jwks JWKS
 	if err := json.Unmarshal([]byte(jwksJSON), &jwks); err != nil {
 		return nil, fmt.Errorf("failed to parse client JWKS: %w", err)
@@ -216,6 +226,7 @@ func (s *JARService) getKeyFromJWKS(jwksJSON string, header map[string]interface
 }
 
 func (s *JARService) getKeyFromJWKSUri(jwksUri string, header map[string]interface{}) (interface{}, error) {
+	defer telemetry.Step("service.JARService.getKeyFromJWKSUri")()
 	body, status, err := FetchSafe(context.Background(), nil, http.MethodGet, jwksUri, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch JWKS from %s: %w", jwksUri, err)
@@ -256,6 +267,7 @@ func (s *JARService) getKeyFromJWKSUri(jwksUri string, header map[string]interfa
 }
 
 func parseRSAJWK(key JWK) (*rsa.PublicKey, error) {
+	defer telemetry.Step("service.parseRSAJWK")()
 	nBytes, err := base64.RawURLEncoding.DecodeString(key.N)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode RSA n: %w", err)
@@ -278,6 +290,7 @@ func parseRSAJWK(key JWK) (*rsa.PublicKey, error) {
 }
 
 func parseECJWK(key JWK) (*ecdsa.PublicKey, error) {
+	defer telemetry.Step("service.parseECJWK")()
 	xBytes, err := base64.RawURLEncoding.DecodeString(key.X)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode EC x: %w", err)
@@ -303,6 +316,7 @@ func parseECJWK(key JWK) (*ecdsa.PublicKey, error) {
 }
 
 func ecPublicKey(curve elliptic.Curve, x, y []byte) (*ecdsa.PublicKey, error) {
+	defer telemetry.Step("service.ecPublicKey")()
 	size := (curve.Params().BitSize + 7) / 8
 	if len(x) == 0 || len(y) == 0 || len(x) > size || len(y) > size {
 		return nil, fmt.Errorf("invalid EC coordinates")

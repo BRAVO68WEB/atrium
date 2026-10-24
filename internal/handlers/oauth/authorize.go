@@ -15,10 +15,12 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/oidc"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
 func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleAuthorize")()
 	clientID := r.URL.Query().Get("client_id")
 	redirectURI := r.URL.Query().Get("redirect_uri")
 	responseType := r.URL.Query().Get("response_type")
@@ -275,13 +277,14 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 			writeOAuthError(w, http.StatusFound, "interaction_required", "Organization selection required", state)
 			return
 		}
-		// Proceed directly
+		telemetry.Interaction("complete")
 		h.issueAuthorizationResponse(w, r, client, session, responseType, responseMode, redirectURI, scope, state, nonce, codeChallenge, codeChallengeMethod, resource, organization, requestedActor)
 		return
 	}
 
 	// prompt=login: force re-authentication
 	if prompt == "login" {
+		telemetry.Interaction("login")
 		h.clearSession(w, r)
 		loginURL := "/login?" + r.URL.RawQuery
 		if loginHint != "" {
@@ -293,6 +296,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	// Not authenticated: redirect to login
 	if session == nil || !session.Authenticated {
+		telemetry.Interaction("login")
 		loginURL := "/login?" + r.URL.RawQuery
 		if loginHint != "" {
 			loginURL += "&login_hint=" + url.QueryEscape(loginHint)
@@ -303,6 +307,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	// MFA check
 	if !session.MFAVerified && h.cfg.Security.MFA.Required {
+		telemetry.Interaction("mfa")
 		mfaURL := "/login/mfa?" + r.URL.RawQuery
 		http.Redirect(w, r, mfaURL, http.StatusFound)
 		return
@@ -314,6 +319,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if needs {
+		telemetry.Interaction("organization")
 		http.Redirect(w, r, "/organization?"+r.URL.RawQuery, http.StatusFound)
 		return
 	}
@@ -322,21 +328,25 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	// one-time grant so this request can finish without asking again.
 	if requestedActor != "" {
 		if !h.takeActorConsent(session.ID, clientID, requestedActor) {
+			telemetry.Interaction("consent")
 			http.Redirect(w, r, "/consent?"+r.URL.RawQuery, http.StatusFound)
 			return
 		}
 	} else if prompt == "consent" || !h.hasConsented(session.UserID, clientID, scope) {
+		telemetry.Interaction("consent")
 		consentURL := "/consent?" + r.URL.RawQuery
 		http.Redirect(w, r, consentURL, http.StatusFound)
 		return
 	}
 
+	telemetry.Interaction("complete")
 	h.issueAuthorizationResponse(w, r, client, session, responseType, responseMode, redirectURI, scope, state, nonce, codeChallenge, codeChallengeMethod, resource, organization, requestedActor)
 }
 
 // ApplyRequestObject fills empty authorize fields from a signed request.
 // The code challenge in that request wins over a query value.
 func (h *Handler) ApplyRequestObject(params map[string]string) {
+	defer telemetry.Step("oauth.Handler.ApplyRequestObject")()
 	if h == nil || h.jarSvc == nil || strings.TrimSpace(params["request"]) == "" {
 		return
 	}
@@ -359,6 +369,7 @@ func (h *Handler) ApplyRequestObject(params map[string]string) {
 }
 
 func (h *Handler) issueAuthorizationResponse(w http.ResponseWriter, r *http.Request, client *models.Client, session *Session, responseType, responseMode, redirectURI, scope, state, nonce, codeChallenge, codeChallengeMethod, resource, organization, requestedActor string) {
+	defer telemetry.Step("oauth.Handler.issueAuthorizationResponse")()
 	scopes := crypto.NormalizeScopes(scope)
 	hasOpenID := containsScope(scopes, "openid")
 	var account *models.User

@@ -5,9 +5,11 @@ import (
 	"net/http"
 
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 func (c *ManagementController) HandleImportUsers(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleImportUsers")()
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	var doc service.ImportDocument
 	if err := json.NewDecoder(r.Body).Decode(&doc); err != nil {
@@ -30,6 +32,7 @@ func (c *ManagementController) HandleImportUsers(w http.ResponseWriter, r *http.
 }
 
 func (c *ManagementController) HandleExportUsers(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleExportUsers")()
 	secrets := r.URL.Query().Get("include_secrets") == "true"
 	doc, err := c.userSvc.ExportUsers(secrets, c.orgs)
 	if err != nil {

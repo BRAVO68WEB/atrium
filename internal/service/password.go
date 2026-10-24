@@ -6,6 +6,7 @@ import (
 	"unicode"
 
 	"github.com/bravo68web/oauth-impl/internal/config"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // PasswordError is a complexity failure. Callers map it to invalid_password.
@@ -21,12 +22,14 @@ func (e *PasswordError) Error() string {
 }
 
 func passwordError(message string) error {
+	defer telemetry.Step("service.passwordError")()
 	return &PasswordError{Message: message}
 }
 
 // CheckPassword reports the first complexity rule the password misses.
 // It does not trim or truncate. Login does not call this.
 func CheckPassword(policy config.PasswordPolicy, username, password string) error {
+	defer telemetry.Step("service.CheckPassword")()
 	if policy.MinLength > 0 && len(password) < policy.MinLength {
 		return passwordError(fmt.Sprintf("password must be at least %d characters", policy.MinLength))
 	}

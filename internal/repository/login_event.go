@@ -8,6 +8,7 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/database"
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type LoginEventRepository struct {
@@ -15,10 +16,12 @@ type LoginEventRepository struct {
 }
 
 func NewLoginEventRepository(db database.SQL) *LoginEventRepository {
+	defer telemetry.Step("repository.NewLoginEventRepository")()
 	return &LoginEventRepository{db: db}
 }
 
 func (r *LoginEventRepository) Insert(ev *models.LoginEvent) error {
+	defer telemetry.Step("repository.LoginEventRepository.Insert")()
 	if ev.ID == "" {
 		ev.ID = uuid.NewString()
 	}
@@ -35,6 +38,7 @@ func (r *LoginEventRepository) Insert(ev *models.LoginEvent) error {
 // LatestIP returns the newest stored address for userID.
 // Mail uses this row instead of the request header.
 func (r *LoginEventRepository) LatestIP(userID string) (string, error) {
+	defer telemetry.Step("repository.LoginEventRepository.LatestIP")()
 	var ip string
 	err := r.db.QueryRow(`SELECT COALESCE(ip, '') FROM login_events
 		WHERE user_id = ? AND COALESCE(ip, '') <> ''
@@ -46,6 +50,7 @@ func (r *LoginEventRepository) LatestIP(userID string) (string, error) {
 }
 
 func (r *LoginEventRepository) ListByUser(userID string, limit int) ([]*models.LoginEvent, error) {
+	defer telemetry.Step("repository.LoginEventRepository.ListByUser")()
 	if limit <= 0 {
 		limit = 50
 	}
@@ -72,12 +77,14 @@ func (r *LoginEventRepository) ListByUser(userID string, limit int) ([]*models.L
 }
 
 func (r *LoginEventRepository) CountFailuresSince(userID string, since time.Time) (int, error) {
+	defer telemetry.Step("repository.LoginEventRepository.CountFailuresSince")()
 	var n int
 	err := r.db.QueryRow(`SELECT COUNT(*) FROM login_events WHERE user_id = ? AND success = 0 AND created_at >= ?`, userID, since).Scan(&n)
 	return n, err
 }
 
 func (r *LoginEventRepository) HasIP(userID, ip string) (bool, error) {
+	defer telemetry.Step("repository.LoginEventRepository.HasIP")()
 	if ip == "" {
 		return false, nil
 	}
@@ -87,6 +94,7 @@ func (r *LoginEventRepository) HasIP(userID, ip string) (bool, error) {
 }
 
 func (r *LoginEventRepository) Analytics(userID string, since time.Time) (*models.LoginAnalytics, error) {
+	defer telemetry.Step("repository.LoginEventRepository.Analytics")()
 	where := `created_at >= ?`
 	args := []any{since}
 	if userID != "" {
@@ -147,6 +155,7 @@ func (r *LoginEventRepository) Analytics(userID string, since time.Time) (*model
 }
 
 func (r *LoginEventRepository) ipStats(where string, args []any, userID string, since time.Time) ([]models.IPLoginStat, error) {
+	defer telemetry.Step("repository.LoginEventRepository.ipStats")()
 	userCount := `0`
 	if userID == "" {
 		userCount = `COUNT(DISTINCT user_id)`
@@ -200,6 +209,7 @@ func (r *LoginEventRepository) ipStats(where string, args []any, userID string, 
 }
 
 func (r *LoginEventRepository) firstSeen(userID string) (map[string]time.Time, error) {
+	defer telemetry.Step("repository.LoginEventRepository.firstSeen")()
 	query := `SELECT COALESCE(ip, ''), MIN(created_at) FROM login_events`
 	var args []any
 	if userID != "" {
@@ -225,6 +235,7 @@ func (r *LoginEventRepository) firstSeen(userID string) (map[string]time.Time, e
 }
 
 func (r *LoginEventRepository) lastAgents(where string, args []any) (map[string]string, error) {
+	defer telemetry.Step("repository.LoginEventRepository.lastAgents")()
 	query := `SELECT COALESCE(e.ip, ''), COALESCE(e.user_agent, '')
 		FROM login_events e
 		JOIN (
@@ -250,6 +261,7 @@ func (r *LoginEventRepository) lastAgents(where string, args []any) (map[string]
 }
 
 func (r *LoginEventRepository) dayStats(where string, args []any) ([]models.DayLoginStat, error) {
+	defer telemetry.Step("repository.LoginEventRepository.dayStats")()
 	day := `substr(created_at, 1, 10)`
 	if r.db.Dialect() == "postgres" {
 		day = `to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`

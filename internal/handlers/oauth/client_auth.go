@@ -4,10 +4,12 @@ import (
 	"net/http"
 
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
 func presentedClient(r *http.Request) (string, string) {
+	defer telemetry.Step("oauth.presentedClient")()
 	id, secret, ok := r.BasicAuth()
 	if ok {
 		return id, secret
@@ -20,6 +22,7 @@ func presentedClient(r *http.Request) (string, string) {
 // matchID is set when client was loaded from a stored grant, not from the presented id.
 // The result is empty on success, or mismatch, missing_secret, or bad_secret.
 func authenticateClient(client *models.Client, presentedID, presentedSecret string, matchID bool) string {
+	defer telemetry.Step("oauth.authenticateClient")()
 	if client == nil {
 		return "bad_secret"
 	}
@@ -40,6 +43,7 @@ func authenticateClient(client *models.Client, presentedID, presentedSecret stri
 
 // tokenCaller authenticates the client at the token, revocation, and exchange endpoints.
 func (h *Handler) tokenCaller(w http.ResponseWriter, r *http.Request) (*models.Client, bool) {
+	defer telemetry.Step("oauth.Handler.tokenCaller")()
 	clientID, clientSecret := presentedClient(r)
 	if clientID == "" {
 		writeTokenError(w, http.StatusBadRequest, "invalid_client", "Client authentication required")

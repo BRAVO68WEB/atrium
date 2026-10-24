@@ -7,6 +7,7 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/database"
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // ErrCodeUsed is returned when an authorization code was already consumed.
@@ -17,10 +18,12 @@ type AuthCodeRepository struct {
 }
 
 func NewAuthCodeRepository(db database.SQL) *AuthCodeRepository {
+	defer telemetry.Step("repository.NewAuthCodeRepository")()
 	return &AuthCodeRepository{db: db}
 }
 
 func (r *AuthCodeRepository) Save(code *models.AuthorizationCode) error {
+	defer telemetry.Step("repository.AuthCodeRepository.Save")()
 	scopes, _ := json.Marshal(code.Scopes)
 	query := `INSERT INTO authorization_codes (code, client_id, user_id, redirect_uri, scopes, resource, nonce,
 		code_challenge, code_challenge_method, family_id, session_id, auth_time, expires_at, used, org_id, requested_actor)
@@ -41,6 +44,7 @@ func (r *AuthCodeRepository) Save(code *models.AuthorizationCode) error {
 }
 
 func (r *AuthCodeRepository) Get(code string) (*models.AuthorizationCode, error) {
+	defer telemetry.Step("repository.AuthCodeRepository.Get")()
 	query := `SELECT code, client_id, user_id, redirect_uri, scopes, resource, nonce,
 		code_challenge, code_challenge_method, COALESCE(family_id, ''), COALESCE(session_id, ''), auth_time, expires_at, used, COALESCE(org_id, ''), COALESCE(requested_actor, '')
 		FROM authorization_codes WHERE code = ?`
@@ -80,6 +84,7 @@ func (r *AuthCodeRepository) Get(code string) (*models.AuthorizationCode, error)
 }
 
 func (r *AuthCodeRepository) MarkUsed(code string) error {
+	defer telemetry.Step("repository.AuthCodeRepository.MarkUsed")()
 	res, err := r.db.Exec("UPDATE authorization_codes SET used = 1 WHERE code = ? AND used = 0", code)
 	if err != nil {
 		return err

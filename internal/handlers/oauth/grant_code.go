@@ -9,10 +9,12 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/oidc"
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
 func (h *Handler) handleAuthorizationCodeToken(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.handleAuthorizationCodeToken")()
 	code := r.Form.Get("code")
 	redirectURI := r.Form.Get("redirect_uri")
 	codeVerifier := r.Form.Get("code_verifier")

@@ -1,10 +1,14 @@
 package service
 
-import "github.com/bravo68web/oauth-impl/pkg/crypto"
+import (
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/oauth-impl/pkg/crypto"
+)
 
 const ManagementScope = "management"
 
 func StripManagement(scopes []string) []string {
+	defer telemetry.Step("service.StripManagement")()
 	if len(scopes) == 0 {
 		return scopes
 	}
@@ -18,6 +22,7 @@ func StripManagement(scopes []string) []string {
 }
 
 func HasScope(scopes []string, want string) bool {
+	defer telemetry.Step("service.HasScope")()
 	for _, s := range scopes {
 		if s == want {
 			return true
@@ -27,6 +32,7 @@ func HasScope(scopes []string, want string) bool {
 }
 
 func HasGrant(grants []string, want string) bool {
+	defer telemetry.Step("service.HasGrant")()
 	for _, g := range grants {
 		if g == want {
 			return true
@@ -36,6 +42,7 @@ func HasGrant(grants []string, want string) bool {
 }
 
 func AllowedScopes(requested string, clientScopes []string) ([]string, error) {
+	defer telemetry.Step("service.AllowedScopes")()
 	scopes := crypto.NormalizeScopes(requested)
 	if len(scopes) == 0 {
 		out := make([]string, len(clientScopes))
@@ -59,5 +66,6 @@ type scopeError string
 func (e scopeError) Error() string { return string(e) }
 
 func errInvalidScope(scope string) error {
+	defer telemetry.Step("service.errInvalidScope")()
 	return scopeError("scope " + scope + " is not allowed for this client")
 }

@@ -10,10 +10,12 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/oidc"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/pkg/crypto"
 )
 
 func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.handlePasswordToken")()
 	clientID, clientSecret := presentedClient(r)
 
 	if clientID == "" {

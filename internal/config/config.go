@@ -27,6 +27,7 @@ type Config struct {
 	Social       SocialConfig       `yaml:"social"`
 	Registration RegistrationConfig `yaml:"registration"`
 	Telemetry    TelemetryConfig    `yaml:"telemetry"`
+	Log          LogConfig          `yaml:"log"`
 	Org          OrgConfig          `yaml:"org"`
 	Push         PushConfig         `yaml:"push"`
 	AAuth        AAuthConfig        `yaml:"aauth"`
@@ -69,6 +70,12 @@ type AAuthConfig struct {
 type OrgConfig struct {
 	Enabled                      bool `yaml:"enabled"`
 	EnabledDomainBasedAutolookup bool `yaml:"enabled_domain_based_autolookup"`
+}
+
+// LogConfig selects the process log format. Empty and text print a
+// human line. json prints one JSON object per record.
+type LogConfig struct {
+	Format string `yaml:"format"`
 }
 
 // TelemetryConfig controls OpenTelemetry traces. Enabled is false unless
@@ -815,6 +822,11 @@ func ValidatePlatform(cfg *Config) error {
 	}
 	if (cfg.Cache.Provider == "redis" || cfg.Queue.Type == "redis") && strings.TrimSpace(cfg.Redis.Addr) == "" {
 		return fmt.Errorf("redis.addr is required when cache.provider or queue.type is redis")
+	}
+	switch strings.ToLower(strings.TrimSpace(cfg.Log.Format)) {
+	case "", "text", "json":
+	default:
+		return fmt.Errorf("log.format must be text or json")
 	}
 	if cfg.Telemetry.Enabled {
 		if strings.TrimSpace(cfg.Telemetry.OTLPEndpoint) == "" {

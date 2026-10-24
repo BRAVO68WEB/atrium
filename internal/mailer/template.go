@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // Data is the only value a mail template can read.
@@ -39,6 +41,7 @@ var builtinMail = map[string]string{
 // Load reads templates_dir. An empty directory uses built-in text.
 // A file that does not parse is an error. A missing file stays built-in.
 func Load(dir string) (*Templates, error) {
+	defer telemetry.Step("mailer.Load")()
 	set := &Templates{parsed: map[string]*template.Template{}}
 	dir = strings.TrimSpace(dir)
 	if dir == "" {
@@ -71,6 +74,7 @@ func Load(dir string) (*Templates, error) {
 
 // Render returns the subject and body for name.
 func Render(set *Templates, name string, data Data) (string, string, error) {
+	defer telemetry.Step("mailer.Render")()
 	source := builtinMail[name]
 	if source == "" {
 		return "", "", fmt.Errorf("unknown email template %s", name)
@@ -98,6 +102,7 @@ func Render(set *Templates, name string, data Data) (string, string, error) {
 }
 
 func parseMail(name, source string) (*template.Template, error) {
+	defer telemetry.Step("mailer.parseMail")()
 	line, _, ok := strings.Cut(source, "\n")
 	if !ok || !strings.HasPrefix(line, "Subject: ") {
 		return nil, fmt.Errorf("first line must start with Subject")

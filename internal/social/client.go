@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 const maxBody = 1 << 20
@@ -46,6 +48,7 @@ type discovery struct {
 
 // NewClient returns a client that times out at 10 seconds and does not follow redirects.
 func NewClient(httpClient *http.Client) *Client {
+	defer telemetry.Step("social.NewClient")()
 	if httpClient == nil {
 		httpClient = &http.Client{
 			Timeout: 10 * time.Second,
@@ -59,6 +62,7 @@ func NewClient(httpClient *http.Client) *Client {
 
 // Prepare fills discovery endpoints onto p.
 func (c *Client) Prepare(ctx context.Context, p Resolved) (Resolved, error) {
+	defer telemetry.Step("social.Client.Prepare")()
 	if !p.Discover {
 		return p, nil
 	}
@@ -84,6 +88,7 @@ func (c *Client) Prepare(ctx context.Context, p Resolved) (Resolved, error) {
 
 // Exchange trades an authorization code for tokens. Upstream tokens are not stored by the caller.
 func (c *Client) Exchange(ctx context.Context, p Resolved, redirectURI, code, verifier string) (tokenResult, error) {
+	defer telemetry.Step("social.Client.Exchange")()
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
@@ -121,6 +126,7 @@ func (c *Client) Exchange(ctx context.Context, p Resolved, redirectURI, code, ve
 
 // Profile loads the upstream account. ID tokens are verified when the provider uses them.
 func (c *Client) Profile(ctx context.Context, p Resolved, redirectURI string, tok tokenResult, nonce string) (Profile, error) {
+	defer telemetry.Step("social.Client.Profile")()
 	claims := map[string]any{}
 	if p.UseIDToken {
 		if tok.IDToken == "" {
@@ -189,6 +195,7 @@ func (c *Client) Profile(ctx context.Context, p Resolved, redirectURI string, to
 }
 
 func (c *Client) discovery(ctx context.Context, issuer string) (discovery, error) {
+	defer telemetry.Step("social.Client.discovery")()
 	issuer = strings.TrimRight(issuer, "/")
 	c.mu.Lock()
 	if doc, ok := c.docs[issuer]; ok {
@@ -220,6 +227,7 @@ func (c *Client) discovery(ctx context.Context, issuer string) (discovery, error
 }
 
 func (c *Client) userinfo(ctx context.Context, endpoint, accessToken string) (map[string]any, error) {
+	defer telemetry.Step("social.Client.userinfo")()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -241,6 +249,7 @@ func (c *Client) userinfo(ctx context.Context, endpoint, accessToken string) (ma
 }
 
 func (c *Client) githubEmail(ctx context.Context, endpoint, accessToken string) (string, bool) {
+	defer telemetry.Step("social.Client.githubEmail")()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return "", false
@@ -273,6 +282,7 @@ func (c *Client) githubEmail(ctx context.Context, endpoint, accessToken string) 
 }
 
 func (c *Client) do(req *http.Request) ([]byte, error) {
+	defer telemetry.Step("social.Client.do")()
 	res, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err
@@ -292,6 +302,7 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 }
 
 func stringClaim(claims map[string]any, field string) string {
+	defer telemetry.Step("social.stringClaim")()
 	if field == "" || claims == nil {
 		return ""
 	}
@@ -308,6 +319,7 @@ func stringClaim(claims map[string]any, field string) string {
 }
 
 func boolClaim(claims map[string]any, field string) bool {
+	defer telemetry.Step("social.boolClaim")()
 	v, ok := claims[field]
 	if !ok {
 		return false
@@ -317,6 +329,7 @@ func boolClaim(claims map[string]any, field string) bool {
 }
 
 func splitName(name string) (string, string) {
+	defer telemetry.Step("social.splitName")()
 	parts := strings.Fields(strings.TrimSpace(name))
 	if len(parts) == 0 {
 		return "", ""

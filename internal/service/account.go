@@ -13,6 +13,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/mailer"
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 var (
@@ -52,6 +53,7 @@ func NewAccountService(
 	logout *LogoutService,
 	cfg *config.Config,
 ) *AccountService {
+	defer telemetry.Step("service.NewAccountService")()
 	if mail == nil {
 		mail = mailer.Nop{}
 	}
@@ -82,18 +84,21 @@ func NewAccountService(
 }
 
 func (a *AccountService) SetTemplates(t *mailer.Templates) {
+	defer telemetry.Step("service.AccountService.SetTemplates")()
 	if a != nil {
 		a.templates = t
 	}
 }
 
 func (a *AccountService) SetWebhooks(d *WebhookDispatcher) {
+	defer telemetry.Step("service.AccountService.SetWebhooks")()
 	if a != nil {
 		a.hooks = d
 	}
 }
 
 func (a *AccountService) EmitRegistered(user *models.User, source, provider string) {
+	defer telemetry.Step("service.AccountService.EmitRegistered")()
 	if a == nil || user == nil {
 		return
 	}
@@ -108,6 +113,7 @@ func (a *AccountService) EmitRegistered(user *models.User, source, provider stri
 }
 
 func (a *AccountService) emit(event string, data map[string]any) {
+	defer telemetry.Step("service.AccountService.emit")()
 	if a == nil || a.hooks == nil {
 		return
 	}
@@ -115,10 +121,12 @@ func (a *AccountService) emit(event string, data map[string]any) {
 }
 
 func (a *AccountService) RegistrationDisabled() bool {
+	defer telemetry.Step("service.AccountService.RegistrationDisabled")()
 	return a != nil && a.registrationDisabled
 }
 
 func (a *AccountService) Register(username, password, email, phone string) (*models.User, error) {
+	defer telemetry.Step("service.AccountService.Register")()
 	if a.RegistrationDisabled() {
 		return nil, ErrRegistrationDisabled
 	}
@@ -141,6 +149,7 @@ func (a *AccountService) Register(username, password, email, phone string) (*mod
 }
 
 func (a *AccountService) Forgot(identifier, ip string) error {
+	defer telemetry.Step("service.AccountService.Forgot")()
 	if !a.lim.allow("forgot-ip:"+ip, 20, time.Hour) {
 		return ErrRateLimited
 	}
@@ -175,6 +184,7 @@ func (a *AccountService) Forgot(identifier, ip string) error {
 }
 
 func (a *AccountService) Reset(token, password, ip string) error {
+	defer telemetry.Step("service.AccountService.Reset")()
 	if !a.lim.allow("reset-ip:"+ip, 10, time.Hour) {
 		return ErrRateLimited
 	}
@@ -195,6 +205,7 @@ func (a *AccountService) Reset(token, password, ip string) error {
 }
 
 func (a *AccountService) Verify(token string) error {
+	defer telemetry.Step("service.AccountService.Verify")()
 	userID, err := a.emails.Consume(token, "verify")
 	if err != nil {
 		return ErrBadToken
@@ -214,6 +225,7 @@ func (a *AccountService) Verify(token string) error {
 }
 
 func (a *AccountService) SendVerification(user *models.User) error {
+	defer telemetry.Step("service.AccountService.SendVerification")()
 	if !a.mail.Enabled() {
 		return mailer.ErrDisabled
 	}
@@ -224,6 +236,7 @@ func (a *AccountService) SendVerification(user *models.User) error {
 }
 
 func (a *AccountService) ChangePassword(userID, current, next, keepAccess, keepSID string) error {
+	defer telemetry.Step("service.AccountService.ChangePassword")()
 	if err := a.users.ChangePassword(userID, current, next); err != nil {
 		return err
 	}
@@ -237,6 +250,7 @@ func (a *AccountService) ChangePassword(userID, current, next, keepAccess, keepS
 }
 
 func (a *AccountService) AdminSetPassword(userID, password string) error {
+	defer telemetry.Step("service.AccountService.AdminSetPassword")()
 	if err := a.users.SetPassword(userID, password); err != nil {
 		return err
 	}
@@ -250,6 +264,7 @@ func (a *AccountService) AdminSetPassword(userID, password string) error {
 }
 
 func (a *AccountService) SetDisabled(user *models.User, disabled bool) error {
+	defer telemetry.Step("service.AccountService.SetDisabled")()
 	user.Disabled = disabled
 	if err := a.userRepo.UpdateProfile(user); err != nil {
 		return err
@@ -272,6 +287,7 @@ func (a *AccountService) SetDisabled(user *models.User, disabled bool) error {
 }
 
 func (a *AccountService) RevokeSession(userID, sid string) error {
+	defer telemetry.Step("service.AccountService.RevokeSession")()
 	sess, err := a.sessions.GetAny(sid)
 	if err != nil || sess.UserID != userID {
 		return sql.ErrNoRows
@@ -281,6 +297,7 @@ func (a *AccountService) RevokeSession(userID, sid string) error {
 }
 
 func (a *AccountService) Record(user *models.User, r *http.Request, success, mfa bool) {
+	defer telemetry.Step("service.AccountService.Record")()
 	if a == nil || user == nil {
 		return
 	}
@@ -323,10 +340,12 @@ func (a *AccountService) Record(user *models.User, r *http.Request, success, mfa
 }
 
 func (a *AccountService) Activity(userID string, limit int) ([]*models.LoginEvent, error) {
+	defer telemetry.Step("service.AccountService.Activity")()
 	return a.logins.ListByUser(userID, limit)
 }
 
 func (a *AccountService) LoginAnalytics(userID string, window time.Duration) (*models.LoginAnalytics, error) {
+	defer telemetry.Step("service.AccountService.LoginAnalytics")()
 	if window <= 0 {
 		window = 30 * 24 * time.Hour
 	}
@@ -342,6 +361,7 @@ func (a *AccountService) LoginAnalytics(userID string, window time.Duration) (*m
 }
 
 func (a *AccountService) RequestIP(r *http.Request) string {
+	defer telemetry.Step("service.AccountService.RequestIP")()
 	if a == nil {
 		return ClientIP(r, nil)
 	}
@@ -349,6 +369,7 @@ func (a *AccountService) RequestIP(r *http.Request) string {
 }
 
 func (a *AccountService) afterCredentialChange(userID, keepAccess, keepSID string) {
+	defer telemetry.Step("service.AccountService.afterCredentialChange")()
 	_ = a.tokens.RevokeOtherFamilies(userID, keepAccess)
 	sids, err := a.sessions.RevokeAllExcept(userID, keepSID)
 	if err != nil {
@@ -364,6 +385,7 @@ func (a *AccountService) afterCredentialChange(userID, keepAccess, keepSID strin
 }
 
 func (a *AccountService) findUser(identifier string) *models.User {
+	defer telemetry.Step("service.AccountService.findUser")()
 	if a == nil || a.users == nil || identifier == "" {
 		return nil
 	}
@@ -375,6 +397,7 @@ func (a *AccountService) findUser(identifier string) *models.User {
 }
 
 func (a *AccountService) sendVerify(user *models.User) error {
+	defer telemetry.Step("service.AccountService.sendVerify")()
 	if !a.mail.Enabled() || user.Email == "" {
 		return nil
 	}
@@ -391,6 +414,7 @@ func (a *AccountService) sendVerify(user *models.User) error {
 }
 
 func (a *AccountService) sendPasswordChanged(user *models.User) {
+	defer telemetry.Step("service.AccountService.sendPasswordChanged")()
 	if !a.mail.Enabled() || user == nil || user.Email == "" {
 		return
 	}
@@ -400,6 +424,7 @@ func (a *AccountService) sendPasswordChanged(user *models.User) {
 }
 
 func (a *AccountService) maybeLoginMail(user *models.User, ev *models.LoginEvent) {
+	defer telemetry.Step("service.AccountService.maybeLoginMail")()
 	if !a.mail.Enabled() || user.Email == "" {
 		return
 	}
@@ -418,6 +443,7 @@ func (a *AccountService) maybeLoginMail(user *models.User, ev *models.LoginEvent
 }
 
 func (a *AccountService) maybeFailMail(user *models.User, ev *models.LoginEvent) {
+	defer telemetry.Step("service.AccountService.maybeFailMail")()
 	n, err := a.logins.CountFailuresSince(user.ID, time.Now().Add(-15*time.Minute))
 	if err != nil || n < 5 {
 		return
@@ -444,6 +470,7 @@ func (a *AccountService) maybeFailMail(user *models.User, ev *models.LoginEvent)
 }
 
 func (a *AccountService) storedIP(userID string) (string, error) {
+	defer telemetry.Step("service.AccountService.storedIP")()
 	if a == nil || a.logins == nil || userID == "" {
 		return "", nil
 	}
@@ -451,6 +478,7 @@ func (a *AccountService) storedIP(userID string) (string, error) {
 }
 
 func (a *AccountService) sendMail(user *models.User, name string, data mailer.Data) error {
+	defer telemetry.Step("service.AccountService.sendMail")()
 	if a == nil || a.mail == nil || user == nil || user.ID == "" || a.userRepo == nil {
 		return nil
 	}
@@ -479,6 +507,7 @@ func (a *AccountService) sendMail(user *models.User, name string, data mailer.Da
 }
 
 func (a *AccountService) markMail(key string, window time.Duration) bool {
+	defer telemetry.Step("service.AccountService.markMail")()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if last, ok := a.lastMail[key]; ok && time.Since(last) < window {
@@ -494,10 +523,12 @@ type rateLimiter struct {
 }
 
 func newRateLimiter() *rateLimiter {
+	defer telemetry.Step("service.newRateLimiter")()
 	return &rateLimiter{hits: map[string][]time.Time{}}
 }
 
 func (l *rateLimiter) allow(key string, max int, window time.Duration) bool {
+	defer telemetry.Step("service.rateLimiter.allow")()
 	now := time.Now()
 	l.mu.Lock()
 	defer l.mu.Unlock()

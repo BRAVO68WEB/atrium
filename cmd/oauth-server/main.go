@@ -8,7 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,6 +19,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/cache"
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/database"
+	"github.com/bravo68web/oauth-impl/internal/log"
 	"github.com/bravo68web/oauth-impl/internal/queue"
 	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/bravo68web/oauth-impl/internal/version"
@@ -33,7 +34,7 @@ func loadRuntimeConfig(flagPath string) (*config.Config, error) {
 		case err == nil:
 			path = "config.yaml"
 		case os.IsNotExist(err):
-			log.Println("No config file found; using built-in defaults")
+			log.Info("no config file found; using built-in defaults")
 			return config.DefaultConfig(), nil
 		default:
 			return nil, fmt.Errorf("stat config.yaml: %w", err)
@@ -44,7 +45,8 @@ func loadRuntimeConfig(flagPath string) (*config.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Loaded config from %s", path)
+	log.Setup(cfg.Log.Format)
+	log.Info("loaded config", "path", path)
 	return cfg, nil
 }
 
@@ -91,19 +93,19 @@ func main() {
 
 	cfg, err := loadRuntimeConfig(opt.configPath)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Fatal("failed to load config", "err", err)
 	}
 
 	cfg.Normalize()
 	shutdownTrace, err := telemetry.Setup(context.Background(), &cfg.Telemetry)
 	if err != nil {
-		log.Fatalf("telemetry: %v", err)
+		log.Fatal("telemetry", "err", err)
 	}
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), telemetry.ShutdownTimeout)
 		defer cancel()
 		if err := shutdownTrace(ctx); err != nil {
-			log.Printf("telemetry shutdown: %v", err)
+			log.Error("telemetry shutdown", "err", err)
 		}
 	}()
 
@@ -115,28 +117,28 @@ func main() {
 	}
 
 	if err := os.MkdirAll(".", 0755); err != nil {
-		log.Fatalf("Failed to create directories: %v", err)
+		log.Fatal("failed to create directories", "err", err)
 	}
 
 	// Database
 	db, err := database.Open(cfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		log.Fatal("failed to initialize database", "err", err)
 	}
 	defer func() { _ = db.Close() }()
 
 	if cfg.Database.Migrations {
 		if err := db.Migrate(); err != nil {
-			log.Fatalf("Failed to run migrations: %v", err)
+			log.Fatal("failed to run migrations", "err", err)
 		}
-		log.Println("Database migrations completed")
+		log.Info("database migrations completed")
 	}
 
 	var rdb *redis.Client
 	if cfg.Queue.Type == "redis" {
 		rdb, err = cache.NewClient(cfg.Redis)
 		if err != nil {
-			log.Fatalf("redis: %v", err)
+			log.Fatal("redis", "err", err)
 		}
 		defer func() { _ = rdb.Close() }()
 	}
@@ -147,12 +149,12 @@ func main() {
 	case "redis":
 		q = queue.NewRedis(rdb, cfg.Redis.Prefix, cfg.Queue.MaxPending)
 	default:
-		log.Fatalf("queue.type must be memory or redis")
+		log.Fatal("queue.type must be memory or redis")
 	}
 
 	built, err := app.Build(cfg, db, q)
 	if err != nil {
-		log.Fatalf("server: %v", err)
+		log.Fatal("server", "err", err)
 	}
 	defer built.Close()
 
@@ -172,7 +174,7 @@ func main() {
 	if cfg.Server.TLS.Enabled && cfg.Server.TLS.ClientCA != "" {
 		caCert, err := os.ReadFile(cfg.Server.TLS.ClientCA)
 		if err != nil {
-			log.Fatalf("Failed to read client CA: %v", err)
+			log.Fatal("failed to read client CA", "err", err)
 		}
 		caCertPool := x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(caCert)
@@ -270,14 +272,14 @@ Endpoints:
 
 	// Start server
 	go func() {
-		log.Printf("Starting OAuth server %s on %s://%s:%d", version.Line(), protocol, cfg.Server.Host, cfg.Server.Port)
+		log.Info("starting OAuth server", "version", version.Line(), "url", protocol+"://"+net.JoinHostPort(cfg.Server.Host, fmt.Sprintf("%d", cfg.Server.Port)))
 		if cfg.Server.TLS.Enabled {
 			if err := httpServer.ListenAndServeTLS(cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Server failed: %v", err)
+				log.Fatal("server failed", "err", err)
 			}
 		} else {
 			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Server failed: %v", err)
+				log.Fatal("server failed", "err", err)
 			}
 		}
 	}()
@@ -287,7 +289,7 @@ Endpoints:
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	log.Info("shutting down server")
 	_ = httpServer.Close()
 }
 

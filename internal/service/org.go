@@ -11,6 +11,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/repository"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/google/uuid"
 )
 
@@ -33,14 +34,17 @@ type OrgService struct {
 }
 
 func NewOrgService(repo *repository.OrgRepository, cfg *config.Config) *OrgService {
+	defer telemetry.Step("service.NewOrgService")()
 	return &OrgService{repo: repo, cfg: cfg}
 }
 
 func (s *OrgService) Enabled() bool {
+	defer telemetry.Step("service.OrgService.Enabled")()
 	return s != nil && s.cfg != nil && s.cfg.Org.Enabled
 }
 
 func (s *OrgService) Autolookup() bool {
+	defer telemetry.Step("service.OrgService.Autolookup")()
 	return s.Enabled() && s.cfg.Org.EnabledDomainBasedAutolookup
 }
 
@@ -48,6 +52,7 @@ func (s *OrgService) Autolookup() bool {
 // has no organization. Domain autolookup fills an omitted organization only
 // when that flag is on and the user is already a member of the matching org.
 func (s *OrgService) Resolve(client *models.Client, user *models.User, requested string) (*OrgChoice, error) {
+	defer telemetry.Step("service.OrgService.Resolve")()
 	requested = strings.TrimSpace(requested)
 	if !s.Enabled() {
 		if requested != "" {
@@ -109,10 +114,12 @@ func (s *OrgService) Resolve(client *models.Client, user *models.User, requested
 }
 
 func choice(org *models.Organization) *OrgChoice {
+	defer telemetry.Step("service.choice")()
 	return &OrgChoice{ID: org.ID, Slug: org.Slug, Name: org.Name}
 }
 
 func (s *OrgService) Create(name, slug string, domains []string, logoURL string) (*models.Organization, error) {
+	defer telemetry.Step("service.OrgService.Create")()
 	if !s.Enabled() {
 		return nil, ErrOrgDisabled
 	}
@@ -140,6 +147,7 @@ func (s *OrgService) Create(name, slug string, domains []string, logoURL string)
 }
 
 func normalizeLogoURL(raw string) (string, error) {
+	defer telemetry.Step("service.normalizeLogoURL")()
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return "", nil
@@ -152,6 +160,7 @@ func normalizeLogoURL(raw string) (string, error) {
 }
 
 func (s *OrgService) AddDomain(orgID, domain string) error {
+	defer telemetry.Step("service.OrgService.AddDomain")()
 	if !s.Enabled() {
 		return ErrOrgDisabled
 	}
@@ -170,6 +179,7 @@ func (s *OrgService) AddDomain(orgID, domain string) error {
 }
 
 func (s *OrgService) AddMember(orgID, userID, role string) error {
+	defer telemetry.Step("service.OrgService.AddMember")()
 	if !s.Enabled() {
 		return ErrOrgDisabled
 	}
@@ -193,6 +203,7 @@ func (s *OrgService) AddMember(orgID, userID, role string) error {
 // NeedsChoice reports that the browser must ask which organization to use.
 // A bound client, or a request that already names an organization, does not ask.
 func (s *OrgService) NeedsChoice(client *models.Client, userID, requested string) (bool, error) {
+	defer telemetry.Step("service.OrgService.NeedsChoice")()
 	if !s.Enabled() || strings.TrimSpace(requested) != "" || (client != nil && client.OrgID != "") {
 		return false, nil
 	}
@@ -204,6 +215,7 @@ func (s *OrgService) NeedsChoice(client *models.Client, userID, requested string
 }
 
 func (s *OrgService) ListForUser(userID string) ([]*models.Organization, error) {
+	defer telemetry.Step("service.OrgService.ListForUser")()
 	if !s.Enabled() {
 		return nil, nil
 	}
@@ -211,6 +223,7 @@ func (s *OrgService) ListForUser(userID string) ([]*models.Organization, error) 
 }
 
 func (s *OrgService) List() ([]*models.Organization, error) {
+	defer telemetry.Step("service.OrgService.List")()
 	if !s.Enabled() {
 		return nil, ErrOrgDisabled
 	}
@@ -218,6 +231,7 @@ func (s *OrgService) List() ([]*models.Organization, error) {
 }
 
 func (s *OrgService) Get(idOrSlug string) (*models.Organization, error) {
+	defer telemetry.Step("service.OrgService.Get")()
 	org, err := s.repo.Get(idOrSlug)
 	if err == nil {
 		return org, nil
@@ -227,6 +241,7 @@ func (s *OrgService) Get(idOrSlug string) (*models.Organization, error) {
 
 // EmailDomain returns the host part of an email address.
 func EmailDomain(email string) string {
+	defer telemetry.Step("service.EmailDomain")()
 	email = strings.ToLower(strings.TrimSpace(email))
 	at := strings.LastIndex(email, "@")
 	if at < 0 || at == len(email)-1 {
@@ -237,6 +252,7 @@ func EmailDomain(email string) string {
 
 // NormalizeDomain checks a bare hostname used for organization lookup.
 func NormalizeDomain(domain string) (string, error) {
+	defer telemetry.Step("service.NormalizeDomain")()
 	domain = strings.ToLower(strings.TrimSpace(domain))
 	domain = strings.TrimPrefix(domain, "@")
 	if domain == "" || strings.Contains(domain, " ") || strings.Contains(domain, "/") || strings.Contains(domain, ":") || strings.Contains(domain, "*") {
@@ -255,6 +271,7 @@ func NormalizeDomain(domain string) (string, error) {
 }
 
 func validSlug(slug string) bool {
+	defer telemetry.Step("service.validSlug")()
 	if slug == "" || len(slug) > 64 {
 		return false
 	}

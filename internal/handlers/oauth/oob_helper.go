@@ -6,6 +6,7 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/branding"
 	"github.com/bravo68web/oauth-impl/internal/oobcode"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // HandleOOBHelper serves the combined-code page from
@@ -13,6 +14,7 @@ import (
 // is true. The authorization server still redirects here like any other
 // registered redirect URI.
 func (h *Handler) HandleOOBHelper(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("oauth.Handler.HandleOOBHelper")()
 	if h == nil || h.cfg == nil || !h.cfg.Security.OOBHelper {
 		http.NotFound(w, r)
 		return
@@ -37,6 +39,7 @@ func (h *Handler) HandleOOBHelper(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) renderCombinedCode(w http.ResponseWriter, combined, state, oauthError, description string) {
+	defer telemetry.Step("oauth.Handler.renderCombinedCode")()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")

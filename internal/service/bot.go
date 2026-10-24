@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/bravo68web/oauth-impl/internal/config"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 const (
@@ -22,6 +23,7 @@ var BotPoster func(ctx context.Context, provider, secret, token, remoteIP string
 // VerifyBot checks a bot_token. An empty provider skips the check.
 // A configured provider with a missing or rejected token fails closed.
 func VerifyBot(ctx context.Context, bot config.BotProtectionConfig, token, remoteIP string) error {
+	defer telemetry.Step("service.VerifyBot")()
 	if bot.Provider == "" {
 		return nil
 	}

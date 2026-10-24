@@ -110,12 +110,25 @@ still succeeds when a send fails.
 
 Message text is in [Configuration](CONFIG.md).
 
-## Traces
+## Logs and traces
+
+Each request writes one log record. The fields are `method`, `route`,
+`status`, `duration_ms`, `client_id`, `grant_type`, `org_id`,
+`oauth.error`, `trace_id`, and `span_id`. `route` is the path pattern,
+so `/api/users/{userID}` stays one series. `trace_id` and `span_id` are
+empty while tracing is off. `log.format` is `text` or `json`.
 
 Traces stay off unless `telemetry.enabled` is true. The server then
 exports OTLP over HTTP to `telemetry.otlp_endpoint`. Enabling traces
-with an empty endpoint is a startup error. Spans omit tokens, codes,
-secrets, and `Authorization`.
+with an empty endpoint is a startup error. The trace for one request
+starts at the HTTP span. Each handler and helper on that goroutine is a
+child span, and each query is a child of the function that ran it. The
+query span keeps the SQL text with placeholders. Argument values and
+quoted literals are not attributes. A client fetch is an `http.client`
+span with the host and the status code, not the query string. Spans
+omit tokens, codes, secrets, and `Authorization`. Copy `trace_id` from
+the log into your tracing UI to see the path, the functions, and the
+time spent in each.
 
 ## Release
 

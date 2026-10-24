@@ -3,10 +3,13 @@ package oidc
 import (
 	"log"
 	"time"
+
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 // StartRotation retires signing keys on a fixed interval. A zero interval does nothing.
 func StartRotation(ks *KeySet, interval, retain time.Duration) {
+	defer telemetry.Step("oidc.StartRotation")()
 	if ks == nil || interval <= 0 {
 		return
 	}

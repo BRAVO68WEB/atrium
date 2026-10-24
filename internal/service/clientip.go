@@ -5,9 +5,12 @@ import (
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 func ValidateTrustedProxies(values []string) error {
+	defer telemetry.Step("service.ValidateTrustedProxies")()
 	for _, value := range values {
 		if _, _, err := net.ParseCIDR(strings.TrimSpace(value)); err != nil {
 			return fmt.Errorf("trusted proxy %q is not a CIDR", value)
@@ -17,6 +20,7 @@ func ValidateTrustedProxies(values []string) error {
 }
 
 func ClientIP(r *http.Request, trusted []string) string {
+	defer telemetry.Step("service.ClientIP")()
 	if r == nil {
 		return ""
 	}
@@ -44,6 +48,7 @@ func ClientIP(r *http.Request, trusted []string) string {
 }
 
 func canonicalIP(value string) string {
+	defer telemetry.Step("service.canonicalIP")()
 	parsed := net.ParseIP(hostOnly(value))
 	if parsed == nil {
 		return ""
@@ -55,6 +60,7 @@ func canonicalIP(value string) string {
 }
 
 func trustedNets(values []string) []*net.IPNet {
+	defer telemetry.Step("service.trustedNets")()
 	out := make([]*net.IPNet, 0, len(values))
 	for _, value := range values {
 		_, network, err := net.ParseCIDR(strings.TrimSpace(value))
@@ -66,6 +72,7 @@ func trustedNets(values []string) []*net.IPNet {
 }
 
 func ipInNets(ip string, nets []*net.IPNet) bool {
+	defer telemetry.Step("service.ipInNets")()
 	parsed := net.ParseIP(ip)
 	if parsed == nil {
 		return false
@@ -79,6 +86,7 @@ func ipInNets(ip string, nets []*net.IPNet) bool {
 }
 
 func hostOnly(value string) string {
+	defer telemetry.Step("service.hostOnly")()
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return ""

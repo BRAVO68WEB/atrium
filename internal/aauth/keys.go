@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/bravo68web/oauth-impl/internal/database"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 type signingKey struct {
@@ -21,6 +22,7 @@ type signingKey struct {
 }
 
 func loadOrCreateKey(db database.SQL) (signingKey, error) {
+	defer telemetry.Step("aauth.loadOrCreateKey")()
 	if db == nil {
 		return generateKey(nil)
 	}
@@ -40,6 +42,7 @@ func loadOrCreateKey(db database.SQL) (signingKey, error) {
 }
 
 func generateKey(db database.SQL) (signingKey, error) {
+	defer telemetry.Step("aauth.generateKey")()
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return signingKey{}, err
@@ -65,6 +68,7 @@ func generateKey(db database.SQL) (signingKey, error) {
 }
 
 func parseEd25519(text string) (ed25519.PrivateKey, error) {
+	defer telemetry.Step("aauth.parseEd25519")()
 	block, _ := pem.Decode([]byte(text))
 	if block == nil {
 		return nil, fmt.Errorf("invalid ed25519 private key")
@@ -81,6 +85,7 @@ func parseEd25519(text string) (ed25519.PrivateKey, error) {
 }
 
 func publicB64(key ed25519.PrivateKey) string {
+	defer telemetry.Step("aauth.publicB64")()
 	pub := key.Public().(ed25519.PublicKey)
 	return base64.RawURLEncoding.EncodeToString(pub)
 }

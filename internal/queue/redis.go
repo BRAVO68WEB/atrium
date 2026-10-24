@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -48,6 +49,7 @@ type RedisQueue struct {
 }
 
 func NewRedis(rdb *redis.Client, prefix string, maxPending int) *RedisQueue {
+	defer telemetry.Step("queue.NewRedis")()
 	prefix = strings.Trim(strings.TrimSpace(prefix), ":")
 	if prefix == "" {
 		prefix = "oauth"
@@ -56,10 +58,12 @@ func NewRedis(rdb *redis.Client, prefix string, maxPending int) *RedisQueue {
 }
 
 func (q *RedisQueue) itemKey(id string) string {
+	defer telemetry.Step("queue.RedisQueue.itemKey")()
 	return q.prefix + ":q:" + id
 }
 
 func (q *RedisQueue) expKey() string {
+	defer telemetry.Step("queue.RedisQueue.expKey")()
 	return q.prefix + ":q:exp"
 }
 
@@ -80,6 +84,7 @@ type queueRecord struct {
 }
 
 func recordFrom(req *AuthRequest) queueRecord {
+	defer telemetry.Step("queue.recordFrom")()
 	return queueRecord{
 		ID: req.ID, Type: req.Type, ClientID: req.ClientID, UserID: req.UserID,
 		BindingMessage: req.BindingMessage, UserCode: req.UserCode, Status: req.Status,
@@ -90,6 +95,7 @@ func recordFrom(req *AuthRequest) queueRecord {
 }
 
 func (rec queueRecord) request() *AuthRequest {
+	defer telemetry.Step("queue.queueRecord.request")()
 	return &AuthRequest{
 		ID: rec.ID, Type: rec.Type, ClientID: rec.ClientID, UserID: rec.UserID,
 		BindingMessage: rec.BindingMessage, UserCode: rec.UserCode, Status: rec.Status,
@@ -100,6 +106,7 @@ func (rec queueRecord) request() *AuthRequest {
 }
 
 func (q *RedisQueue) Enqueue(req *AuthRequest) error {
+	defer telemetry.Step("queue.RedisQueue.Enqueue")()
 	if req == nil || req.ID == "" {
 		return fmt.Errorf("request id is required")
 	}
@@ -131,6 +138,7 @@ func (q *RedisQueue) Enqueue(req *AuthRequest) error {
 }
 
 func (q *RedisQueue) load(ctx context.Context, id string) (*AuthRequest, error) {
+	defer telemetry.Step("queue.RedisQueue.load")()
 	raw, err := q.rdb.Get(ctx, q.itemKey(id)).Bytes()
 	if err == redis.Nil {
 		_ = q.rdb.ZRem(ctx, q.expKey(), id).Err()
@@ -147,10 +155,12 @@ func (q *RedisQueue) load(ctx context.Context, id string) (*AuthRequest, error) 
 }
 
 func (q *RedisQueue) GetByID(id string) (*AuthRequest, error) {
+	defer telemetry.Step("queue.RedisQueue.GetByID")()
 	return q.load(context.Background(), id)
 }
 
 func (q *RedisQueue) Dequeue() (*AuthRequest, error) {
+	defer telemetry.Step("queue.RedisQueue.Dequeue")()
 	pending, err := q.GetPending()
 	if err != nil {
 		return nil, err
@@ -162,6 +172,7 @@ func (q *RedisQueue) Dequeue() (*AuthRequest, error) {
 }
 
 func (q *RedisQueue) GetPending() ([]*AuthRequest, error) {
+	defer telemetry.Step("queue.RedisQueue.GetPending")()
 	ctx := context.Background()
 	now := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	ids, err := q.rdb.ZRangeArgs(ctx, redis.ZRangeArgs{
@@ -184,6 +195,7 @@ func (q *RedisQueue) GetPending() ([]*AuthRequest, error) {
 }
 
 func (q *RedisQueue) Approve(id string, userID string) error {
+	defer telemetry.Step("queue.RedisQueue.Approve")()
 	return q.transition(id, func(req *AuthRequest) error {
 		req.Status = StatusApproved
 		req.UserID = userID
@@ -192,6 +204,7 @@ func (q *RedisQueue) Approve(id string, userID string) error {
 }
 
 func (q *RedisQueue) Deny(id string, reason string) error {
+	defer telemetry.Step("queue.RedisQueue.Deny")()
 	return q.transition(id, func(req *AuthRequest) error {
 		req.Status = StatusDenied
 		req.DenialReason = reason
@@ -200,6 +213,7 @@ func (q *RedisQueue) Deny(id string, reason string) error {
 }
 
 func (q *RedisQueue) transition(id string, mutate func(*AuthRequest) error) error {
+	defer telemetry.Step("queue.RedisQueue.transition")()
 	ctx := context.Background()
 	req, err := q.load(ctx, id)
 	if err != nil {
@@ -237,6 +251,7 @@ func (q *RedisQueue) transition(id string, mutate func(*AuthRequest) error) erro
 }
 
 func (q *RedisQueue) Count() int {
+	defer telemetry.Step("queue.RedisQueue.Count")()
 	pending, err := q.GetPending()
 	if err != nil {
 		return 0
@@ -245,6 +260,7 @@ func (q *RedisQueue) Count() int {
 }
 
 func (q *RedisQueue) StartCleanup(ctx context.Context, interval time.Duration) {
+	defer telemetry.Step("queue.RedisQueue.StartCleanup")()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -259,6 +275,7 @@ func (q *RedisQueue) StartCleanup(ctx context.Context, interval time.Duration) {
 }
 
 func (q *RedisQueue) Poll(ctx context.Context, interval time.Duration) <-chan *AuthRequest {
+	defer telemetry.Step("queue.RedisQueue.Poll")()
 	ch := make(chan *AuthRequest)
 	go func() {
 		defer close(ch)

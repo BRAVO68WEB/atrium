@@ -11,11 +11,13 @@ import (
 
 	"github.com/bravo68web/oauth-impl/internal/models"
 	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
 
 const cimdTTL = 5 * time.Minute
 
 func (h *Handler) cimdGet(id string) (*models.Client, bool) {
+	defer telemetry.Step("oauth.Handler.cimdGet")()
 	if h == nil || h.cimd == nil {
 		return nil, false
 	}
@@ -31,6 +33,7 @@ func (h *Handler) cimdGet(id string) (*models.Client, bool) {
 }
 
 func (h *Handler) cimdPut(client *models.Client) {
+	defer telemetry.Step("oauth.Handler.cimdPut")()
 	if h == nil || h.cimd == nil || client == nil {
 		return
 	}
@@ -42,15 +45,19 @@ func (h *Handler) cimdPut(client *models.Client) {
 }
 
 func (h *Handler) SetAudit(a *service.AuditLog) {
+	defer telemetry.Step("oauth.Handler.SetAudit")(
+
+	// resolveClient loads a client for authorize and token requests.
+	// An HTTPS client_id is a Client ID Metadata Document.
+	// A DCR client is unauthorized unless the tenant and the row both allow it.
+	)
 	if h != nil {
 		h.audit = a
 	}
 }
 
-// resolveClient loads a client for authorize and token requests.
-// An HTTPS client_id is a Client ID Metadata Document.
-// A DCR client is unauthorized unless the tenant and the row both allow it.
 func (h *Handler) resolveClient(clientID, redirectURI string) (*models.Client, string, string) {
+	defer telemetry.Step("oauth.Handler.resolveClient")()
 	if clientID == "" {
 		return nil, "invalid_client", "Client not found"
 	}
@@ -68,6 +75,7 @@ func (h *Handler) resolveClient(clientID, redirectURI string) (*models.Client, s
 }
 
 func (h *Handler) gateDCR(client *models.Client) (string, string) {
+	defer telemetry.Step("oauth.Handler.gateDCR")()
 	source := client.RegistrationSource
 	if source == "" {
 		source = "management"
@@ -83,11 +91,13 @@ func (h *Handler) gateDCR(client *models.Client) (string, string) {
 }
 
 func isCIMDURL(id string) bool {
+	defer telemetry.Step("oauth.isCIMDURL")()
 	parsed, err := url.Parse(id)
 	return err == nil && parsed.Scheme == "https" && parsed.Host != ""
 }
 
 func (h *Handler) resolveCIMD(clientID, redirectURI string) (*models.Client, string, string) {
+	defer telemetry.Step("oauth.Handler.resolveCIMD")()
 	if h.cfg == nil || !h.cfg.Registration.CIMDEnabled {
 		return nil, "invalid_client", "Client ID metadata documents are disabled"
 	}
@@ -136,6 +146,7 @@ func (h *Handler) resolveCIMD(clientID, redirectURI string) (*models.Client, str
 }
 
 func (h *Handler) requireClient(w http.ResponseWriter, clientID, redirectURI string, missingStatus int) (*models.Client, bool) {
+	defer telemetry.Step("oauth.Handler.requireClient")()
 	client, code, desc := h.resolveClient(clientID, redirectURI)
 	if code == "" {
 		return client, true

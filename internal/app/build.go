@@ -4,7 +4,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -22,6 +21,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/database"
 	"github.com/bravo68web/oauth-impl/internal/handlers/oauth"
 	"github.com/bravo68web/oauth-impl/internal/hashalgo"
+	"github.com/bravo68web/oauth-impl/internal/log"
 	"github.com/bravo68web/oauth-impl/internal/mailer"
 	"github.com/bravo68web/oauth-impl/internal/oidc"
 	"github.com/bravo68web/oauth-impl/internal/push"
@@ -87,7 +87,7 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("password hasher: %s (%s)", hasher.ID(), hashalgo.CanonicalRel)
+	log.Info("password hasher", "id", hasher.ID(), "file", hashalgo.CanonicalRel)
 
 	conn := db
 	clientRepo := repository.NewClientRepository(conn)
@@ -150,9 +150,9 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 	mtlsSvc := service.NewMTLSService()
 	if cfg.Server.TLS.CRLFile != "" {
 		if err := mtlsSvc.SetCRLPath(cfg.Server.TLS.CRLFile); err != nil {
-			log.Printf("WARNING: Failed to load CRL: %v", err)
+			log.Warn("failed to load CRL", "err", err)
 		} else {
-			log.Printf("CRL loaded from %s", cfg.Server.TLS.CRLFile)
+			log.Info("CRL loaded", "path", cfg.Server.TLS.CRLFile)
 		}
 	}
 	jarSvc := service.NewJARService(cfg.Security.Issuer)
