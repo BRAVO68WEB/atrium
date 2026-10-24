@@ -79,3 +79,4 @@ oauth-mobile
 !oauth-mobile/
 certs/
 keys/
+data/*
