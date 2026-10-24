@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/url"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -15,6 +16,19 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/database"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
+
+func init() {
+	// go test runs each package as its own process under one parent.
+	// testcontainers derives a single session id from that parent pid, so
+	// every package shares one Ryuk. A package that starts after Ryuk has
+	// exited still finds the stopped container and blocks on the 60s
+	// readiness check. The reaper retry budget is 20s, so that wait is
+	// never tried again, and startOnce keeps the error for every test in
+	// the package. A session id of our own gives this process its own Ryuk.
+	if os.Getenv("TESTCONTAINERS_SESSION_ID") == "" {
+		_ = os.Setenv("TESTCONTAINERS_SESSION_ID", newSessionID())
+	}
+}
 
 // Instance is one Postgres container shared by a process.
 type Instance struct {
@@ -111,6 +125,16 @@ func randomName() (string, error) {
 		return "", err
 	}
 	return "t_" + hex.EncodeToString(buf), nil
+}
+
+// newSessionID returns 64 hex characters, the length testcontainers uses
+// for the reaper container name.
+func newSessionID() string {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		copy(buf, []byte(fmt.Sprintf("%032d", os.Getpid())))
+	}
+	return hex.EncodeToString(buf)
 }
 
 // Open returns a migrated database in its own Postgres database.
