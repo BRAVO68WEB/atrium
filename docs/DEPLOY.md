@@ -96,9 +96,12 @@ cache:
   provider: redis
 ```
 
-`addr` is `host:port` or a `redis://` URL. Users, sessions, tokens,
-consents, and audit stay in SQL. More than one server process shares
-queue and cache state only when those settings are `redis`.
+`addr` is `host:port` or a `redis://` URL. The process opens one
+connection when either the queue or the cache asks for Redis. Users,
+sessions, tokens, consents, and audit stay in SQL. More than one
+server process shares queue and cache state only when those settings
+are `redis`. The key names, and the warning you get when the queue is
+shared and the cache is not, are in [Infrastructure](INFRA.md).
 
 ## SMTP
 

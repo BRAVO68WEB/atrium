@@ -116,7 +116,7 @@ func (m *Middleware) checkDPoP(r *http.Request, tok *models.AccessToken) error {
 		scheme = "https"
 	}
 	fullURI := fmt.Sprintf("%s://%s%s", scheme, r.Host, r.URL.Path)
-	proof, err := m.dpop.ValidateDPoPProof(header, r.Method, fullURI, tok.Token)
+	proof, err := m.dpop.ValidateDPoPProof(r.Context(), header, r.Method, fullURI, tok.Token)
 	if err != nil {
 		return err
 	}

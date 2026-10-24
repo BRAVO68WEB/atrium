@@ -19,7 +19,7 @@ func (h *Handler) handleClientCredentialsToken(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	client, ok := h.requireClient(w, clientID, "", http.StatusUnauthorized)
+	client, ok := h.requireClient(r.Context(), w, clientID, "", http.StatusUnauthorized)
 	if !ok {
 		return
 	}
@@ -78,7 +78,7 @@ func (h *Handler) handleClientCredentialsToken(w http.ResponseWriter, r *http.Re
 	}
 
 	resource := r.Form.Get("resource")
-	accessToken, err := h.issueAccessTokenFor(clientID, "", strings.Join(scopes, " "), tokenType, orgID, orgSlug, resource, "")
+	accessToken, err := h.issueAccessTokenFor(r.Context(), clientID, "", strings.Join(scopes, " "), tokenType, orgID, orgSlug, resource, "")
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
 		return

@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -54,7 +55,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if clientID != "" {
-			client, code, _ := h.resolveClient(clientID, redirectURI)
+			client, code, _ := h.resolveClient(r.Context(), clientID, redirectURI)
 			if code == "" && client != nil && h.jarSvc != nil {
 				claims, err := h.jarSvc.ValidateRequestObject(request, client)
 				if err != nil {
@@ -171,7 +172,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, code, desc := h.resolveClient(clientID, redirectURI)
+	client, code, desc := h.resolveClient(r.Context(), clientID, redirectURI)
 	if code != "" {
 		writeOAuthError(w, http.StatusBadRequest, code, desc, state)
 		return
@@ -350,7 +351,7 @@ func (h *Handler) ApplyRequestObject(params map[string]string) {
 	if h == nil || h.jarSvc == nil || strings.TrimSpace(params["request"]) == "" {
 		return
 	}
-	client, _, _ := h.resolveClient(params["client_id"], params["redirect_uri"])
+	client, _, _ := h.resolveClient(context.Background(), params["client_id"], params["redirect_uri"])
 	if client == nil {
 		return
 	}
@@ -443,7 +444,7 @@ func (h *Handler) issueAuthorizationResponse(w http.ResponseWriter, r *http.Requ
 	}
 
 	if needsToken {
-		accessToken, err = h.issueAccessTokenFor(client.ID, session.UserID, scope, "Bearer", orgID, orgSlug, resource, "")
+		accessToken, err = h.issueAccessTokenFor(r.Context(), client.ID, session.UserID, scope, "Bearer", orgID, orgSlug, resource, "")
 		if err != nil {
 			writeOAuthError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token", state)
 			return
@@ -494,7 +495,7 @@ func (h *Handler) issueAuthorizationResponse(w http.ResponseWriter, r *http.Requ
 	}
 
 	if needsIDToken && hasOpenID && h.oidcHandler != nil {
-		idToken, err = h.oidcHandler.CreateIDToken(client.ID, session.UserID, nonce, scopes, oidc.IDTokenExtra{SID: session.ID, AuthTime: session.AuthTime, OrgID: orgID, OrgSlug: orgSlug})
+		idToken, err = h.oidcHandler.CreateIDToken(r.Context(), client.ID, session.UserID, nonce, scopes, oidc.IDTokenExtra{SID: session.ID, AuthTime: session.AuthTime, OrgID: orgID, OrgSlug: orgSlug})
 		if err != nil {
 			writeOAuthError(w, http.StatusInternalServerError, "server_error", "Failed to create ID token", state)
 			return

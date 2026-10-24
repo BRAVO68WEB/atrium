@@ -20,6 +20,11 @@ type memoryEntry struct {
 	expires time.Time
 }
 
+// memorySweepAt is the map size that triggers a drop of expired keys.
+// DPoP and XAA only call Add, so an expired key stays until that same
+// key is written again. A busy process would keep every proof forever.
+const memorySweepAt = 1024
+
 // MemoryCache is the default cache. A zero TTL does not expire.
 type MemoryCache struct {
 	mu    sync.Mutex
@@ -54,6 +59,7 @@ func (c *MemoryCache) Set(_ context.Context, key string, value []byte, ttl time.
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.items[key] = memoryEntry{value: append([]byte(nil), value...), expires: deadline(ttl)}
+	c.sweepLocked()
 	return nil
 }
 
@@ -68,7 +74,19 @@ func (c *MemoryCache) Add(_ context.Context, key string, value []byte, ttl time.
 		return false, nil
 	}
 	c.items[key] = memoryEntry{value: append([]byte(nil), value...), expires: deadline(ttl)}
+	c.sweepLocked()
 	return true, nil
+}
+
+func (c *MemoryCache) sweepLocked() {
+	if c == nil || len(c.items) <= memorySweepAt {
+		return
+	}
+	for key, entry := range c.items {
+		if expired(entry.expires) {
+			delete(c.items, key)
+		}
+	}
 }
 
 func deadline(ttl time.Duration) time.Time {

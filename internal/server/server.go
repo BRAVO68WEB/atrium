@@ -26,7 +26,7 @@ type Server struct {
 }
 
 func New(cfg *config.Config, db *database.DB, q queue.Queue) (*Server, error) {
-	built, err := app.Build(cfg, db, q)
+	built, err := app.Build(cfg, db, q, nil)
 	if err != nil {
 		return nil, err
 	}

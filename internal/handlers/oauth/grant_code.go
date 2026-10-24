@@ -32,7 +32,7 @@ func (h *Handler) handleAuthorizationCodeToken(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	client, ok := h.requireClient(w, authCode.ClientID, "", http.StatusBadRequest)
+	client, ok := h.requireClient(r.Context(), w, authCode.ClientID, "", http.StatusBadRequest)
 	if !ok {
 		return
 	}
@@ -130,7 +130,7 @@ func (h *Handler) handleAuthorizationCodeToken(w http.ResponseWriter, r *http.Re
 	tokenType := boundTokenType(client)
 	orgSlug := h.orgSlug(authCode.OrgID)
 
-	accessToken, err := h.issueAccessTokenFor(authCode.ClientID, authCode.UserID, strings.Join(authCode.Scopes, " "), tokenType, authCode.OrgID, orgSlug, authCode.Resource, authCode.RequestedActor)
+	accessToken, err := h.issueAccessTokenFor(r.Context(), authCode.ClientID, authCode.UserID, strings.Join(authCode.Scopes, " "), tokenType, authCode.OrgID, orgSlug, authCode.Resource, authCode.RequestedActor)
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
 		return
@@ -181,7 +181,7 @@ func (h *Handler) handleAuthorizationCodeToken(w http.ResponseWriter, r *http.Re
 	var idToken string
 	if containsScope(authCode.Scopes, "openid") && h.oidcHandler != nil {
 		// Use nonce stored with the authorization code, not from the token request
-		idToken, err = h.oidcHandler.CreateIDToken(authCode.ClientID, authCode.UserID, authCode.Nonce, authCode.Scopes, oidc.IDTokenExtra{SID: authCode.SessionID, AuthTime: authCode.AuthTime, OrgID: authCode.OrgID, OrgSlug: orgSlug})
+		idToken, err = h.oidcHandler.CreateIDToken(r.Context(), authCode.ClientID, authCode.UserID, authCode.Nonce, authCode.Scopes, oidc.IDTokenExtra{SID: authCode.SessionID, AuthTime: authCode.AuthTime, OrgID: authCode.OrgID, OrgSlug: orgSlug})
 		if err != nil {
 			writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to create ID token")
 			return

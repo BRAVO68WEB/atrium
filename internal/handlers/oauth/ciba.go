@@ -223,7 +223,7 @@ func (h *Handler) HandleCIBAToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, ok := h.requireClient(w, cibaReq.ClientID, "", http.StatusBadRequest)
+	client, ok := h.requireClient(r.Context(), w, cibaReq.ClientID, "", http.StatusBadRequest)
 	if !ok {
 		return
 	}
@@ -266,7 +266,7 @@ func (h *Handler) HandleCIBAToken(w http.ResponseWriter, r *http.Request) {
 		userID = queueReq.UserID
 	}
 
-	accessToken, err := h.issueAccessToken(cibaReq.ClientID, userID, strings.Join(cibaReq.Scopes, " "), tokenType)
+	accessToken, err := h.issueAccessToken(r.Context(), cibaReq.ClientID, userID, strings.Join(cibaReq.Scopes, " "), tokenType)
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
 		return

@@ -31,12 +31,12 @@ type Handler struct {
 	users       *repository.UserRepository
 	tokens      *repository.TokenRepository
 	orgs        *repository.OrgRepository
-	checkDPoP   func(header, method, uri, accessToken string) (string, error)
+	checkDPoP   func(ctx context.Context, header, method, uri, accessToken string) (string, error)
 	fetchSector func(ctx context.Context, rawURL string) ([]byte, error)
 	sectorCache cache.Cache
 }
 
-func (h *Handler) SetDPoPCheck(fn func(header, method, uri, accessToken string) (string, error)) {
+func (h *Handler) SetDPoPCheck(fn func(ctx context.Context, header, method, uri, accessToken string) (string, error)) {
 	defer telemetry.Step("oidc.Handler.SetDPoPCheck")()
 	if h != nil {
 		h.checkDPoP = fn
@@ -125,9 +125,9 @@ type IDTokenExtra struct {
 	OrgSlug  string
 }
 
-func (h *Handler) CreateIDToken(clientID, userID, nonce string, scopes []string, extra ...IDTokenExtra) (string, error) {
+func (h *Handler) CreateIDToken(ctx context.Context, clientID, userID, nonce string, scopes []string, extra ...IDTokenExtra) (string, error) {
 	defer telemetry.Step("oidc.Handler.CreateIDToken")()
-	claims, err := h.identityClaims(clientID, userID, nonce, scopes, extra...)
+	claims, err := h.identityClaims(ctx, clientID, userID, nonce, scopes, extra...)
 	if err != nil {
 		return "", err
 	}
@@ -139,9 +139,9 @@ func (h *Handler) CreateIDToken(clientID, userID, nonce string, scopes []string,
 	return h.sealIDToken(clientID, signed)
 }
 
-func (h *Handler) CreateIDTokenWithES256(clientID, userID, nonce string, scopes []string, extra ...IDTokenExtra) (string, error) {
+func (h *Handler) CreateIDTokenWithES256(ctx context.Context, clientID, userID, nonce string, scopes []string, extra ...IDTokenExtra) (string, error) {
 	defer telemetry.Step("oidc.Handler.CreateIDTokenWithES256")()
-	claims, err := h.identityClaims(clientID, userID, nonce, scopes, extra...)
+	claims, err := h.identityClaims(ctx, clientID, userID, nonce, scopes, extra...)
 	if err != nil {
 		return "", err
 	}
@@ -157,7 +157,7 @@ func (h *Handler) CreateIDTokenWithES256(clientID, userID, nonce string, scopes 
 // The profile is RFC 9068: typ at+jwt, aud is the resource or the issuer,
 // and client_id plus azp name the client. Callers still store the compact
 // token so revocation and UserInfo keep working.
-func (h *Handler) CreateAccessTokenJWT(clientID, userID, scope, _ string, lifetime time.Duration, orgID, orgSlug, resource, actor string) (string, error) {
+func (h *Handler) CreateAccessTokenJWT(ctx context.Context, clientID, userID, scope, _ string, lifetime time.Duration, orgID, orgSlug, resource, actor string) (string, error) {
 	defer telemetry.Step("oidc.Handler.CreateAccessTokenJWT")()
 	if h == nil || h.keySet == nil {
 		return "", fmt.Errorf("signing keys are not loaded")
@@ -165,7 +165,7 @@ func (h *Handler) CreateAccessTokenJWT(clientID, userID, scope, _ string, lifeti
 	if lifetime <= 0 {
 		lifetime = time.Hour
 	}
-	sub, err := h.SubjectFor(clientID, userID)
+	sub, err := h.SubjectFor(ctx, clientID, userID)
 	if err != nil {
 		return "", err
 	}
@@ -246,7 +246,7 @@ func signIDToken(method jwt.SigningMethod, kid string, key any, claims jwt.Claim
 	return token.SignedString(key)
 }
 
-func (h *Handler) identityClaims(clientID, userID, nonce string, scopes []string, extra ...IDTokenExtra) (jwt.Claims, error) {
+func (h *Handler) identityClaims(ctx context.Context, clientID, userID, nonce string, scopes []string, extra ...IDTokenExtra) (jwt.Claims, error) {
 	defer telemetry.Step("oidc.Handler.identityClaims")()
 	var ex IDTokenExtra
 	if len(extra) > 0 {
@@ -261,7 +261,7 @@ func (h *Handler) identityClaims(clientID, userID, nonce string, scopes []string
 	if h.cfg != nil {
 		mappings = h.cfg.OIDC.ClaimMappings
 	}
-	sub, err := h.SubjectFor(clientID, userID)
+	sub, err := h.SubjectFor(ctx, clientID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +375,7 @@ func (h *Handler) HandleUserInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sub, err := h.SubjectFor(at.ClientID, user.ID)
+	sub, err := h.SubjectFor(r.Context(), at.ClientID, user.ID)
 	if err != nil {
 		writeOIDCError(w, http.StatusInternalServerError, "server_error", "Failed to resolve subject")
 		return
@@ -465,7 +465,7 @@ func (h *Handler) userInfoDPoP(w http.ResponseWriter, r *http.Request, at *model
 			proofScheme = "https"
 		}
 		uri := fmt.Sprintf("%s://%s%s", proofScheme, r.Host, r.URL.Path)
-		jkt, err := h.checkDPoP(r.Header.Get("DPoP"), r.Method, uri, at.Token)
+		jkt, err := h.checkDPoP(r.Context(), r.Header.Get("DPoP"), r.Method, uri, at.Token)
 		if err != nil {
 			writeOIDCError(w, http.StatusUnauthorized, "invalid_token", err.Error())
 			return false

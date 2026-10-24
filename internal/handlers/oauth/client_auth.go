@@ -49,7 +49,7 @@ func (h *Handler) tokenCaller(w http.ResponseWriter, r *http.Request) (*models.C
 		writeTokenError(w, http.StatusBadRequest, "invalid_client", "Client authentication required")
 		return nil, false
 	}
-	client, ok := h.requireClient(w, clientID, "", http.StatusUnauthorized)
+	client, ok := h.requireClient(r.Context(), w, clientID, "", http.StatusUnauthorized)
 	if !ok {
 		return nil, false
 	}

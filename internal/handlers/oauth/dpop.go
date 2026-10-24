@@ -105,5 +105,5 @@ func (h *Handler) ValidateDPoPProof(r *http.Request, accessToken string) (*servi
 	}
 	fullURI := fmt.Sprintf("%s://%s%s", scheme, r.Host, r.URL.Path)
 
-	return h.dpopSvc.ValidateDPoPProof(dpopHeader, r.Method, fullURI, accessToken)
+	return h.dpopSvc.ValidateDPoPProof(r.Context(), dpopHeader, r.Method, fullURI, accessToken)
 }

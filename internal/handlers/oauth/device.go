@@ -190,7 +190,7 @@ func (h *Handler) HandleDeviceToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, ok := h.requireClient(w, dc.ClientID, "", http.StatusBadRequest)
+	client, ok := h.requireClient(r.Context(), w, dc.ClientID, "", http.StatusBadRequest)
 	if !ok {
 		return
 	}
@@ -231,7 +231,7 @@ func (h *Handler) HandleDeviceToken(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	accessToken, err := h.issueAccessToken(dc.ClientID, userID, strings.Join(dc.Scopes, " "), tokenType)
+	accessToken, err := h.issueAccessToken(r.Context(), dc.ClientID, userID, strings.Join(dc.Scopes, " "), tokenType)
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
 		return
@@ -273,7 +273,7 @@ func (h *Handler) HandleDeviceToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if containsScope(dc.Scopes, "openid") && h.oidcHandler != nil {
-		idToken, err := h.oidcHandler.CreateIDToken(dc.ClientID, userID, "", dc.Scopes, oidc.IDTokenExtra{SID: dc.SessionID, AuthTime: dc.AuthTime})
+		idToken, err := h.oidcHandler.CreateIDToken(r.Context(), dc.ClientID, userID, "", dc.Scopes, oidc.IDTokenExtra{SID: dc.SessionID, AuthTime: dc.AuthTime})
 		if err != nil {
 			writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to create ID token")
 			return

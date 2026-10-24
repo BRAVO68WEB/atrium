@@ -135,12 +135,15 @@ func main() {
 	}
 
 	var rdb *redis.Client
-	if cfg.Queue.Type == "redis" {
+	if cfg.Queue.Type == "redis" || cfg.Cache.Provider == "redis" {
 		rdb, err = cache.NewClient(cfg.Redis)
 		if err != nil {
 			log.Fatal("redis", "err", err)
 		}
 		defer func() { _ = rdb.Close() }()
+	}
+	if cfg.Queue.Type == "redis" && cfg.Cache.Provider != "redis" {
+		log.Warn("queue.type is redis and cache.provider is memory; DPoP, XAA, CIMD, and sector state stay on this process")
 	}
 	var q queue.Queue
 	switch cfg.Queue.Type {
@@ -152,7 +155,7 @@ func main() {
 		log.Fatal("queue.type must be memory or redis")
 	}
 
-	built, err := app.Build(cfg, db, q)
+	built, err := app.Build(cfg, db, q, rdb)
 	if err != nil {
 		log.Fatal("server", "err", err)
 	}

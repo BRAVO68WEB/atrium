@@ -1,6 +1,7 @@
 package oidc
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
@@ -48,7 +49,7 @@ func TestIDTokenIsNestedJWEWhenClientAsks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := handler.CreateIDToken("app", "user-1", "nonce", []string{"openid"})
+	token, err := handler.CreateIDToken(context.Background(), "app", "user-1", "nonce", []string{"openid"})
 	if err != nil {
 		t.Fatal(err)
 	}

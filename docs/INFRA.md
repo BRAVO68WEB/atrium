@@ -47,11 +47,27 @@ subscriptions stay in SQL.
 ## Redis
 
 `queue.type` and `cache.provider` stay `memory` when `redis.addr` is
-empty. Redis, when configured, holds:
+empty. One Redis connection serves both when either setting is
+`redis`. Redis holds only values that expire:
 
-- the CIBA and device approval queue
-- client ID metadata documents, for five minutes
-- DPoP replay entries, for ten minutes
+| Key | How long it lives | What it is |
+| --- | --- | --- |
+| `q:<id>` and `q:exp` | until the request expires | CIBA and device approval queue |
+| `cimd:<client id>` | 5 minutes | fetched client metadata document |
+| `sector:<url>` | 5 minutes | sector identifier document |
+| `dpop:jti:<jti>` | 10 minutes | DPoP proof replay |
+| `xaa:subject:<hash>` | until the token expires | subject-token replay |
+| `xaa:used:<issuer and jti>` | until the assertion expires | ID-JAG replay |
+
+The prefix in front of those keys is `redis.prefix`, which defaults to
+`oauth`. Users, sessions, clients, tokens, and signing keys stay in
+SQL. A cache error on a metadata document is a miss, and the server
+fetches the document again. A cache error on a replay key rejects the
+proof.
+
+If `queue.type` is `redis` and `cache.provider` is `memory`, startup
+logs a warning. The approval queue is shared across processes. DPoP,
+XAA, CIMD, and sector state are not.
 
 ## Signing keys
 

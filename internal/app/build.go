@@ -46,7 +46,7 @@ func (b *Built) Close() {
 
 // Build wires repositories, services, handlers, and route.NewRouter.
 // cfg is normalized here. q is the approval queue the caller opened.
-func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
+func Build(cfg *config.Config, db *database.DB, q queue.Queue, shared *redis.Client) (*Built, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
 	}
@@ -119,7 +119,7 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 		return nil, fmt.Errorf("failed to create OIDC handler: %w", err)
 	}
 
-	store, redisClient, err := openCache(cfg)
+	store, redisClient, err := openCache(cfg, shared)
 	if err != nil {
 		return nil, err
 	}
@@ -167,8 +167,8 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 	logoutSvc.SetFetchConfig(cfg)
 	accountSvc.SetWebhooks(hooks)
 	logoutSvc.SetWebhooks(hooks)
-	oidcHandler.SetDPoPCheck(func(header, method, uri, accessToken string) (string, error) {
-		proof, err := dpopSvc.ValidateDPoPProof(header, method, uri, accessToken)
+	oidcHandler.SetDPoPCheck(func(ctx context.Context, header, method, uri, accessToken string) (string, error) {
+		proof, err := dpopSvc.ValidateDPoPProof(ctx, header, method, uri, accessToken)
 		if err != nil || proof == nil {
 			if err == nil {
 				err = fmt.Errorf("DPoP proof required")
@@ -260,9 +260,15 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue) (*Built, error) {
 	}, nil
 }
 
-func openCache(cfg *config.Config) (cache.Cache, *redis.Client, error) {
+// openCache returns the process cache. shared is the Redis client the
+// caller already opened for the queue or the cache. The returned client
+// is non-nil only when this function opened it and Build must close it.
+func openCache(cfg *config.Config, shared *redis.Client) (cache.Cache, *redis.Client, error) {
 	if cfg.Cache.Provider != "redis" {
 		return cache.NewMemory(), nil, nil
+	}
+	if shared != nil {
+		return cache.NewRedis(shared, cfg.Redis.Prefix), nil, nil
 	}
 	rdb, err := cache.NewClient(cfg.Redis)
 	if err != nil {

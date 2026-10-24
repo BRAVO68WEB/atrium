@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"net/url"
@@ -87,7 +88,7 @@ func (s *LogoutService) Notify(sid, sub string) {
 			continue
 		}
 		subject := sub
-		if computed, err := s.oidc.Subject(client, sub); err == nil && computed != "" {
+		if computed, err := s.oidc.Subject(context.Background(), client, sub); err == nil && computed != "" {
 			subject = computed
 		}
 		tok, err := s.oidc.CreateLogoutToken(client.ID, subject, sid)

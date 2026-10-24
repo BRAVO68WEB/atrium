@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/url"
 	"strings"
 	"time"
@@ -26,7 +27,7 @@ func PairwiseIdentifier(sectorID, userID, salt string) string {
 }
 
 // Subject returns the local user id for a public client and the PPID for a pairwise client.
-func (h *Handler) Subject(client *models.Client, userID string) (string, error) {
+func (h *Handler) Subject(ctx context.Context, client *models.Client, userID string) (string, error) {
 	defer telemetry.Step("oidc.Handler.Subject")()
 	if userID == "" || client == nil || !strings.EqualFold(client.SubjectType, "pairwise") {
 		return userID, nil
@@ -38,7 +39,7 @@ func (h *Handler) Subject(client *models.Client, userID string) (string, error) 
 	if salt == "" {
 		return "", fmt.Errorf("oidc.pairwise_salt is required")
 	}
-	sector, err := h.sectorID(client)
+	sector, err := h.sectorID(ctx, client)
 	if err != nil {
 		return "", err
 	}
@@ -49,7 +50,7 @@ func (h *Handler) Subject(client *models.Client, userID string) (string, error) 
 	return ppid, nil
 }
 
-func (h *Handler) SubjectFor(clientID, userID string) (string, error) {
+func (h *Handler) SubjectFor(ctx context.Context, clientID, userID string) (string, error) {
 	defer telemetry.Step("oidc.Handler.SubjectFor")()
 	if userID == "" {
 		return clientID, nil
@@ -61,10 +62,10 @@ func (h *Handler) SubjectFor(clientID, userID string) (string, error) {
 	if err != nil || client == nil {
 		return userID, nil
 	}
-	return h.Subject(client, userID)
+	return h.Subject(ctx, client, userID)
 }
 
-func (h *Handler) sectorID(client *models.Client) (string, error) {
+func (h *Handler) sectorID(ctx context.Context, client *models.Client) (string, error) {
 	defer telemetry.Step("oidc.Handler.sectorID")()
 	if strings.TrimSpace(client.SectorIdentifierURI) != "" {
 		raw := strings.TrimSpace(client.SectorIdentifierURI)
@@ -72,7 +73,7 @@ func (h *Handler) sectorID(client *models.Client) (string, error) {
 		if err != nil || parsed.Hostname() == "" || parsed.Scheme != "https" {
 			return "", fmt.Errorf("sector_identifier_uri must be an absolute https url")
 		}
-		listed, err := h.sectorRedirects(raw)
+		listed, err := h.sectorRedirects(ctx, raw)
 		if err != nil {
 			return "", err
 		}
@@ -114,10 +115,16 @@ func SectorHost(redirects []string) (string, error) {
 	return host, nil
 }
 
-func (h *Handler) sectorRedirects(rawURL string) ([]string, error) {
+func (h *Handler) sectorRedirects(ctx context.Context, rawURL string) ([]string, error) {
 	defer telemetry.Step("oidc.Handler.sectorRedirects")()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if h != nil && h.sectorCache != nil {
-		if cached, ok, err := h.sectorCache.Get(context.Background(), "sector:"+rawURL); err == nil && ok {
+		cached, ok, err := h.sectorCache.Get(ctx, "sector:"+rawURL)
+		if err != nil {
+			log.Printf("cache sector: %v", err)
+		} else if ok {
 			var listed []string
 			if err := json.Unmarshal(cached, &listed); err == nil {
 				return listed, nil
@@ -127,7 +134,7 @@ func (h *Handler) sectorRedirects(rawURL string) ([]string, error) {
 	if h == nil || h.fetchSector == nil {
 		return nil, fmt.Errorf("sector identifier document cannot be fetched")
 	}
-	body, err := h.fetchSector(context.Background(), rawURL)
+	body, err := h.fetchSector(ctx, rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +143,9 @@ func (h *Handler) sectorRedirects(rawURL string) ([]string, error) {
 		return nil, fmt.Errorf("sector identifier document is not a json array of urls")
 	}
 	if h.sectorCache != nil {
-		_ = h.sectorCache.Set(context.Background(), "sector:"+rawURL, body, sectorCacheTTL)
+		if err := h.sectorCache.Set(ctx, "sector:"+rawURL, body, sectorCacheTTL); err != nil {
+			log.Printf("cache sector: %v", err)
+		}
 	}
 	return listed, nil
 }

@@ -1,6 +1,7 @@
 package oidc
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -15,7 +16,7 @@ func TestAccessTokenUsesJWTProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := handler.CreateAccessTokenJWT("app", "user-1", "openid", "Bearer", time.Hour, "", "", "https://api.example", "actor-1")
+	raw, err := handler.CreateAccessTokenJWT(context.Background(), "app", "user-1", "openid", "Bearer", time.Hour, "", "", "https://api.example", "actor-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +38,7 @@ func TestAccessTokenUsesJWTProfile(t *testing.T) {
 	if act["sub"] != "actor-1" {
 		t.Fatalf("act %v", claims["act"])
 	}
-	issuerOnly, err := handler.CreateAccessTokenJWT("app", "", "openid", "Bearer", time.Hour, "", "", "", "")
+	issuerOnly, err := handler.CreateAccessTokenJWT(context.Background(), "app", "", "openid", "Bearer", time.Hour, "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

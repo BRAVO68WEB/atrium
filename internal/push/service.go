@@ -319,7 +319,7 @@ func (s *Service) finishAuth(r *http.Request, deviceID, credential string, allow
 	if s.dpop == nil || r.Header.Get("DPoP") == "" {
 		return deviceRow{}, problem(http.StatusUnauthorized, "dpop_required", "DPoP proof is required")
 	}
-	proof, err := s.dpop.ValidateDPoPProof(r.Header.Get("DPoP"), r.Method, requestURI(r), "")
+	proof, err := s.dpop.ValidateDPoPProof(r.Context(), r.Header.Get("DPoP"), r.Method, requestURI(r), "")
 	if err != nil || !s.acceptThumbprint(row, proof.JKT) {
 		return deviceRow{}, problem(http.StatusUnauthorized, "dpop_required", "DPoP proof does not match the device key")
 	}

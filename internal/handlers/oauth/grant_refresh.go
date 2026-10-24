@@ -44,7 +44,7 @@ func (h *Handler) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 
 	clientID, clientSecret := presentedClient(r)
 
-	client, ok := h.requireClient(w, refreshToken.ClientID, "", http.StatusBadRequest)
+	client, ok := h.requireClient(r.Context(), w, refreshToken.ClientID, "", http.StatusBadRequest)
 	if !ok {
 		return
 	}
@@ -68,7 +68,7 @@ func (h *Handler) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 	orgSlug := h.orgSlug(refreshToken.OrgID)
 
-	newAccessToken, err := h.issueAccessTokenFor(refreshToken.ClientID, refreshToken.UserID, strings.Join(refreshToken.Scopes, " "), tokenType, refreshToken.OrgID, orgSlug, refreshToken.Resource, refreshToken.Act)
+	newAccessToken, err := h.issueAccessTokenFor(r.Context(), refreshToken.ClientID, refreshToken.UserID, strings.Join(refreshToken.Scopes, " "), tokenType, refreshToken.OrgID, orgSlug, refreshToken.Resource, refreshToken.Act)
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
 		return

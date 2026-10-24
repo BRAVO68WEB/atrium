@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -153,7 +154,7 @@ func (h *Handler) ClientRedirectURIs(id string) []string {
 	if h == nil || id == "" {
 		return nil
 	}
-	client, code, _ := h.resolveClient(id, "")
+	client, code, _ := h.resolveClient(context.Background(), id, "")
 	if code != "" || client == nil {
 		return nil
 	}
@@ -491,7 +492,7 @@ func (h *Handler) HandleIntrospect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result != nil && result.Active && result.Sub != "" && h.oidcHandler != nil {
-		computed, err := h.oidcHandler.SubjectFor(result.ClientID, result.Sub)
+		computed, err := h.oidcHandler.SubjectFor(r.Context(), result.ClientID, result.Sub)
 		if err != nil {
 			writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to resolve subject")
 			return
@@ -682,12 +683,12 @@ func isValidURI(uri string) bool {
 	return parsed.Scheme == "http" && parsed.Hostname() == "localhost"
 }
 
-func (h *Handler) issueAccessToken(clientID, userID, scope, tokenType string) (string, error) {
+func (h *Handler) issueAccessToken(ctx context.Context, clientID, userID, scope, tokenType string) (string, error) {
 	defer telemetry.Step("oauth.Handler.issueAccessToken")()
-	return h.issueAccessTokenFor(clientID, userID, scope, tokenType, "", "", "", "")
+	return h.issueAccessTokenFor(ctx, clientID, userID, scope, tokenType, "", "", "", "")
 }
 
-func (h *Handler) issueAccessTokenFor(clientID, userID, scope, tokenType, orgID, orgSlug, resource, actor string) (string, error) {
+func (h *Handler) issueAccessTokenFor(ctx context.Context, clientID, userID, scope, tokenType, orgID, orgSlug, resource, actor string) (string, error) {
 	defer telemetry.Step("oauth.Handler.issueAccessTokenFor")()
 	format := ""
 	var lifetime time.Duration
@@ -699,7 +700,7 @@ func (h *Handler) issueAccessTokenFor(clientID, userID, scope, tokenType, orgID,
 		if h.oidcHandler == nil {
 			return "", fmt.Errorf("jwt access tokens require the oidc handler")
 		}
-		return h.oidcHandler.CreateAccessTokenJWT(clientID, userID, scope, tokenType, lifetime, orgID, orgSlug, resource, actor)
+		return h.oidcHandler.CreateAccessTokenJWT(ctx, clientID, userID, scope, tokenType, lifetime, orgID, orgSlug, resource, actor)
 	}
 	return crypto.GenerateToken()
 }
@@ -784,7 +785,7 @@ func (h *Handler) NeedsOrgChoice(clientID, userID, requested string) (bool, erro
 	defer telemetry.Step("oauth.Handler.NeedsOrgChoice")()
 	var client *models.Client
 	if h != nil && clientID != "" {
-		if loaded, code, _ := h.resolveClient(clientID, ""); code == "" {
+		if loaded, code, _ := h.resolveClient(context.Background(), clientID, ""); code == "" {
 			client = loaded
 		}
 	}

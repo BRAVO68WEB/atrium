@@ -55,7 +55,7 @@ func NewDPoPServiceWithCache(store cache.Cache) *DPoPService {
 }
 
 // ValidateDPoPProof validates a DPoP proof JWT
-func (s *DPoPService) ValidateDPoPProof(dpopHeader string, method string, uri string, accessToken string) (*DPoPProof, error) {
+func (s *DPoPService) ValidateDPoPProof(ctx context.Context, dpopHeader string, method string, uri string, accessToken string) (*DPoPProof, error) {
 	defer telemetry.Step("service.DPoPService.ValidateDPoPProof")()
 	if dpopHeader == "" {
 		return nil, fmt.Errorf("DPoP header is required")
@@ -133,7 +133,7 @@ func (s *DPoPService) ValidateDPoPProof(dpopHeader string, method string, uri st
 	}
 
 	// Check for replay
-	if err := s.checkReplay(jti); err != nil {
+	if err := s.checkReplay(ctx, jti); err != nil {
 		return nil, err
 	}
 
@@ -298,12 +298,15 @@ func (s *DPoPService) computeATH(accessToken string) string {
 	return base64.RawURLEncoding.EncodeToString(hash[:])
 }
 
-func (s *DPoPService) checkReplay(jti string) error {
+func (s *DPoPService) checkReplay(ctx context.Context, jti string) error {
 	defer telemetry.Step("service.DPoPService.checkReplay")()
 	if s == nil || s.replay == nil {
 		return fmt.Errorf("DPoP replay cache is not configured")
 	}
-	ok, err := s.replay.Add(context.Background(), "dpop:jti:"+jti, []byte("1"), 10*time.Minute)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ok, err := s.replay.Add(ctx, "dpop:jti:"+jti, []byte("1"), 10*time.Minute)
 	if err != nil {
 		return err
 	}
