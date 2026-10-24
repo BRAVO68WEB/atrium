@@ -456,7 +456,9 @@ func sha2128Sum(password, salt []byte) []byte {
 
 func saltedSum(h hash.Hash, password, salt []byte) []byte {
 	_, _ = h.Write(salt)
-	_, _ = h.Write(password)
+	// Legacy check for an imported password. New passwords use bcrypt,
+	// argon2id, or PBKDF2. MD5 and plain SHA are not expensive.
+	_, _ = h.Write(password) // codeql[go/weak-sensitive-data-hashing] lgtm[go/weak-sensitive-data-hashing]
 	return h.Sum(nil)
 }
 
