@@ -272,10 +272,10 @@ stalls. Startup exits when the on-disk file differs from the binary.
 A custom hasher implements `Recognizes(encoded string) bool` when its
 stored form is not one of the built-in prefixes. User import stores
 `password_hash` only when that method, or a built-in prefix, accepts
-the string. Built-in salted encodings are `MD5`, `SHA256`, `SHA512`,
-`SHA3512`, `SHA2_128` (SHA-256 truncated to 16 bytes), and
-`PBKDF2`. Use those as the legacy side of `Fallback`. New passwords
-should stay on bcrypt or argon2id.
+the string. `MD5`, `SHA256`, `SHA512`, `SHA3512`, `SHA2_128`, and
+`PBKDF2` are PBKDF2-HMAC constructions. `SHA2_128` uses a 16-byte
+SHA-256 key because SHA-2 has no 128-bit hash. New passwords should
+stay on bcrypt or argon2id.
 
 ## Mail templates
 
