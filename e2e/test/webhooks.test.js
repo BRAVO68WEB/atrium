@@ -5,6 +5,7 @@ const { startServer } = require("../support/server");
 const { shortID } = require("../support/pkce");
 const { createUser, managementToken } = require("../support/oauth");
 const { newPage, submitLogin, closeBrowser } = require("../support/browser");
+const { until } = require("../support/wait");
 
 function listen() {
   const events = [];
@@ -86,6 +87,7 @@ describe("webhooks", function () {
     await page.goto(`${server.base}/login`);
     await submitLogin(page, user.username, user.password);
     await page.waitForURL(/oauth\/authorize/);
+    await until(() => receiver.events.some((event) => event.event === "login"));
     const delivered = receiver.events;
     assert.ok(delivered.some((event) => event.event === "login"));
     assert.equal(delivered.some((event) => event.event === "logout"), false);
@@ -103,6 +105,7 @@ describe("webhooks", function () {
     await page.goto(`${server.base}/oauth/logout`);
     await page.click("button[type=submit]");
     await page.waitForSelector("text=session has ended");
+    await until(() => receiver.events.some((event) => event.event === "logout"));
     const delivered = receiver.events;
     assert.ok(delivered.some((event) => event.event === "logout"));
     assert.equal(delivered.some((event) => event.event === "login"), false);
@@ -115,6 +118,7 @@ describe("webhooks", function () {
     await page.goto(`${server.base}/login`);
     await submitLogin(page, user.username, "wrong-password");
     await page.waitForSelector(".error");
+    await until(() => receiver.events.some((event) => event.event === "login_failed"));
     const delivered = receiver.events;
     assert.ok(delivered.some((event) => event.event === "login_failed"));
     await page.context().close();
@@ -123,6 +127,7 @@ describe("webhooks", function () {
   it("delivers user_registered for a management-created user", async function () {
     const receiver = await subscribe(["user_registered"]);
     const created = await createUser(server, { username: shortID("reghook") });
+    await until(() => receiver.events.some((item) => item.event === "user_registered"));
     const delivered = receiver.events;
     const event = delivered.find((item) => item.event === "user_registered");
     assert.ok(event);

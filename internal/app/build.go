@@ -23,6 +23,7 @@ import (
 	"github.com/bravo68web/oauth-impl/internal/hashalgo"
 	"github.com/bravo68web/oauth-impl/internal/log"
 	"github.com/bravo68web/oauth-impl/internal/mailer"
+	"github.com/bravo68web/oauth-impl/internal/notify"
 	"github.com/bravo68web/oauth-impl/internal/oidc"
 	"github.com/bravo68web/oauth-impl/internal/push"
 	"github.com/bravo68web/oauth-impl/internal/queue"
@@ -255,10 +256,60 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue, shared *redis.Cli
 
 	rt := route.NewRouter(mgmtCtrl, webCtrl, oauthHandler, oidcHandler, pushHandler, aauthHandler, accountCtrl, authn, root.OpenAPISpec, root.TemplateFS)
 	rt.SetContentSecurityPolicy(service.ContentSecurityPolicy(cfg.Security.BotProtection.Provider))
+	jobs, notifyRedis, err := openNotify(cfg, shared, redisClient)
+	if err != nil {
+		closeRedis(redisClient)
+		return nil, err
+	}
+	hooks.SetOutbox(jobs)
+	accountSvc.SetOutbox(jobs)
+	jobCtx, stopJobs := context.WithCancel(context.Background())
+	go func() {
+		if err := jobs.Consume(jobCtx, service.DispatchNotify(hooks, mail), notify.DefaultDelays); err != nil {
+			log.Error("notify", "err", err)
+		}
+	}()
 	return &Built{
-		Mux:   rt.GetMux(),
-		close: func() { closeRedis(redisClient) },
+		Mux: rt.GetMux(),
+		close: func() {
+			stopJobs()
+			_ = jobs.Close()
+			closeRedis(redisClient)
+			closeRedis(notifyRedis)
+		},
 	}, nil
+}
+
+// openNotify starts the webhook and mail retry queue. The returned client
+// is set only when this function opened Redis and Build must close it.
+func openNotify(cfg *config.Config, shared, cacheClient *redis.Client) (notify.Queue, *redis.Client, error) {
+	switch cfg.Notify.Type {
+	case "", "memory":
+		return notify.NewMemory(), nil, nil
+	case "redis":
+		rdb := shared
+		if rdb == nil {
+			rdb = cacheClient
+		}
+		var owned *redis.Client
+		if rdb == nil {
+			client, err := cache.NewClient(cfg.Redis)
+			if err != nil {
+				return nil, nil, err
+			}
+			rdb = client
+			owned = client
+		}
+		return notify.NewRedis(rdb, cfg.Redis.Prefix), owned, nil
+	case "rabbitmq":
+		q, err := notify.NewRabbit(cfg.Notify.RabbitMQ.URL, cfg.Notify.RabbitMQ.Exchange, cfg.Notify.RabbitMQ.Queue)
+		if err != nil {
+			return nil, nil, err
+		}
+		return q, nil, nil
+	default:
+		return nil, nil, fmt.Errorf("notify.type must be memory, redis, or rabbitmq")
+	}
 }
 
 // openCache returns the process cache. shared is the Redis client the

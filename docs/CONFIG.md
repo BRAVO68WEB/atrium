@@ -82,6 +82,13 @@ queue:
   poll_interval: 5s
   max_pending: 100
 
+notify:
+  type: memory
+  rabbitmq:
+    url: ""
+    exchange: oauth.notify
+    queue: oauth.notify
+
 security:
   issuer: http://localhost:8080
   login_identifier: username

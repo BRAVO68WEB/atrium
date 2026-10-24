@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/bravo68web/oauth-impl/internal/background"
 )
 
 func csrfFromBody(t *testing.T, body string) string {
@@ -482,6 +484,7 @@ func TestLoginAnalyticsEndpoint(t *testing.T) {
 		t.Fatal("wrong password was accepted")
 	}
 	issued := passwordToken(t, ts.URL, client.ID, client.Secret, "correct horse")
+	background.Wait()
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/me/login-analytics?window=24h", nil)
 	req.Header.Set("Authorization", "Bearer "+issued["access_token"].(string))
 	resp, err := http.DefaultClient.Do(req)

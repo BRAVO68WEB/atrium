@@ -26,6 +26,19 @@ function yamlValue(value) {
   return JSON.stringify(String(value));
 }
 
+// OTEL_EXPORTER_OTLP_ENDPOINT is a base URL. WithEndpointURL does not append /v1/traces.
+function otlpEndpoint() {
+  const raw = (process.env.E2E_OTLP_ENDPOINT || process.env.OTEL_EXPORTER_OTLP_ENDPOINT || "").trim();
+  if (!raw) {
+    return "";
+  }
+  const trimmed = raw.replace(/\/$/, "");
+  if (trimmed.endsWith("/v1/traces")) {
+    return trimmed;
+  }
+  return `${trimmed}/v1/traces`;
+}
+
 function renderConfig(port, dsn, overrides) {
   const security = overrides.security || {};
   const password = security.password || null;
@@ -136,6 +149,15 @@ function renderConfig(port, dsn, overrides) {
     lines.push(`      client_secret: ${yamlValue(provider.client_secret || "notes-social-secret")}`);
     lines.push(`      issuer: ${yamlValue(provider.issuer)}`);
   }
+  const endpoint = otlpEndpoint();
+  if (endpoint) {
+    lines.push("telemetry:");
+    lines.push("  enabled: true");
+    lines.push(`  service_name: ${yamlValue(process.env.OTEL_SERVICE_NAME || "oauth-e2e")}`);
+    lines.push(`  otlp_endpoint: ${yamlValue(endpoint)}`);
+    lines.push("  insecure: true");
+    lines.push("  sample_ratio: 1");
+  }
   return lines.join("\n") + "\n";
 }
 
@@ -218,14 +240,21 @@ async function startServer(overrides = {}) {
   const child = spawn(binPath, ["-config", cfgPath, "-port", String(port)], {
     cwd: repoRoot,
     stdio: ["ignore", "pipe", "pipe"],
+    env: process.env,
   });
   let logs = "";
-  child.stdout.on("data", (chunk) => {
+  const logPath = process.env.E2E_SERVER_LOG || "";
+  if (logPath) {
+    fs.appendFileSync(logPath, `\n===== http://127.0.0.1:${port} telemetry=${otlpEndpoint() || "off"} =====\n`);
+  }
+  const record = (chunk) => {
     logs += chunk;
-  });
-  child.stderr.on("data", (chunk) => {
-    logs += chunk;
-  });
+    if (logPath) {
+      fs.appendFileSync(logPath, chunk);
+    }
+  };
+  child.stdout.on("data", record);
+  child.stderr.on("data", record);
   const base = `http://127.0.0.1:${port}`;
   try {
     await waitHealth(base);
@@ -241,8 +270,24 @@ async function startServer(overrides = {}) {
     },
     async stop() {
       if (child.exitCode == null) {
-        child.kill("SIGKILL");
-        await new Promise((resolve) => child.once("exit", resolve));
+        // SIGTERM runs the process defers, including the OTLP flush. SIGKILL drops that batch.
+        if (otlpEndpoint()) {
+          child.kill("SIGTERM");
+          const exited = await new Promise((resolve) => {
+            const timer = setTimeout(() => resolve(false), 8000);
+            child.once("exit", () => {
+              clearTimeout(timer);
+              resolve(true);
+            });
+          });
+          if (!exited && child.exitCode == null) {
+            child.kill("SIGKILL");
+            await new Promise((resolve) => child.once("exit", resolve));
+          }
+        } else {
+          child.kill("SIGKILL");
+          await new Promise((resolve) => child.once("exit", resolve));
+        }
       }
       fs.rmSync(dir, { recursive: true, force: true });
     },

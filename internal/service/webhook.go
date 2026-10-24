@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -17,8 +18,10 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/bravo68web/oauth-impl/internal/background"
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/notify"
 	"github.com/bravo68web/oauth-impl/internal/repository"
 	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
@@ -72,9 +75,17 @@ func KnownWebhookEvents() []string {
 }
 
 type WebhookDispatcher struct {
-	repo  *repository.WebhookRepository
-	http  *http.Client
-	fetch *config.Config
+	repo   *repository.WebhookRepository
+	http   *http.Client
+	fetch  *config.Config
+	outbox Outbox
+}
+
+func (d *WebhookDispatcher) SetOutbox(box Outbox) {
+	defer telemetry.Step("service.WebhookDispatcher.SetOutbox")()
+	if d != nil {
+		d.outbox = box
+	}
 }
 
 func (d *WebhookDispatcher) SetFetchConfig(cfg *config.Config) {
@@ -206,6 +217,44 @@ func (d *WebhookDispatcher) Emit(event string, data map[string]any) {
 	if d == nil || d.repo == nil {
 		return
 	}
+	copied := make(map[string]any, len(data))
+	for key, value := range data {
+		copied[key] = value
+	}
+	background.Go(func() {
+		defer telemetry.Step("service.WebhookDispatcher.deliver")()
+		if d.outbox != nil {
+			d.enqueue(event, copied)
+			return
+		}
+		d.deliver(event, copied)
+	})
+}
+
+func (d *WebhookDispatcher) enqueue(event string, data map[string]any) {
+	hooks, err := d.repo.List()
+	if err != nil {
+		log.Printf("webhooks: list: %v", err)
+		return
+	}
+	body := string(payload(event, data))
+	for _, hook := range hooks {
+		if hook == nil || !hook.Wants(event) {
+			continue
+		}
+		err := d.outbox.Publish(context.Background(), notify.Job{
+			Kind:   notify.KindWebhook,
+			HookID: hook.ID,
+			Event:  event,
+			Body:   body,
+		}, 0)
+		if err != nil {
+			log.Printf("webhook %s %s: %v", hook.ID, event, err)
+		}
+	}
+}
+
+func (d *WebhookDispatcher) deliver(event string, data map[string]any) {
 	hooks, err := d.repo.List()
 	if err != nil {
 		log.Printf("webhooks: list: %v", err)

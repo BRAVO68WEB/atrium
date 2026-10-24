@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bravo68web/oauth-impl/internal/background"
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/database"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -170,7 +171,10 @@ func Connect(t testing.TB, dsn string) *database.DB {
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() {
+		background.Wait()
+		_ = db.Close()
+	})
 	if err := db.Migrate(); err != nil {
 		t.Fatalf("migrate postgres: %v", err)
 	}

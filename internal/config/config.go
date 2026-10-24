@@ -19,6 +19,7 @@ type Config struct {
 	Cache        CacheConfig        `yaml:"cache"`
 	Security     SecurityConfig     `yaml:"security"`
 	Queue        QueueConfig        `yaml:"queue"`
+	Notify       NotifyConfig       `yaml:"notify"`
 	OIDC         OIDCConfig         `yaml:"oidc"`
 	Management   ManagementConfig   `yaml:"management"`
 	SMTP         SMTPConfig         `yaml:"smtp"`
@@ -275,6 +276,21 @@ type QueueConfig struct {
 	MaxPending   int           `yaml:"max_pending"`
 }
 
+// NotifyConfig selects the retry queue for webhook and mail delivery.
+// Type is memory, redis, or rabbitmq. memory is the default and drops
+// jobs when the process exits.
+type NotifyConfig struct {
+	Type     string         `yaml:"type"`
+	RabbitMQ RabbitMQConfig `yaml:"rabbitmq"`
+}
+
+// RabbitMQConfig is the broker used when notify.type is rabbitmq.
+type RabbitMQConfig struct {
+	URL      string `yaml:"url"`
+	Exchange string `yaml:"exchange"`
+	Queue    string `yaml:"queue"`
+}
+
 type OIDCConfig struct {
 	Issuer               string         `yaml:"issuer"`
 	SigningKey           string         `yaml:"signing_key"`
@@ -351,6 +367,13 @@ func DefaultConfig() *Config {
 			Type:         "memory",
 			PollInterval: 5 * time.Second,
 			MaxPending:   100,
+		},
+		Notify: NotifyConfig{
+			Type: "memory",
+			RabbitMQ: RabbitMQConfig{
+				Exchange: "oauth.notify",
+				Queue:    "oauth.notify",
+			},
 		},
 		Management: ManagementConfig{},
 		SMTP: SMTPConfig{
@@ -496,6 +519,16 @@ func (c *Config) Normalize() {
 	c.Security.LoginIdentifier = strings.ToLower(strings.TrimSpace(c.Security.LoginIdentifier))
 	if c.Security.LoginIdentifier == "" {
 		c.Security.LoginIdentifier = "username"
+	}
+	c.Notify.Type = strings.ToLower(strings.TrimSpace(c.Notify.Type))
+	if c.Notify.Type == "" {
+		c.Notify.Type = "memory"
+	}
+	if strings.TrimSpace(c.Notify.RabbitMQ.Exchange) == "" {
+		c.Notify.RabbitMQ.Exchange = "oauth.notify"
+	}
+	if strings.TrimSpace(c.Notify.RabbitMQ.Queue) == "" {
+		c.Notify.RabbitMQ.Queue = "oauth.notify"
 	}
 	if c.Telemetry.ServiceName == "" {
 		c.Telemetry.ServiceName = "oauth-server"
@@ -820,8 +853,16 @@ func ValidatePlatform(cfg *Config) error {
 	default:
 		return fmt.Errorf("queue.type must be memory or redis")
 	}
-	if (cfg.Cache.Provider == "redis" || cfg.Queue.Type == "redis") && strings.TrimSpace(cfg.Redis.Addr) == "" {
-		return fmt.Errorf("redis.addr is required when cache.provider or queue.type is redis")
+	if (cfg.Cache.Provider == "redis" || cfg.Queue.Type == "redis" || cfg.Notify.Type == "redis") && strings.TrimSpace(cfg.Redis.Addr) == "" {
+		return fmt.Errorf("redis.addr is required when cache.provider, queue.type, or notify.type is redis")
+	}
+	switch cfg.Notify.Type {
+	case "", "memory", "redis", "rabbitmq":
+	default:
+		return fmt.Errorf("notify.type must be memory, redis, or rabbitmq")
+	}
+	if cfg.Notify.Type == "rabbitmq" && strings.TrimSpace(cfg.Notify.RabbitMQ.URL) == "" {
+		return fmt.Errorf("notify.rabbitmq.url is required when notify.type is rabbitmq")
 	}
 	switch strings.ToLower(strings.TrimSpace(cfg.Log.Format)) {
 	case "", "text", "json":

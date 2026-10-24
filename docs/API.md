@@ -308,8 +308,11 @@ name. `*` subscribes to every event. Events include `login`,
 `login_failed`, `logout`, `sso_session_triggered`,
 `bruteforce_detected`, `forgot_password`, `change_password`,
 `password_reset`, `user_registered`, `email_verified`, and
-`user_disabled`. A delivery error is logged and does not fail the user
-action. `POST /api/webhooks/{id}/test` sends `webhook.test`.
+`user_disabled`. The server returns the response, then delivers the
+event. A failed delivery is retried for about 10 minutes. A delivery
+error is logged and does not change that response.
+`POST /api/webhooks/{id}/test` still waits for the receiver and sends
+`webhook.test`.
 
 `POST /api/keys/rotate` returns the new key ids. Private keys stay in
 SQL. See [Infrastructure](INFRA.md).

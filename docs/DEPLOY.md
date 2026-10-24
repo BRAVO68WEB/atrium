@@ -97,19 +97,33 @@ cache:
 ```
 
 `addr` is `host:port` or a `redis://` URL. The process opens one
-connection when either the queue or the cache asks for Redis. Users,
+connection when the queue, the cache, or notify asks for Redis. Users,
 sessions, tokens, consents, and audit stay in SQL. More than one
 server process shares queue and cache state only when those settings
 are `redis`. The key names, and the warning you get when the queue is
 shared and the cache is not, are in [Infrastructure](INFRA.md).
 
+## Notify
+
+Webhook and mail delivery run after the response. `notify.type` is
+`memory`, `redis`, or `rabbitmq`. `memory` is the default. A restart
+drops jobs still in that process. `redis` uses `redis.addr` and stores
+due jobs under `prefix:notify:`. `rabbitmq` uses `notify.rabbitmq.url`.
+
+A failed attempt waits 1 second, then 5 seconds, 30 seconds, 2
+minutes, and 10 minutes. A 4xx response other than 429 is not retried.
+`POST /api/webhooks/{id}/test` still waits for that one call. Login
+recording stays in the process so the next attempt sees the new row.
+
 ## SMTP
 
 Password reset, email confirmation, and login mail send when
-`smtp.enabled` is true. With SMTP off, forgot-password returns
-`503` and `mailer_disabled`. An operator can still set a password with
-`oauth-cli user password` or `POST /api/users/{id}/password`. Login
-still succeeds when a send fails.
+`smtp.enabled` is true. The server stores the token or the login,
+returns the response, and then talks to SMTP. With SMTP off,
+forgot-password returns `503` and `mailer_disabled`. An operator can
+still set a password with `oauth-cli user password` or
+`POST /api/users/{id}/password`. Login still succeeds when a send
+fails.
 
 Message text is in [Configuration](CONFIG.md).
 

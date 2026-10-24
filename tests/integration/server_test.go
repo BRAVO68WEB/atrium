@@ -39,6 +39,7 @@ func setupTestServer(t *testing.T) (*httptest.Server, func()) {
 
 	cleanup := func() {
 		ts.Close()
+		_ = srv.Stop()
 	}
 
 	return ts, cleanup
@@ -60,6 +61,7 @@ func setupConfigured(t *testing.T, mutate func(*config.Config)) *httptest.Server
 		t.Fatal(err)
 	}
 	ts := httptest.NewServer(srv.GetRouter())
+	t.Cleanup(func() { _ = srv.Stop() })
 	t.Cleanup(ts.Close)
 	return ts
 }
@@ -94,6 +96,7 @@ func setupBound(t *testing.T, mutate func(*config.Config)) *httptest.Server {
 	}
 	ts.Listener = ln
 	ts.Start()
+	t.Cleanup(func() { _ = srv.Stop() })
 	t.Cleanup(ts.Close)
 	if ts.URL != issuer {
 		t.Fatalf("url %s issuer %s", ts.URL, issuer)

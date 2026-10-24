@@ -3,15 +3,20 @@ package service
 import (
 	"database/sql"
 	"fmt"
+	"hash/fnv"
 	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"context"
+
+	"github.com/bravo68web/oauth-impl/internal/background"
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/mailer"
 	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/oauth-impl/internal/notify"
 	"github.com/bravo68web/oauth-impl/internal/repository"
 	"github.com/bravo68web/oauth-impl/internal/telemetry"
 )
@@ -40,6 +45,7 @@ type AccountService struct {
 	lim                  *rateLimiter
 	mu                   sync.Mutex
 	lastMail             map[string]time.Time
+	outbox               Outbox
 }
 
 func NewAccountService(
@@ -80,6 +86,13 @@ func NewAccountService(
 		registrationDisabled: cfg.Security.DisableRegistration,
 		lim:                  newRateLimiter(),
 		lastMail:             map[string]time.Time{},
+	}
+}
+
+func (a *AccountService) SetOutbox(box Outbox) {
+	defer telemetry.Step("service.AccountService.SetOutbox")()
+	if a != nil {
+		a.outbox = box
 	}
 }
 
@@ -301,16 +314,26 @@ func (a *AccountService) Record(user *models.User, r *http.Request, success, mfa
 	if a == nil || user == nil {
 		return
 	}
+	copied := cloneUser(user)
 	ev := &models.LoginEvent{
-		UserID:    user.ID,
+		UserID:    copied.ID,
 		Success:   success,
 		MFA:       mfa,
 		IP:        a.RequestIP(r),
-		UserAgent: "",
 		CreatedAt: time.Now(),
 	}
 	if r != nil {
 		ev.UserAgent = r.UserAgent()
+	}
+	enqueueRecord(copied.ID, func() {
+		defer telemetry.Step("service.AccountService.record")()
+		a.record(&copied, ev)
+	})
+}
+
+func (a *AccountService) record(user *models.User, ev *models.LoginEvent) {
+	if a == nil || user == nil || ev == nil {
+		return
 	}
 	seen := false
 	if ev.IP != "" {
@@ -320,18 +343,18 @@ func (a *AccountService) Record(user *models.User, r *http.Request, success, mfa
 		log.Printf("login event: %v", err)
 	}
 	event := EventLoginFailed
-	if success {
+	if ev.Success {
 		event = EventLogin
 	}
 	data := map[string]any{
 		"user_id": user.ID, "username": user.Username, "email": user.Email,
-		"ip": ev.IP, "user_agent": ev.UserAgent, "mfa": mfa, "success": success,
+		"ip": ev.IP, "user_agent": ev.UserAgent, "mfa": ev.MFA, "success": ev.Success,
 	}
-	if success && ev.IP != "" && !seen {
+	if ev.Success && ev.IP != "" && !seen {
 		data["new_ip"] = true
 	}
 	a.emit(event, data)
-	if success {
+	if ev.Success {
 		a.users.TouchLastLogin(user.ID)
 		a.maybeLoginMail(user, ev)
 		return
@@ -503,7 +526,24 @@ func (a *AccountService) sendMail(user *models.User, name string, data mailer.Da
 	if err != nil {
 		return err
 	}
-	return a.mail.Send(stored.Email, subject, body)
+	if a.outbox != nil {
+		return a.outbox.Publish(context.Background(), notify.Job{
+			Kind:    notify.KindMail,
+			To:      stored.Email,
+			Subject: subject,
+			Text:    body,
+		}, 0)
+	}
+	to := stored.Email
+	userID := stored.ID
+	mail := a.mail
+	background.Go(func() {
+		defer telemetry.Step("service.AccountService.sendMailAsync")()
+		if err := mail.Send(to, subject, body); err != nil {
+			log.Printf("mail %s for %s: %v", name, userID, err)
+		}
+	})
+	return nil
 }
 
 func (a *AccountService) markMail(key string, window time.Duration) bool {
@@ -515,6 +555,71 @@ func (a *AccountService) markMail(key string, window time.Duration) bool {
 	}
 	a.lastMail[key] = time.Now()
 	return true
+}
+
+func cloneUser(user *models.User) models.User {
+	copied := *user
+	if user.Attributes != nil {
+		copied.Attributes = make(map[string]string, len(user.Attributes))
+		for key, value := range user.Attributes {
+			copied.Attributes[key] = value
+		}
+	}
+	if user.LastLoginAt != nil {
+		at := *user.LastLoginAt
+		copied.LastLoginAt = &at
+	}
+	return copied
+}
+
+// recordLaneCount stripes login recording so one user stays in order
+// without a map entry per user.
+const recordLaneCount = 64
+
+type recordLane struct {
+	mu   sync.Mutex
+	jobs []func()
+	live bool
+}
+
+var recordLanes [recordLaneCount]recordLane
+
+func enqueueRecord(userID string, job func()) {
+	if userID == "" {
+		userID = "_"
+	}
+	sum := fnv.New32a()
+	_, _ = sum.Write([]byte(userID))
+	lane := &recordLanes[sum.Sum32()%recordLaneCount]
+	lane.mu.Lock()
+	lane.jobs = append(lane.jobs, job)
+	if lane.live {
+		lane.mu.Unlock()
+		return
+	}
+	lane.live = true
+	lane.mu.Unlock()
+	background.Go(func() {
+		for {
+			lane.mu.Lock()
+			if len(lane.jobs) == 0 {
+				lane.live = false
+				lane.mu.Unlock()
+				return
+			}
+			next := lane.jobs[0]
+			lane.jobs = lane.jobs[1:]
+			lane.mu.Unlock()
+			func() {
+				defer func() {
+					if rec := recover(); rec != nil {
+						log.Printf("login record: %v", rec)
+					}
+				}()
+				next()
+			}()
+		}
+	})
 }
 
 type rateLimiter struct {
