@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/bravo68web/oauth-impl/internal/app"
+	"github.com/bravo68web/oauth-impl/internal/background"
 	"github.com/bravo68web/oauth-impl/internal/cache"
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/database"
@@ -135,7 +136,7 @@ func main() {
 	}
 
 	var rdb *redis.Client
-	if cfg.Queue.Type == "redis" || cfg.Cache.Provider == "redis" {
+	if cfg.Queue.Type == "redis" || cfg.Cache.Provider == "redis" || cfg.Notify.Type == "redis" {
 		rdb, err = cache.NewClient(cfg.Redis)
 		if err != nil {
 			log.Fatal("redis", "err", err)
@@ -294,6 +295,7 @@ Endpoints:
 
 	log.Info("shutting down server")
 	_ = httpServer.Close()
+	background.Wait()
 }
 
 func mfaStatus(cfg *config.Config) string {

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bravo68web/oauth-impl/internal/background"
 	"github.com/pquerna/otp/totp"
 )
 
@@ -181,6 +182,7 @@ func TestManagementAPI(t *testing.T) {
 		t.Fatal("session still active")
 	}
 
+	background.Wait()
 	global := apiObject(t, http.MethodGet, base+"/api/analytics/logins?window=24h", token, nil)
 	if global["successes"].(float64) < 1 {
 		t.Fatalf("global analytics %v", global)

@@ -4,6 +4,7 @@ const { startServer } = require("../support/server");
 const { shortID } = require("../support/pkce");
 const { createUser, managementToken } = require("../support/oauth");
 const { newPage, submitLogin, closeBrowser } = require("../support/browser");
+const { until } = require("../support/wait");
 
 function listen() {
   const events = [];
@@ -71,22 +72,26 @@ describe("brute force detection", function () {
   it("emits one bruteforce_detected event on the fifth failure and still allows the real password", async function () {
     const page = await newPage();
     await page.goto(`${server.base}/login`);
+    const failed = () => receiver.events.filter((event) => event.event === "login_failed").length;
+    const detected = () => receiver.events.filter((event) => event.event === "bruteforce_detected");
     for (let attempt = 1; attempt <= 4; attempt += 1) {
       await submitLogin(page, user.username, "wrong-password");
       await page.waitForSelector(".error");
     }
-    assert.equal(receiver.events.filter((event) => event.event === "login_failed").length, 4);
-    assert.equal(receiver.events.some((event) => event.event === "bruteforce_detected"), false);
+    await until(() => failed() >= 4);
+    assert.equal(failed(), 4);
+    assert.equal(detected().length, 0);
 
     await submitLogin(page, user.username, "wrong-password");
     await page.waitForSelector(".error");
-    const detected = receiver.events.filter((event) => event.event === "bruteforce_detected");
-    assert.equal(detected.length, 1);
-    assert.ok(JSON.parse(detected[0].body).data.failures >= 5);
+    await until(() => detected().length >= 1 && failed() >= 5);
+    assert.equal(detected().length, 1);
+    assert.ok(JSON.parse(detected()[0].body).data.failures >= 5);
 
     await submitLogin(page, user.username, "wrong-password");
     await page.waitForSelector(".error");
-    assert.equal(receiver.events.filter((event) => event.event === "bruteforce_detected").length, 1);
+    await until(() => failed() >= 6);
+    assert.equal(detected().length, 1);
 
     await submitLogin(page, user.username, user.password);
     await page.waitForURL(/oauth\/authorize/);

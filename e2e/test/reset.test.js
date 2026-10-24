@@ -4,6 +4,7 @@ const { startServer } = require("../support/server");
 const { shortID } = require("../support/pkce");
 const { createUser } = require("../support/oauth");
 const { newPage, closeBrowser } = require("../support/browser");
+const { settled } = require("../support/wait");
 
 function startSMTP() {
   const messages = [];
@@ -109,12 +110,14 @@ describe("password reset", function () {
   });
 
   it("does not send mail for an unknown account", async function () {
+    await settled(() => smtp.messages.length);
     const before = smtp.messages.length;
     const page = await newPage();
     await page.goto(`${server.base}/forgot`);
     await page.fill("#username", "nobody-no-such-user");
     await page.click("button[type=submit]");
     await page.waitForSelector("text=reset link is on its way");
+    await settled(() => smtp.messages.length);
     assert.equal(smtp.messages.length, before);
     await page.context().close();
   });

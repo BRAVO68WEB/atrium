@@ -126,6 +126,26 @@ func TestSocialValidation(t *testing.T) {
 	}
 }
 
+func TestNotifyType(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Normalize()
+	if err := ValidatePlatform(cfg); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Notify.Type = "rabbitmq"
+	if err := ValidatePlatform(cfg); err == nil {
+		t.Fatal("expected rabbitmq without a url to fail")
+	}
+	cfg.Notify.RabbitMQ.URL = "amqp://localhost"
+	if err := ValidatePlatform(cfg); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Notify.Type = "redis"
+	if err := ValidatePlatform(cfg); err == nil {
+		t.Fatal("expected redis without an address to fail")
+	}
+}
+
 func TestBrandingRejectsBadValues(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Branding.PrimaryColor = "red"

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/bravo68web/oauth-impl/internal/background"
 	"github.com/bravo68web/oauth-impl/internal/repository"
 	"github.com/bravo68web/oauth-impl/internal/testpg"
 )
@@ -51,6 +52,7 @@ func TestWebhookFiltersAndSigns(t *testing.T) {
 	}
 
 	hooks.Emit(EventLogout, map[string]any{"user_id": "u"})
+	background.Wait()
 	mu.Lock()
 	if gotEvent != "" {
 		t.Fatalf("logout was delivered to a login subscription: %s", gotEvent)
@@ -58,6 +60,7 @@ func TestWebhookFiltersAndSigns(t *testing.T) {
 	mu.Unlock()
 
 	hooks.Emit(EventLogin, map[string]any{"user_id": "u", "username": "ada"})
+	background.Wait()
 	mu.Lock()
 	defer mu.Unlock()
 	if gotEvent != EventLogin || !sigOK {

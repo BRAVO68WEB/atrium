@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/bravo68web/oauth-impl/internal/app"
+	"github.com/bravo68web/oauth-impl/internal/background"
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/database"
 	"github.com/bravo68web/oauth-impl/internal/log"
@@ -75,6 +76,7 @@ func (s *Server) StartWithGracefulShutdown() {
 	if err := s.server.Shutdown(ctx); err != nil {
 		log.Fatal("server forced to shutdown", "err", err)
 	}
+	background.Wait()
 	if s.close != nil {
 		s.close()
 	}

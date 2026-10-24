@@ -8,6 +8,7 @@ import (
 	"net/smtp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bravo68web/oauth-impl/internal/config"
 	"github.com/bravo68web/oauth-impl/internal/telemetry"
@@ -66,10 +67,11 @@ func (m *smtpMailer) Send(to, subject, text string) error {
 	addr := net.JoinHostPort(m.cfg.Host, strconv.Itoa(m.cfg.Port))
 	var conn net.Conn
 	tlsConfig := &tls.Config{ServerName: m.cfg.Host}
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	if m.cfg.ImplicitTLS {
-		conn, err = tls.Dial("tcp", addr, tlsConfig)
+		conn, err = tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
 	} else {
-		conn, err = net.Dial("tcp", addr)
+		conn, err = dialer.Dial("tcp", addr)
 	}
 	if err != nil {
 		return err
