@@ -1,0 +1,5 @@
+Subject: New sign-in
+{{.Username}} signed in.
+
+Time: {{.Time}}
+IP: {{.IP}}

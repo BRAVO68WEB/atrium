@@ -1,0 +1,6 @@
+Subject: Reset your password
+Reset the password for {{.Username}}.
+
+{{.Link}}
+
+This link expires in {{.TTL}}.
