@@ -218,8 +218,8 @@ time spent in each.
 ## Release
 
 Pushing a `v*` tag is the only publish step. A tag such as `v1.2.3`
-creates a GitHub Release and a container image. Pushes to `main` do not
-publish either one.
+creates a GitHub Release and pushes the container image to GHCR and
+Docker Hub. Pushes to `main` do not publish either one.
 
 ```bash
 git tag v1.2.3
@@ -242,12 +242,14 @@ Windows archives are `.zip`. The names look like
 macOS has no 32-bit build. Extract an archive and run `./atrium`
 from that directory so startup can read the hasher file.
 
-The server image is `ghcr.io/bravo68web/atrium`. One tag covers
-`linux/amd64`, `linux/arm64`, and `linux/arm/v7`. A stable tag also
-publishes `1.2.3`, `1.2`, `1`, and `latest`. A prerelease tag such as
+The same build is pushed to `bravo68web/atrium` and
+`ghcr.io/bravo68web/atrium`. One tag covers `linux/amd64`,
+`linux/arm64`, and `linux/arm/v7`. A stable tag also publishes `1.2.3`,
+`1.2`, `1`, and `latest` on both registries. A prerelease tag such as
 `v1.2.3-rc.1` publishes `1.2.3-rc.1` and leaves `latest` where it is.
 
 ```bash
+docker run --rm -p 8080:8080 bravo68web/atrium:1.2.3
 docker run --rm -p 8080:8080 ghcr.io/bravo68web/atrium:1.2.3
 ```
 
@@ -260,14 +262,20 @@ Mount a config when you want Postgres, TLS, or stricter token rules:
 ```bash
 docker run --rm -p 8080:8080 \
   -v "$PWD/config.yaml:/config/config.yaml:ro" \
-  ghcr.io/bravo68web/atrium:1.2.3 \
+  bravo68web/atrium:1.2.3 \
   -config /config/config.yaml
 ```
 
+`ghcr.io/bravo68web/atrium:1.2.3` is the same image.
 `deploy/compose.yaml` already passes that `-config` argument. The first
-push creates a private GHCR package. Open the package, link it to this
+GHCR push creates a private package. Open the package, link it to this
 repository, and set the visibility to public before other people can
 pull it.
+
+Before the first Docker Hub push, add Actions secrets
+`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`. The token is a Docker Hub
+access token with write access. Create a public repository named
+`atrium` on that account. A missing secret fails the image job.
 
 ## Related
 
