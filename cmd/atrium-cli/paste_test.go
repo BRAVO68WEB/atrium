@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/oobcode"
+	"github.com/bravo68web/atrium/internal/oobcode"
 )
 
 func TestFlowPasteExchangesPastedCode(t *testing.T) {

@@ -9,8 +9,8 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"github.com/bravo68web/oauth-impl/internal/log"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/log"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 // Rabbit publishes durable messages. A retry waits on a queue whose

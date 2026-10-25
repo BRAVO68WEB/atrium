@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bravo68web/oauth-impl/internal/version"
+	"github.com/bravo68web/atrium/internal/version"
 )
 
 var (
@@ -28,7 +28,7 @@ func main() {
 
 func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:     "oauth-mobile",
+		Use:     "atrium-mobile",
 		Short:   "OAuth Mobile Polling CLI",
 		Long:    "A CLI tool for polling and managing CIBA/PAR authorization requests",
 		Version: version.Line(),
@@ -123,7 +123,7 @@ func pollForRequests() error {
 	}
 	_ = w.Flush()
 
-	fmt.Println("\nUse 'oauth-mobile approve <id>' or 'oauth-mobile deny <id>' to respond")
+	fmt.Println("\nUse 'atrium-mobile approve <id>' or 'atrium-mobile deny <id>' to respond")
 	return nil
 }
 

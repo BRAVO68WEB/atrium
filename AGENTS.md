@@ -1,4 +1,4 @@
-# AGENTS.md - OAuth Implementation Server
+# AGENTS.md - Atrium
 
 ## Quick Reference
 
@@ -11,20 +11,20 @@ just test-flow        # Quick integration test
 just e2e              # Playwright + Mocha flows (cd e2e && npm install first)
 
 # CLI commands
-./bin/oauth-cli init                    # Generate config.yaml and algo.go
-./bin/oauth-cli init --mfa              # Generate config with MFA enabled
-./bin/oauth-cli init --hash argon2id    # argon2id hasher, bcrypt still verifies
-./bin/oauth-cli server status           # Check server status
-./bin/oauth-cli client list             # List clients
-./bin/oauth-cli mfa enable --user-id X  # Enable MFA for user
+./bin/atrium-cli init                    # Generate config.yaml and algo.go
+./bin/atrium-cli init --mfa              # Generate config with MFA enabled
+./bin/atrium-cli init --hash argon2id    # argon2id hasher, bcrypt still verifies
+./bin/atrium-cli server status           # Check server status
+./bin/atrium-cli client list             # List clients
+./bin/atrium-cli mfa enable --user-id X  # Enable MFA for user
 ```
 
 ## Architecture
 
 Three binaries in `cmd/`:
-- **oauth-server** - Main HTTP server (chi router, SQLite, port 8080)
-- **oauth-cli** - Management CLI (client/user/token management + config init)
-- **oauth-mobile** - Mobile polling CLI (CIBA request approval)
+- **atrium** - Main HTTP server (chi router, SQLite, port 8080)
+- **atrium-cli** - Management CLI (client/user/token management + config init)
+- **atrium-mobile** - Mobile polling CLI (CIBA request approval)
 
 ### Layered Architecture (Route → Controller → Service → Repository)
 
@@ -53,7 +53,7 @@ Key package boundaries:
 **MFA (TOTP):**
 - Config: `security.mfa.enabled`, `security.mfa.required`
 - Web enrollment: `/mfa/enroll` (QR code + secret text)
-- CLI enrollment: `oauth-cli mfa enable --user-id X`
+- CLI enrollment: `atrium-cli mfa enable --user-id X`
 - QR rendering: `skip2/go-qrcode` (PNG + ASCII art)
 - TOTP: `pquerna/otp` library
 
@@ -93,15 +93,15 @@ The `E2E` GitHub check runs `cd e2e && npm test` on every pull request. Docker m
 - **Config load**: empty `-config` loads `./config.yaml` when it exists, otherwise built-in defaults. A `-config` path that is missing is fatal.
 - **CIBA queue polling**: `MemoryQueue.Poll()` uses a channel. `queue.type: redis` stores the same requests with a TTL of `expires_at` and approves them in one Redis script.
 - **OIDC key generation**: RSA + EC keys generated on startup. `subject_type: pairwise` replaces `sub` with a sector PPID. `oidc.pairwise_salt` is required when any pairwise client exists. Changing the salt changes every pairwise `sub`. ID tokens and UserInfo are nested JWEs (`RSA-OAEP-256` + `A256GCM`) only when the client sets the matching `*_encrypted_response_alg` and `*_encrypted_response_enc` and publishes an encryption key. Access tokens stay unencrypted.
-- **Config defaults**: Server binds `0.0.0.0:8080`, SQLite at `./oauth.db`
+- **Config defaults**: Server binds `0.0.0.0:8080`, SQLite at `./atrium.db`
 - **MFA**: TOTP with QR code rendering (PNG for web, ASCII for CLI)
-- **Management API**: `/api` and `/ciba` require a client-credentials access token with scope `management`. `oauth-cli init` writes `management.client_id` and `management.client_secret`. Startup inserts that client when it is missing. The CLI and `oauth-mobile` send the bearer token (`--client-id`, `--client-secret`, or `management.*` in `--config`).
+- **Management API**: `/api` and `/ciba` require a client-credentials access token with scope `management`. `atrium-cli init` writes `management.client_id` and `management.client_secret`. Startup inserts that client when it is missing. The CLI and `atrium-mobile` send the bearer token (`--client-id`, `--client-secret`, or `management.*` in `--config`).
 - **CIAM**: `/api/me` uses the user access token. Public reset and registration live under `/api/account`. SMTP is `smtp` in config and stays off until `enabled` is true.
 - **Sessions**: Browser sessions are SQLite rows. Cookie lifetime is `security.session_lifetime` (default 8h). `/device` approval uses that session. `/oauth/logout` sends OIDC back-channel logout tokens.
 - **Refresh tokens**: Rotation keeps `family_id`. Reuse revokes that family. List APIs return a public id and omit the secret.
 - **Login analytics**: `login_events` stores IP and user agent. `GET /api/me/login-analytics` and `GET /api/analytics/logins` summarize attempts, failure rate, new addresses, per-IP totals, and per-day totals. `security.trusted_proxies` is the only case where `X-Forwarded-For` is read. A first-seen address sets `new_ip` on the login webhook.
 - **Webhooks**: `webhooks` table. Management CRUD at `/api/webhooks`. Each row lists events (`login`, `logout`, `sso_session_triggered`, `bruteforce_detected`, `forgot_password`, `change_password`, and others). Delivery is HMAC-SHA256 in `X-Webhook-Signature` and does not fail the user action.
-- **Templates**: Go `html/template` in `internal/templates/`. `branding.templates` replaces a page by file name at startup. `docs.html` is not part of the auth chrome. Editing the embedded HTML does not change a built `bin/oauth-server` until the next build; the overlay directory does, after a restart.
+- **Templates**: Go `html/template` in `internal/templates/`. `branding.templates` replaces a page by file name at startup. `docs.html` is not part of the auth chrome. Editing the embedded HTML does not change a built `bin/atrium` until the next build; the overlay directory does, after a restart.
 - **OpenAPI**: Spec in `openapi/spec.yaml`, Scalar UI at `/docs`
 - **Traces**: `telemetry.enabled` is false unless set. When it is true, `telemetry.otlp_endpoint` is required and the server exports OTLP/HTTP spans. One request log carries `trace_id`. The HTTP span is the root. Handlers, helpers, and SQL queries on that goroutine are child spans. Query spans keep the statement and the argument count, not the values. `log.format` is `text` or `json`. Span attributes on the request are `client_id`, `grant_type`, `org_id`, and `oauth.error`. Tokens, codes, and secrets are not span attributes.
 - **Email templates**: `email.templates_dir` is empty unless set. Files are `reset.txt`, `verify.txt`, `password_changed.txt`, `new_sign_in.txt`, and `login_failed.txt`. The first line is `Subject:`. A missing file keeps the built-in text. A broken file stops startup.
@@ -130,28 +130,28 @@ The `E2E` GitHub check runs `cd e2e && npm test` on every pull request. Docker m
 
 ```bash
 # Initialize config and internal/hashalgo/algo.go
-./bin/oauth-cli init
-./bin/oauth-cli init --mfa
-./bin/oauth-cli init --hash argon2id
-./bin/oauth-cli init --output myconfig.yaml
-./bin/oauth-cli init --force
-HASH_ALGO=./myhash.go ./bin/oauth-cli init
+./bin/atrium-cli init
+./bin/atrium-cli init --mfa
+./bin/atrium-cli init --hash argon2id
+./bin/atrium-cli init --output myconfig.yaml
+./bin/atrium-cli init --force
+HASH_ALGO=./myhash.go ./bin/atrium-cli init
 
 # Management
-./bin/oauth-cli client list
-./bin/oauth-cli client create --name "App" --redirect-uri "https://example.com/cb"
-./bin/oauth-cli user create --username "user" --password "pass"
-./bin/oauth-cli ciba pending
+./bin/atrium-cli client list
+./bin/atrium-cli client create --name "App" --redirect-uri "https://example.com/cb"
+./bin/atrium-cli user create --username "user" --password "pass"
+./bin/atrium-cli ciba pending
 
 # MFA
-./bin/oauth-cli mfa enable --user-id <id>
-./bin/oauth-cli mfa enable --user-id <id> --show-secret
-./bin/oauth-cli mfa verify --user-id <id> --code 123456
+./bin/atrium-cli mfa enable --user-id <id>
+./bin/atrium-cli mfa enable --user-id <id> --show-secret
+./bin/atrium-cli mfa verify --user-id <id> --code 123456
 
 # Mobile
-./bin/oauth-mobile list
-./bin/oauth-mobile approve <auth-req-id> --user-id <user-id>
-./bin/oauth-mobile deny <auth-req-id> --reason "Denied"
+./bin/atrium-mobile list
+./bin/atrium-mobile approve <auth-req-id> --user-id <user-id>
+./bin/atrium-mobile deny <auth-req-id> --reason "Denied"
 ```
 
 ## Development

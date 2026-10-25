@@ -3,7 +3,7 @@ package service
 import (
 	"strings"
 
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/telemetry"
 	// ContentSecurityPolicy is the browser policy. Provider hosts are added only
 	// while bot protection is configured. img-src allows https so an
 	// organization logo_url can load.

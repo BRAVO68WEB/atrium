@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
+	"github.com/bravo68web/atrium/internal/config"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )

@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/background"
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/database"
+	"github.com/bravo68web/atrium/internal/background"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/database"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 

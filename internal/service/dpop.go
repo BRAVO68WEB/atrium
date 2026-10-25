@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/cache"
+	"github.com/bravo68web/atrium/internal/cache"
 
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/telemetry"
 	"github.com/golang-jwt/jwt/v5"
 )
 

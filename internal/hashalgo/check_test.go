@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
+	"github.com/bravo68web/atrium/internal/config"
 )
 
 func TestDefaultFileMatchesBinary(t *testing.T) {
@@ -87,7 +87,7 @@ func TestCheckSourceContract(t *testing.T) {
 		{name: "default", src: valid},
 		{
 			name: "alias",
-			src:  "package hashalgo\n\nimport ph \"github.com/bravo68web/oauth-impl/pkg/passhash\"\n\nfunc Hash() ph.Hasher { return nil }\n",
+			src:  "package hashalgo\n\nimport ph \"github.com/bravo68web/atrium/pkg/passhash\"\n\nfunc Hash() ph.Hasher { return nil }\n",
 		},
 		{
 			name: "method is not a second function",

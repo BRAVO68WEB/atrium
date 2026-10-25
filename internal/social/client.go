@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 const maxBody = 1 << 20
@@ -104,7 +104,7 @@ func (c *Client) Exchange(ctx context.Context, p Resolved, redirectURI, code, ve
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "oauth-impl")
+	req.Header.Set("User-Agent", "atrium")
 	res, err := c.do(req)
 	if err != nil {
 		return tokenResult{}, err
@@ -208,7 +208,7 @@ func (c *Client) discovery(ctx context.Context, issuer string) (discovery, error
 		return discovery{}, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "oauth-impl")
+	req.Header.Set("User-Agent", "atrium")
 	raw, err := c.do(req)
 	if err != nil {
 		return discovery{}, err
@@ -234,7 +234,7 @@ func (c *Client) userinfo(ctx context.Context, endpoint, accessToken string) (ma
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "oauth-impl")
+	req.Header.Set("User-Agent", "atrium")
 	raw, err := c.do(req)
 	if err != nil {
 		return nil, err
@@ -256,7 +256,7 @@ func (c *Client) githubEmail(ctx context.Context, endpoint, accessToken string) 
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "oauth-impl")
+	req.Header.Set("User-Agent", "atrium")
 	raw, err := c.do(req)
 	if err != nil {
 		return "", false

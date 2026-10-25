@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/bravo68web/oauth-impl/internal/mgmtclient"
+	"github.com/bravo68web/atrium/internal/mgmtclient"
 )
 
 var (

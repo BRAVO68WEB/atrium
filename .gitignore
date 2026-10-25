@@ -71,12 +71,12 @@ e2e/.cache/
 # Temporary files
 *.tmp
 *.bak
-oauth-server
-!oauth-server/
-oauth-cli
-!oauth-cli/
-oauth-mobile
-!oauth-mobile/
+atrium
+!atrium/
+atrium-cli
+!atrium-cli/
+atrium-mobile
+!atrium-mobile/
 certs/
 keys/
 data/*

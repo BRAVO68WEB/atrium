@@ -11,9 +11,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/bravo68web/oauth-impl/internal/background"
-	"github.com/bravo68web/oauth-impl/internal/repository"
-	"github.com/bravo68web/oauth-impl/internal/testpg"
+	"github.com/bravo68web/atrium/internal/background"
+	"github.com/bravo68web/atrium/internal/repository"
+	"github.com/bravo68web/atrium/internal/testpg"
 )
 
 func TestWebhookFiltersAndSigns(t *testing.T) {

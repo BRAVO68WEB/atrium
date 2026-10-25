@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/background"
+	"github.com/bravo68web/atrium/internal/background"
 )
 
 func csrfFromBody(t *testing.T, body string) string {

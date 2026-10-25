@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 // dbTime scans a timestamp that SQLite returns as text and Postgres returns as time.Time.

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping with oauth-impl. This page is how a change gets onto
+Thanks for helping with Atrium. This page is how a change gets onto
 `main`. Behavior and operator setup live in the [docs](docs/CONFIG.md).
 
 ## Setup
@@ -50,7 +50,7 @@ file. Copy a starting point from `internal/hashalgo/examples/`. See
 
 ## Files to leave untracked
 
-Do not commit `certs/`, `oauth.db`, or a `package-lock.json` at the
+Do not commit `certs/`, `atrium.db`, or a `package-lock.json` at the
 repository root. The end-to-end lockfile is `e2e/package-lock.json`.
 
 ## License

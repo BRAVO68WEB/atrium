@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SERVER="${1:-http://localhost:8080}"
 
-echo "=== OAuth Implementation Server - Test Suite ==="
+echo "=== Atrium - Test Suite ==="
 echo "Server: $SERVER"
 echo ""
 

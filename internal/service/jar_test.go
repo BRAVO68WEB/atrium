@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/models"
+	"github.com/bravo68web/atrium/internal/models"
 	"github.com/golang-jwt/jwt/v5"
 )
 

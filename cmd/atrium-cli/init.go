@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/hashalgo"
-	"github.com/bravo68web/oauth-impl/pkg/crypto"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/hashalgo"
+	"github.com/bravo68web/atrium/pkg/crypto"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
@@ -38,8 +38,8 @@ The client secret is in that file under management.client_secret.
 
 Next:
   just run
-  ./bin/oauth-cli user create --username "user" --password "pass" --email "user@example.com"
-  ./bin/oauth-cli client create --name "App" --redirect-uri "https://example.com/cb"
+  ./bin/atrium-cli user create --username "user" --password "pass" --email "user@example.com"
+  ./bin/atrium-cli client create --name "App" --redirect-uri "https://example.com/cb"
 `, r.HasherMessage, r.ConfigPath, r.ManagementClientID)
 }
 

@@ -22,7 +22,7 @@ services:
     command: ["start", "--auto-create-sessions"]
     ports:
       - "8089:8080"
-  oauth-server:
+  atrium:
     build:
       context: ..
       dockerfile: Dockerfile

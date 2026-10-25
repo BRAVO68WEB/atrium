@@ -14,13 +14,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bravo68web/oauth-impl/pkg/passhash"
+	"github.com/bravo68web/atrium/pkg/passhash"
 )
 
 // CanonicalRel is the hasher file, relative to the project root.
 const CanonicalRel = "internal/hashalgo/algo.go"
 
-const passhashPath = "github.com/bravo68web/oauth-impl/pkg/passhash"
+const passhashPath = "github.com/bravo68web/atrium/pkg/passhash"
 
 //go:embed algo.go
 var embeddedAlgo []byte
@@ -125,7 +125,7 @@ func CheckSource(filename string, src []byte) error {
 		Importer:                 importer,
 	}
 	info := &types.Info{Defs: map[*ast.Ident]types.Object{}}
-	if _, err := conf.Check("github.com/bravo68web/oauth-impl/internal/hashalgo", fset, []*ast.File{file}, info); err != nil {
+	if _, err := conf.Check("github.com/bravo68web/atrium/internal/hashalgo", fset, []*ast.File{file}, info); err != nil {
 		return fmt.Errorf("typecheck password hasher: %w", err)
 	}
 

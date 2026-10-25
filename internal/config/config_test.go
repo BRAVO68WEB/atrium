@@ -51,7 +51,7 @@ func TestSaveRoundTrip(t *testing.T) {
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Branding.ProductName != "OAuth Server" || loaded.Branding.PrimaryColor != "#0066ff" {
+	if loaded.Branding.ProductName != "Atrium" || loaded.Branding.PrimaryColor != "#0066ff" {
 		t.Fatalf("branding = %+v", loaded.Branding)
 	}
 	if loaded.Branding.ShowRegister == nil || !*loaded.Branding.ShowRegister {
@@ -65,7 +65,7 @@ func TestBrandingNormalizeDefaults(t *testing.T) {
 	if cfg.Branding.PrimaryColor != "#0066ff" {
 		t.Fatalf("primary = %q", cfg.Branding.PrimaryColor)
 	}
-	if cfg.Branding.ProductName != "OAuth Server" || cfg.Branding.LoginTitle != "Sign In" {
+	if cfg.Branding.ProductName != "Atrium" || cfg.Branding.LoginTitle != "Sign In" {
 		t.Fatalf("copy = %+v", cfg.Branding)
 	}
 	if cfg.Branding.ShowRegister == nil || !*cfg.Branding.ShowRegister {

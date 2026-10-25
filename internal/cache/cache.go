@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 // Cache stores short-lived values. Add reports whether the key was newly stored.

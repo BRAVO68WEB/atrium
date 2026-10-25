@@ -3,9 +3,9 @@ package oidc
 import (
 	"strings"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/models"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/models"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 func applyClaimMappings(mappings []config.ClaimMapping, user *models.User, scopes []string) map[string]any {

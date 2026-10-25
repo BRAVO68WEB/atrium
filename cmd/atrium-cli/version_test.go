@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bravo68web/oauth-impl/internal/version"
+	"github.com/bravo68web/atrium/internal/version"
 )
 
 func TestRootVersionFlag(t *testing.T) {
@@ -18,7 +18,7 @@ func TestRootVersionFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := strings.TrimSpace(buf.String())
-	want := "oauth-mobile " + version.Line()
+	want := "atrium-cli " + version.Line()
 	if got != want {
 		t.Fatalf("got %q", got)
 	}

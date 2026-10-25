@@ -1,10 +1,10 @@
 #!/bin/bash
-# OAuth Implementation Server - Usage Examples
+# Atrium - Usage Examples
 # Make sure the server is running: just run
 
 SERVER="http://localhost:8080"
 
-echo "=== OAuth Implementation Server - Usage Examples ==="
+echo "=== Atrium - Usage Examples ==="
 echo ""
 
 # Colors for output

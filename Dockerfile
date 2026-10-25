@@ -12,16 +12,16 @@ ARG DATE=
 RUN variant="$TARGETVARIANT"; \
     CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" GOARM="${variant#v}" \
     go build -trimpath \
-      -ldflags="-s -w -X github.com/bravo68web/oauth-impl/internal/version.Version=${VERSION} -X github.com/bravo68web/oauth-impl/internal/version.Commit=${COMMIT} -X github.com/bravo68web/oauth-impl/internal/version.Date=${DATE}" \
-      -o /oauth-server ./cmd/oauth-server
+      -ldflags="-s -w -X github.com/bravo68web/atrium/internal/version.Version=${VERSION} -X github.com/bravo68web/atrium/internal/version.Commit=${COMMIT} -X github.com/bravo68web/atrium/internal/version.Date=${DATE}" \
+      -o /atrium ./cmd/atrium
 
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates \
     && mkdir -p /app/internal/hashalgo \
     && chown -R nobody:nobody /app
-COPY --from=build --chown=nobody:nobody /oauth-server /usr/local/bin/oauth-server
+COPY --from=build --chown=nobody:nobody /atrium /usr/local/bin/atrium
 COPY --from=build --chown=nobody:nobody /src/internal/hashalgo/algo.go /app/internal/hashalgo/algo.go
 WORKDIR /app
 USER nobody
 EXPOSE 8080
-ENTRYPOINT ["oauth-server"]
+ENTRYPOINT ["atrium"]

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	root "github.com/bravo68web/oauth-impl"
-	"github.com/bravo68web/oauth-impl/internal/branding"
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/models"
+	root "github.com/bravo68web/atrium"
+	"github.com/bravo68web/atrium/internal/branding"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/models"
 )
 
 func TestOverlayReplacesLoginOnly(t *testing.T) {
@@ -108,7 +108,7 @@ func TestBrandSceneStaysInsideTheCard(t *testing.T) {
 		t.Fatal(err)
 	}
 	login := executePage(t, tmpl, "login.html", cfg, "Login", "Sign In")
-	logo := strings.Index(login, `alt="OAuth Server"`)
+	logo := strings.Index(login, `alt="Atrium"`)
 	title := strings.Index(login, "Continue to Example App")
 	signup := strings.Index(login, "Sign up")
 	footer := strings.Index(login, "Northwind")

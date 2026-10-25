@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
-	applog "github.com/bravo68web/oauth-impl/internal/log"
+	"github.com/bravo68web/atrium/internal/config"
+	applog "github.com/bravo68web/atrium/internal/log"
 	"github.com/felixge/httpsnoop"
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -24,7 +24,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const tracerName = "github.com/bravo68web/oauth-impl"
+const tracerName = "github.com/bravo68web/atrium"
 
 // Setup installs a global tracer provider. A disabled config leaves the
 // default no-op provider in place and the returned shutdown function does nothing.
@@ -49,7 +49,7 @@ func Setup(ctx context.Context, cfg *config.TelemetryConfig) (func(context.Conte
 	}
 	name := cfg.ServiceName
 	if name == "" {
-		name = "oauth-server"
+		name = "atrium"
 	}
 	ratio := cfg.SampleRatio
 	if ratio <= 0 {

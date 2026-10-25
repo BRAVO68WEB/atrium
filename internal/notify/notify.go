@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/log"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/log"
+	"github.com/bravo68web/atrium/internal/telemetry"
 	"github.com/google/uuid"
 )
 

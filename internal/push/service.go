@@ -16,17 +16,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/database"
-	"github.com/bravo68web/oauth-impl/internal/service"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
-	"github.com/bravo68web/oauth-impl/pkg/crypto"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/database"
+	"github.com/bravo68web/atrium/internal/service"
+	"github.com/bravo68web/atrium/internal/telemetry"
+	"github.com/bravo68web/atrium/pkg/crypto"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	qrcode "github.com/skip2/go-qrcode"
 )
 
-const problemBase = "https://oauth-impl.local/problems/"
+const problemBase = "https://atrium.local/problems/"
 
 // Problem is an RFC 9457 body for the push endpoints.
 type Problem struct {

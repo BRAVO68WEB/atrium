@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	root "github.com/bravo68web/oauth-impl"
-	"github.com/bravo68web/oauth-impl/internal/branding"
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/service"
+	root "github.com/bravo68web/atrium"
+	"github.com/bravo68web/atrium/internal/branding"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/service"
 )
 
 func TestDisableRegistrationBlocksWebSignup(t *testing.T) {

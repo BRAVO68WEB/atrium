@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/oobcode"
-	"github.com/bravo68web/oauth-impl/internal/queue"
-	"github.com/bravo68web/oauth-impl/internal/server"
-	"github.com/bravo68web/oauth-impl/internal/testpg"
-	"github.com/bravo68web/oauth-impl/pkg/crypto"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/oobcode"
+	"github.com/bravo68web/atrium/internal/queue"
+	"github.com/bravo68web/atrium/internal/server"
+	"github.com/bravo68web/atrium/internal/testpg"
+	"github.com/bravo68web/atrium/pkg/crypto"
 )
 
 func TestOOBHelperStaysOff(t *testing.T) {

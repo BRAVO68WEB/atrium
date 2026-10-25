@@ -12,7 +12,7 @@ while [[ "$#" -gt 0 ]]; do
     esac
 done
 
-echo "=== OAuth Implementation Server - Certificate Generator ==="
+echo "=== Atrium - Certificate Generator ==="
 
 if [ -f "$CERT_DIR/server.crt" ] && [ "$FORCE" = false ]; then
     echo "Certificates already exist. Use --force to regenerate."
@@ -26,14 +26,14 @@ openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 \
     -keyout "$CERT_DIR/ca.key" \
     -out "$CERT_DIR/ca.crt" \
     -days 3650 -nodes \
-    -subj "/CN=OAuth Test CA/O=OAuth Implementation/C=US" 2>/dev/null
+    -subj "/CN=OAuth Test CA/O=Atrium/C=US" 2>/dev/null
 
 echo "2. Generating server certificate..."
 openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 \
     -keyout "$CERT_DIR/server.key" \
     -out "$CERT_DIR/server.csr" \
     -nodes \
-    -subj "/CN=localhost/O=OAuth Server/C=US" 2>/dev/null
+    -subj "/CN=localhost/O=Atrium/C=US" 2>/dev/null
 
 cat > "$CERT_DIR/server.ext" << EOF
 authorityKeyIdentifier=keyid,issuer
@@ -138,7 +138,7 @@ fi
 
 echo "8. Updating config.yaml..."
 cat > "$CONFIG_FILE" << EOF
-# OAuth Implementation Server Configuration
+# Atrium Configuration
 server:
   host: "0.0.0.0"
   port: 8443
@@ -199,7 +199,7 @@ security:
   mfa:
     enabled: false
     required: false
-    issuer: "OAuthImplServer"
+    issuer: "Atrium"
     digits: 6
     period: 30
   mtls:
@@ -231,7 +231,7 @@ social:
   providers: []
 
 branding:
-  product_name: "OAuth Server"
+  product_name: "Atrium"
   login_title: "Sign In"
   username_label: "Username"
   password_label: "Password"

@@ -27,7 +27,7 @@ import (
 // DefaultBcryptCost matches bcrypt.DefaultCost so existing hashes verify.
 const DefaultBcryptCost = bcrypt.DefaultCost
 
-// DefaultArgon2 is the argon2id parameter set written by `oauth-cli init --hash argon2id`.
+// DefaultArgon2 is the argon2id parameter set written by `atrium-cli init --hash argon2id`.
 // Memory is kibibytes. 64 * 1024 is 64 MiB.
 var DefaultArgon2 = Argon2Params{
 	Memory:      64 * 1024,

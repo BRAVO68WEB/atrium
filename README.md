@@ -1,16 +1,16 @@
-# OAuth Implementation Server
+# Atrium
 
-[![codecov](https://codecov.io/gh/BRAVO68WEB/oauth-impl/branch/main/graph/badge.svg)](https://codecov.io/gh/BRAVO68WEB/oauth-impl)
+[![codecov](https://codecov.io/gh/BRAVO68WEB/atrium/branch/main/graph/badge.svg)](https://codecov.io/gh/BRAVO68WEB/atrium)
 
-oauth-impl is a self-hosted OAuth 2.0 and OpenID Connect issuer. One Go
-process serves the protocol, the browser sign-in pages, and the management
-API.
+Atrium is a self-hosted identity server. It speaks OAuth 2.0 and OpenID
+Connect. One process serves the protocol, the browser sign-in pages, and the
+management API.
 
 ## Goals
 
 Run it with a SQLite file and no extra services. `just run` is enough for
 local use. Administration is a client-credentials token with the
-`management` scope, through `/api` and `oauth-cli`. Postgres, Redis, SMTP,
+`management` scope, through `/api` and `atrium-cli`. Postgres, Redis, SMTP,
 and traces turn on when you set them.
 
 ## Features
@@ -37,8 +37,8 @@ Access tokens are opaque unless you set `security.access_token_format` to
 ## Quick start
 
 ```bash
-git clone https://github.com/bravo68web/oauth-impl.git
-cd oauth-impl
+git clone https://github.com/bravo68web/atrium.git
+cd atrium
 just run
 ```
 
@@ -46,7 +46,7 @@ With no `config.yaml`, the server listens on `http://localhost:8080`. When
 that file is present, `just run` uses its port and TLS settings.
 
 A `v*` tag publishes release archives and
-`ghcr.io/bravo68web/oauth-impl` for amd64, arm64, and arm/v7. See
+`ghcr.io/bravo68web/atrium` for amd64, arm64, and arm/v7. See
 [Deploy](docs/DEPLOY.md).
 
 Postgres install:
@@ -60,7 +60,7 @@ that file anywhere but a laptop. `just run` still uses SQLite.
 
 ```bash
 just build
-./bin/oauth-cli init
+./bin/atrium-cli init
 ```
 
 `init` writes `config.yaml` and `internal/hashalgo/algo.go`. It leaves an
@@ -73,7 +73,7 @@ existing file in place unless you pass `--force`.
 | [Configuration](docs/CONFIG.md) | Config file, keys, mail templates, hashing |
 | [Deploy](docs/DEPLOY.md) | Process, TLS, Postgres, Redis, SMTP, traces |
 | [Branding](docs/BRANDING.md) | Login pages, assets, and HTML overlays |
-| [CLI](docs/CLI.md) | `oauth-cli` and `oauth-mobile` |
+| [CLI](docs/CLI.md) | `atrium-cli` and `atrium-mobile` |
 | [Infrastructure](docs/INFRA.md) | Process layout, SQL, Redis, signing keys |
 | [Testing](docs/TESTING.md) | Go tests, Postgres, and the browser suite |
 | [API](docs/API.md) | Route map and the OpenAPI spec |

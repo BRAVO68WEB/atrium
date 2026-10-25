@@ -1,4 +1,4 @@
-# OAuth Implementation Server Configuration
+# Atrium Configuration
 server:
   host: "0.0.0.0"
   port: 8443
@@ -22,14 +22,14 @@ log:
 
 telemetry:
   enabled: false
-  service_name: oauth-server
+  service_name: atrium
   otlp_endpoint: ""
   insecure: false
   sample_ratio: 1
 
 database:
   driver: sqlite
-  path: "./oauth.db"
+  path: "./atrium.db"
   dsn: ""
   migrations: true
 
@@ -68,7 +68,7 @@ security:
   mfa:
     enabled: false
     required: false
-    issuer: "OAuthImplServer"
+    issuer: "Atrium"
     digits: 6
     period: 30
   mtls:
@@ -100,7 +100,7 @@ social:
   providers: []
 
 branding:
-  product_name: "OAuth Server"
+  product_name: "Atrium"
   login_title: "Sign In"
   username_label: "Username"
   password_label: "Password"
@@ -129,7 +129,7 @@ redis:
   username: ""
   password: ""
   db: 0
-  prefix: oauth
+  prefix: atrium
 
 cache:
   provider: memory

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 // PasswordError is a complexity failure. Callers map it to invalid_password.

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
+	"github.com/bravo68web/atrium/internal/config"
 )
 
 func TestOrganizationsStayOffUntilEnabled(t *testing.T) {

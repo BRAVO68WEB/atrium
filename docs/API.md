@@ -16,7 +16,7 @@ map. Command equivalents are in [CLI](CLI.md). Sample curls are in
 ## Who can call what
 
 `/api` management routes and `/ciba` need `Authorization: Bearer` with a
-client-credentials token whose scope contains `management`. `oauth-cli
+client-credentials token whose scope contains `management`. `atrium-cli
 init` writes that client into `management.client_id` and
 `management.client_secret`. The server inserts the client on startup
 when the id is missing.
@@ -96,7 +96,7 @@ The default discovery list includes every grant above except `password`
 and the JWT bearer grant. The JWT bearer grant is advertised only when
 `xaa.enabled` is true. See [Cross-app access](XAA.md).
 
-`oauth-cli client master` creates a client that includes `password`.
+`atrium-cli client master` creates a client that includes `password`.
 The password grant sends the identifier in `username`. CIBA on this
 server is poll mode. A token exchange has to present an access token
 this client already holds. The new scope stays inside that token's
@@ -112,7 +112,7 @@ A client can register `urn:ietf:wg:oauth:2.0:oob` or
 `urn:ietf:wg:oauth:2.0:oob:auto` instead of an HTTP callback. The request
 must use `response_type=code` and PKCE `S256`. After sign-in the server
 returns an HTML page that shows the code. The token request sends that
-same `redirect_uri` with the pasted code and `code_verifier`. `oauth-cli
+same `redirect_uri` with the pasted code and `code_verifier`. `atrium-cli
 flow paste` prints the URL and reads the code.
 
 When `security.oob_helper` is true, `GET /oauth/oob` is the helper page
@@ -297,7 +297,7 @@ POST   /api/ciba/{id}/approve
 POST   /api/ciba/{id}/deny
 ```
 
-`oauth-mobile` calls `GET /ciba/pending`, `POST /ciba/approve`, and
+`atrium-mobile` calls `GET /ciba/pending`, `POST /ciba/approve`, and
 `POST /ciba/deny`. Its `status` command calls `GET /health`.
 
 Webhook deliveries are `POST` JSON. `X-Webhook-Signature` is `sha256=`

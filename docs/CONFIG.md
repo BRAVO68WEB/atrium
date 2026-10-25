@@ -6,17 +6,17 @@ run the process is in [Deploy](DEPLOY.md). Page copy is in
 
 ## Load order
 
-`oauth-cli init` writes `config.yaml` from the built-in defaults, fills
+`atrium-cli init` writes `config.yaml` from the built-in defaults, fills
 `management.client_id` and `management.client_secret`, and generates
 `oidc.pairwise_salt`. It also writes `internal/hashalgo/algo.go` when
 that file is missing. An existing config or an edited hasher stays in
 place unless you pass `--force`.
 
 ```bash
-./bin/oauth-cli init
-./bin/oauth-cli init --mfa --output config.yaml
-./bin/oauth-cli init --hash argon2id
-HASH_ALGO=./myhash.go ./bin/oauth-cli init
+./bin/atrium-cli init
+./bin/atrium-cli init --mfa --output config.yaml
+./bin/atrium-cli init --hash argon2id
+HASH_ALGO=./myhash.go ./bin/atrium-cli init
 ```
 
 `--hash` is `bcrypt` or `argon2id`. `HASH_ALGO` copies another Go file
@@ -63,7 +63,7 @@ server:
 
 database:
   driver: sqlite
-  path: ./oauth.db
+  path: ./atrium.db
   dsn: ""
   migrations: true
 
@@ -72,7 +72,7 @@ redis:
   username: ""
   password: ""
   db: 0
-  prefix: oauth
+  prefix: atrium
 
 cache:
   provider: memory
@@ -125,7 +125,7 @@ security:
   mfa:
     enabled: false
     required: false
-    issuer: OAuthImplServer
+    issuer: Atrium
     digits: 6
     period: 30
   mtls:
@@ -157,7 +157,7 @@ email:
   templates_dir: ""
 
 branding:
-  product_name: OAuth Server
+  product_name: Atrium
   login_title: Sign In
   username_label: Username
   password_label: Password
@@ -217,7 +217,7 @@ debug:
 
 telemetry:
   enabled: false
-  service_name: oauth-server
+  service_name: atrium
   otlp_endpoint: ""
   insecure: false
   sample_ratio: 1

@@ -55,7 +55,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/bravo68web/oauth-impl
+          images: ghcr.io/bravo68web/atrium
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}

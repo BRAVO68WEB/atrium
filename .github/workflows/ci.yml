@@ -23,9 +23,9 @@ jobs:
 
       - name: Build all binaries
         run: |
-          go build -o bin/oauth-server ./cmd/oauth-server
-          go build -o bin/oauth-cli ./cmd/oauth-cli
-          go build -o bin/oauth-mobile ./cmd/oauth-mobile
+          go build -o bin/atrium ./cmd/atrium
+          go build -o bin/atrium-cli ./cmd/atrium-cli
+          go build -o bin/atrium-mobile ./cmd/atrium-mobile
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4

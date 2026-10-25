@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bravo68web/oauth-impl/pkg/crypto"
+	"github.com/bravo68web/atrium/pkg/crypto"
 	"github.com/golang-jwt/jwt/v5"
 )
 

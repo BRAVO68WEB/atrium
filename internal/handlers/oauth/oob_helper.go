@@ -4,9 +4,9 @@ import (
 	"html"
 	"net/http"
 
-	"github.com/bravo68web/oauth-impl/internal/branding"
-	"github.com/bravo68web/oauth-impl/internal/oobcode"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/branding"
+	"github.com/bravo68web/atrium/internal/oobcode"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 // HandleOOBHelper serves the combined-code page from

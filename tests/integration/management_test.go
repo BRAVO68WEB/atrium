@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/background"
+	"github.com/bravo68web/atrium/internal/background"
 	"github.com/pquerna/otp/totp"
 )
 

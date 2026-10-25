@@ -14,8 +14,8 @@ services:
       interval: 2s
       timeout: 5s
       retries: 20
-  oauth-server:
-    image: ghcr.io/bravo68web/oauth-impl:0.1.1
+  atrium:
+    image: ghcr.io/bravo68web/atrium:0.1.1
     depends_on:
       postgres:
         condition: service_healthy

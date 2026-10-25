@@ -1,6 +1,6 @@
 # Deploy
 
-This page is how you run oauth-impl. Keys and defaults are in
+This page is how you run Atrium. Keys and defaults are in
 [Configuration](CONFIG.md). The data layout is in
 [Infrastructure](INFRA.md).
 
@@ -12,18 +12,18 @@ From the repository root:
 just run
 ```
 
-`just run` executes `go run cmd/oauth-server/main.go`. With no
+`just run` executes `go run cmd/atrium/main.go`. With no
 `config.yaml` in the working directory, the server listens on
 `http://localhost:8080`. When `config.yaml` is present, that file sets
 the host, port, and TLS.
 
 ```bash
 just dev                 # reload on save, requires air
-just build               # bin/oauth-server, bin/oauth-cli, bin/oauth-mobile
-./bin/oauth-server
-go run cmd/oauth-server/main.go --port 9090
-go run cmd/oauth-server/main.go --config /etc/oauth/config.yaml
-go run cmd/oauth-server/main.go --db /var/lib/oauth/oauth.db
+just build               # bin/atrium, bin/atrium-cli, bin/atrium-mobile
+./bin/atrium
+go run cmd/atrium/main.go --port 9090
+go run cmd/atrium/main.go --config /etc/atrium/config.yaml
+go run cmd/atrium/main.go --db /var/lib/atrium/atrium.db
 ```
 
 `--port` overrides `server.port`. `--db` overrides `database.path`. A
@@ -36,7 +36,7 @@ from the binary.
 
 `GET /health` returns `{"status":"ok"}`.
 
-`oauth-server --version` prints the build version. `--help` lists
+`atrium --version` prints the build version. `--help` lists
 `--config`, `--port`, `--db`, and `--version`. `GET /version` needs no
 token. A local build returns `{"version":"dev"}`. A release build adds
 `commit` and `date`.
@@ -89,7 +89,7 @@ want to share:
 ```yaml
 redis:
   addr: localhost:6379
-  prefix: oauth
+  prefix: atrium
 queue:
   type: redis
 cache:
@@ -121,7 +121,7 @@ Password reset, email confirmation, and login mail send when
 `smtp.enabled` is true. The server stores the token or the login,
 returns the response, and then talks to SMTP. With SMTP off,
 forgot-password returns `503` and `mailer_disabled`. An operator can
-still set a password with `oauth-cli user password` or
+still set a password with `atrium-cli user password` or
 `POST /api/users/{id}/password`. Login still succeeds when a send
 fails.
 
@@ -227,11 +227,11 @@ git push origin v1.2.3
 ```
 
 The release archive for each OS and architecture contains
-`oauth-server`, `oauth-cli`, and `oauth-mobile`, plus
+`atrium`, `atrium-cli`, and `atrium-mobile`, plus
 `internal/hashalgo/algo.go`. Linux and macOS archives are `.tar.gz`.
 Windows archives are `.zip`. The names look like
-`oauth-impl_1.2.3_linux_amd64.tar.gz` and
-`oauth-impl_1.2.3_windows_386.zip`.
+`atrium_1.2.3_linux_amd64.tar.gz` and
+`atrium_1.2.3_windows_386.zip`.
 
 | OS | amd64 | 386 | arm64 |
 | --- | --- | --- | --- |
@@ -239,16 +239,16 @@ Windows archives are `.zip`. The names look like
 | windows | yes | yes | yes |
 | darwin | yes | no | yes |
 
-macOS has no 32-bit build. Extract an archive and run `./oauth-server`
+macOS has no 32-bit build. Extract an archive and run `./atrium`
 from that directory so startup can read the hasher file.
 
-The server image is `ghcr.io/bravo68web/oauth-impl`. One tag covers
+The server image is `ghcr.io/bravo68web/atrium`. One tag covers
 `linux/amd64`, `linux/arm64`, and `linux/arm/v7`. A stable tag also
 publishes `1.2.3`, `1.2`, `1`, and `latest`. A prerelease tag such as
 `v1.2.3-rc.1` publishes `1.2.3-rc.1` and leaves `latest` where it is.
 
 ```bash
-docker run --rm -p 8080:8080 ghcr.io/bravo68web/oauth-impl:1.2.3
+docker run --rm -p 8080:8080 ghcr.io/bravo68web/atrium:1.2.3
 ```
 
 That container listens on port 8080 and stores SQLite in its working
@@ -260,7 +260,7 @@ Mount a config when you want Postgres, TLS, or stricter token rules:
 ```bash
 docker run --rm -p 8080:8080 \
   -v "$PWD/config.yaml:/config/config.yaml:ro" \
-  ghcr.io/bravo68web/oauth-impl:1.2.3 \
+  ghcr.io/bravo68web/atrium:1.2.3 \
   -config /config/config.yaml
 ```
 
