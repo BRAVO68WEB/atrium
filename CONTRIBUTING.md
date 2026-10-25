@@ -1,7 +1,7 @@
 # Contributing
 
 Thanks for helping with Atrium. This page is how a change gets onto
-`main`. Behavior and operator setup live in the [docs](docs/CONFIG.md).
+`dev`. Behavior and operator setup live in the [docs](docs/CONFIG.md).
 
 ## Setup
 
@@ -17,8 +17,12 @@ just test
 
 ## Pull requests
 
-`main` accepts changes through a pull request. Run `just check` before you
-open one. That runs format, vet, lint, and the Go tests.
+Open a pull request against `dev`. That branch is the default. Run
+`just check` before you open one. That runs format, vet, lint, and the
+Go tests.
+
+`main` does not take a feature branch. The only pull request `main`
+accepts is from `dev`, and that is how a preview becomes a release.
 
 GitHub also runs these checks:
 
