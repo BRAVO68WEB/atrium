@@ -10,8 +10,43 @@ permissions:
   packages: write
 
 jobs:
+  channel:
+    name: Release channel
+    runs-on: ubuntu-latest
+    outputs:
+      preview: ${{ steps.rel.outputs.preview }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Classify the tag
+        id: rel
+        run: |
+          git fetch origin main
+          commit="$(git rev-parse "${GITHUB_SHA}^{commit}")"
+          tag="${GITHUB_REF_NAME}"
+          if printf '%s\n' "$tag" | grep -Eq -- '-(rc|preview|alpha|beta)([.]|$)'; then
+            preview=true
+          else
+            preview=false
+          fi
+          on_main=false
+          if git merge-base --is-ancestor "$commit" origin/main; then
+            on_main=true
+          fi
+          if [ "$preview" = false ] && [ "$on_main" = false ]; then
+            echo "A stable tag must point at main. From dev, tag vX.Y.Z-rc.N."
+            exit 1
+          fi
+          if [ "$preview" = true ] && [ "$on_main" = true ]; then
+            echo "A preview tag must point at dev, not main."
+            exit 1
+          fi
+          echo "preview=$preview" >> "$GITHUB_OUTPUT"
+
   binaries:
     name: Binaries
+    needs: channel
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,6 +69,7 @@ jobs:
 
   image:
     name: Image
+    needs: channel
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +104,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
+            type=raw,value=preview,enable=${{ needs.channel.outputs.preview == 'true' }}
           flavor: |
             latest=auto
 

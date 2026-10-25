@@ -217,9 +217,19 @@ time spent in each.
 
 ## Release
 
-Pushing a `v*` tag is the only publish step. A tag such as `v1.2.3`
-creates a GitHub Release and pushes the container image to GHCR and
-Docker Hub. Pushes to `main` do not publish either one.
+Pushing a `v*` tag is the only publish step. Pushes to `dev` or `main`
+do not publish a release by themselves. A tag pushes the same image to
+GHCR and Docker Hub.
+
+Tag `vX.Y.Z-rc.N` on `dev`. That GitHub Release is a prerelease, and
+the image is also tagged `preview` on both registries. It does not
+move `latest`.
+
+Tag `vX.Y.Z` on `main`, after `dev` has been merged there. That release
+is stable. A stable tag also publishes `X.Y.Z`, `X.Y`, `X`, and
+`latest` on both registries. A stable tag that does not point at
+`main`, or a preview tag that points at `main`, fails the release
+workflow.
 
 ```bash
 git tag v1.2.3
