@@ -13,13 +13,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"gopkg.in/yaml.v3"
 
-	root "github.com/bravo68web/oauth-impl"
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/database"
-	"github.com/bravo68web/oauth-impl/internal/queue"
-	"github.com/bravo68web/oauth-impl/internal/server"
-	"github.com/bravo68web/oauth-impl/internal/service"
-	"github.com/bravo68web/oauth-impl/internal/testpg"
+	root "github.com/bravo68web/atrium"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/database"
+	"github.com/bravo68web/atrium/internal/queue"
+	"github.com/bravo68web/atrium/internal/server"
+	"github.com/bravo68web/atrium/internal/service"
+	"github.com/bravo68web/atrium/internal/testpg"
 )
 
 func TestLoginCSRF(t *testing.T) {

@@ -12,15 +12,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bravo68web/oauth-impl/internal/auth"
-	"github.com/bravo68web/oauth-impl/internal/branding"
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/handlers/oauth"
-	"github.com/bravo68web/oauth-impl/internal/mailer"
-	"github.com/bravo68web/oauth-impl/internal/models"
-	"github.com/bravo68web/oauth-impl/internal/repository"
-	"github.com/bravo68web/oauth-impl/internal/service"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/auth"
+	"github.com/bravo68web/atrium/internal/branding"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/handlers/oauth"
+	"github.com/bravo68web/atrium/internal/mailer"
+	"github.com/bravo68web/atrium/internal/models"
+	"github.com/bravo68web/atrium/internal/repository"
+	"github.com/bravo68web/atrium/internal/service"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 type AccountController struct {
@@ -820,7 +820,7 @@ func accountChrome(name string) (string, string) {
 	case "profile.html":
 		return "Account", "Your account"
 	default:
-		return "OAuth Server", "OAuth Server"
+		return "Atrium", "Atrium"
 	}
 }
 

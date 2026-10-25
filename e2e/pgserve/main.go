@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/testpg"
+	"github.com/bravo68web/atrium/internal/testpg"
 )
 
 func main() {

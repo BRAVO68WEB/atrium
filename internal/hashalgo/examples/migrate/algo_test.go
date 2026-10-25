@@ -3,7 +3,7 @@ package hashalgo
 import (
 	"testing"
 
-	"github.com/bravo68web/oauth-impl/pkg/passhash"
+	"github.com/bravo68web/atrium/pkg/passhash"
 )
 
 func TestRoundTrip(t *testing.T) {

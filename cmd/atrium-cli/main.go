@@ -22,9 +22,9 @@ import (
 	qrcode "github.com/skip2/go-qrcode"
 	"github.com/spf13/cobra"
 
-	"github.com/bravo68web/oauth-impl/internal/oobcode"
-	"github.com/bravo68web/oauth-impl/internal/version"
-	"github.com/bravo68web/oauth-impl/pkg/crypto"
+	"github.com/bravo68web/atrium/internal/oobcode"
+	"github.com/bravo68web/atrium/internal/version"
+	"github.com/bravo68web/atrium/pkg/crypto"
 )
 
 var (
@@ -40,9 +40,9 @@ func main() {
 
 func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:     "oauth-cli",
-		Short:   "OAuth Implementation Server Management CLI",
-		Long:    "A CLI tool for managing the OAuth Implementation Server",
+		Use:     "atrium-cli",
+		Short:   "Atrium Management CLI",
+		Long:    "A CLI tool for managing the Atrium",
 		Version: version.Line(),
 	}
 	rootCmd.SetVersionTemplate("{{.Name}} {{.Version}}\n")
@@ -358,7 +358,7 @@ func mfaCmd() *cobra.Command {
 			if showSecret {
 				fmt.Printf("MFA Secret: %s\n", result["secret"])
 				fmt.Printf("Add this to your authenticator manually, then run:\n")
-				fmt.Printf("  oauth-cli mfa verify --user-id %s\n", userID)
+				fmt.Printf("  atrium-cli mfa verify --user-id %s\n", userID)
 			} else {
 				qrURI, _ := result["qr_uri"].(string)
 				qrBase64, _ := result["qr_base64"].(string)
@@ -382,7 +382,7 @@ func mfaCmd() *cobra.Command {
 
 				fmt.Println()
 				fmt.Printf("Secret: %s\n", secret)
-				fmt.Printf("Issuer: OAuthImplServer\n")
+				fmt.Printf("Issuer: Atrium\n")
 				fmt.Println()
 				fmt.Printf("Enter code to verify: ")
 

@@ -38,7 +38,7 @@ services:
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
-  oauth-server:
+  atrium:
     build:
       context: ../../..
       dockerfile: deploy/examples/full/Dockerfile

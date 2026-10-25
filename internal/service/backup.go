@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/database"
-	"github.com/bravo68web/oauth-impl/internal/models"
-	"github.com/bravo68web/oauth-impl/internal/oidc"
-	"github.com/bravo68web/oauth-impl/internal/repository"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/database"
+	"github.com/bravo68web/atrium/internal/models"
+	"github.com/bravo68web/atrium/internal/oidc"
+	"github.com/bravo68web/atrium/internal/repository"
+	"github.com/bravo68web/atrium/internal/telemetry"
 	"github.com/google/uuid"
 )
 

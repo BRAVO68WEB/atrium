@@ -5,7 +5,7 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 
 const root = path.resolve(__dirname, "../..");
-const bin = path.join(root, "e2e/.cache/oauth-server");
+const bin = path.join(root, "e2e/.cache/atrium");
 const pgBin = path.join(root, "e2e/.cache/pgserve");
 
 let pgProc;
@@ -36,7 +36,7 @@ exports.mochaHooks = {
   async beforeAll() {
     this.timeout(180000);
     fs.mkdirSync(path.dirname(bin), { recursive: true });
-    execFileSync("go", ["build", "-o", bin, "./cmd/oauth-server"], {
+    execFileSync("go", ["build", "-o", bin, "./cmd/atrium"], {
       cwd: root,
       stdio: "inherit",
     });

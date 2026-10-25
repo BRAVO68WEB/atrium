@@ -21,7 +21,7 @@ elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
 fi
 
 cat > "$CONFIG_FILE" << EOF
-# OAuth Implementation Server Configuration
+# Atrium Configuration
 server:
   host: "0.0.0.0"
   port: 8080
@@ -82,7 +82,7 @@ security:
   mfa:
     enabled: false
     required: false
-    issuer: "OAuthImplServer"
+    issuer: "Atrium"
     digits: 6
     period: 30
   mtls:
@@ -114,7 +114,7 @@ social:
   providers: []
 
 branding:
-  product_name: "OAuth Server"
+  product_name: "Atrium"
   login_title: "Sign In"
   username_label: "Username"
   password_label: "Password"

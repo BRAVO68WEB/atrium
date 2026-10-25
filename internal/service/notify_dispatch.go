@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/mailer"
-	"github.com/bravo68web/oauth-impl/internal/notify"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/mailer"
+	"github.com/bravo68web/atrium/internal/notify"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 // Outbox accepts a delivery after the request that caused it.

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/bravo68web/oauth-impl/internal/models"
-	"github.com/bravo68web/oauth-impl/internal/service"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/models"
+	"github.com/bravo68web/atrium/internal/service"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 // enforceClientDPoP requires a proof when the OAuth app forces DPoP.

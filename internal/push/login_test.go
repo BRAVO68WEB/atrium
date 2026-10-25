@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/service"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/service"
 )
 
 func TestPushLoginApprovesAndDeniesCIBA(t *testing.T) {

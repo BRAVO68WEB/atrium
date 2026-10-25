@@ -316,10 +316,10 @@ func DefaultConfig() *Config {
 		},
 		Database: DatabaseConfig{
 			Driver:     "sqlite",
-			Path:       "./oauth.db",
+			Path:       "./atrium.db",
 			Migrations: true,
 		},
-		Redis: RedisConfig{Prefix: "oauth"},
+		Redis: RedisConfig{Prefix: "atrium"},
 		Cache: CacheConfig{Provider: "memory"},
 		Security: SecurityConfig{
 			AccessTokenLifetime:       3600 * time.Second,
@@ -346,7 +346,7 @@ func DefaultConfig() *Config {
 			MFA: MFAConfig{
 				Enabled:  false,
 				Required: false,
-				Issuer:   "OAuthImplServer",
+				Issuer:   "Atrium",
 				Digits:   6,
 				Period:   30,
 			},
@@ -415,7 +415,7 @@ func DefaultConfig() *Config {
 			},
 		},
 		Telemetry: TelemetryConfig{
-			ServiceName: "oauth-server",
+			ServiceName: "atrium",
 			SampleRatio: 1,
 		},
 		Push: PushConfig{
@@ -472,7 +472,7 @@ func defaultBranding() BrandingConfig {
 	showRegister := true
 	showForgot := true
 	return BrandingConfig{
-		ProductName:        "OAuth Server",
+		ProductName:        "Atrium",
 		LoginTitle:         "Sign In",
 		UsernameLabel:      "Username",
 		PasswordLabel:      "Password",
@@ -491,7 +491,7 @@ func (c *Config) Normalize() {
 	}
 	b := &c.Branding
 	if b.ProductName == "" {
-		b.ProductName = "OAuth Server"
+		b.ProductName = "Atrium"
 	}
 	if b.LoginTitle == "" {
 		b.LoginTitle = "Sign In"
@@ -531,7 +531,7 @@ func (c *Config) Normalize() {
 		c.Notify.RabbitMQ.Queue = "oauth.notify"
 	}
 	if c.Telemetry.ServiceName == "" {
-		c.Telemetry.ServiceName = "oauth-server"
+		c.Telemetry.ServiceName = "atrium"
 	}
 	if c.Telemetry.SampleRatio == 0 {
 		c.Telemetry.SampleRatio = 1

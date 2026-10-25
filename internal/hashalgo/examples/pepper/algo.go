@@ -4,7 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 
-	"github.com/bravo68web/oauth-impl/pkg/passhash"
+	"github.com/bravo68web/atrium/pkg/passhash"
 )
 
 // pepper is a server secret. Changing it locks every password out.

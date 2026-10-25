@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/bravo68web/oauth-impl/internal/models"
-	"github.com/bravo68web/oauth-impl/internal/service"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/models"
+	"github.com/bravo68web/atrium/internal/service"
+	"github.com/bravo68web/atrium/internal/telemetry"
 	"github.com/go-chi/chi/v5"
 	qrcode "github.com/skip2/go-qrcode"
 )

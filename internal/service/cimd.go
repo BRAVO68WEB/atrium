@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/models"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/models"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 // CIMDDocument is a Client ID Metadata Document.

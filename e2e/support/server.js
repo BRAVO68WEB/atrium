@@ -83,7 +83,7 @@ function renderConfig(port, dsn, overrides) {
     lines.push("  mfa:");
     lines.push(`    enabled: ${yamlValue(Boolean(mfa.enabled))}`);
     lines.push(`    required: ${yamlValue(Boolean(mfa.required))}`);
-    lines.push("    issuer: \"OAuthImplServer\"");
+    lines.push("    issuer: \"Atrium\"");
     lines.push("    digits: 6");
     lines.push("    period: 30");
   }

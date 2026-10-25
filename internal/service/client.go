@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/bravo68web/oauth-impl/internal/models"
-	"github.com/bravo68web/oauth-impl/internal/repository"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
-	"github.com/bravo68web/oauth-impl/pkg/crypto"
+	"github.com/bravo68web/atrium/internal/models"
+	"github.com/bravo68web/atrium/internal/repository"
+	"github.com/bravo68web/atrium/internal/telemetry"
+	"github.com/bravo68web/atrium/pkg/crypto"
 )
 
 type ClientService struct {

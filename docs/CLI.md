@@ -1,6 +1,6 @@
 # CLI
 
-`oauth-cli` calls the management API. `oauth-mobile` approves CIBA
+`atrium-cli` calls the management API. `atrium-mobile` approves CIBA
 requests. Both take a client-credentials client. Sample curls are in
 [examples.sh](examples.sh). Routes are in [API](API.md).
 
@@ -17,8 +17,8 @@ Binaries land in `bin/`.
 
 ## Version
 
-`oauth-server --version`, `oauth-cli --version`, and
-`oauth-mobile --version` print the build version. `--help` lists the
+`atrium --version`, `atrium-cli --version`, and
+`atrium-mobile --version` print the build version. `--help` lists the
 flags. `GET /version` returns the same version as JSON. A local build
 reports `dev`. A release build adds the commit and the build time.
 
@@ -42,13 +42,13 @@ It then asks `POST /oauth/token` for a token with scope `management`.
 `OAUTH_CLI_SERVER` sets the issuer when you do not pass `--server`.
 
 ```bash
-oauth-cli --server https://auth.example.com \
+atrium-cli --server https://auth.example.com \
   --client-id "$OAUTH_CLI_CLIENT_ID" \
   --client-secret "$OAUTH_CLI_CLIENT_SECRET" \
   user list
 ```
 
-`oauth-mobile` also has `--interval` (default 5 seconds) for `poll`.
+`atrium-mobile` also has `--interval` (default 5 seconds) for `poll`.
 
 ## init
 
@@ -56,28 +56,28 @@ oauth-cli --server https://auth.example.com \
 hasher. See [Configuration](CONFIG.md).
 
 ```bash
-./bin/oauth-cli init
-./bin/oauth-cli init --mfa --output config.yaml
-./bin/oauth-cli init --hash argon2id
-./bin/oauth-cli init --force
+./bin/atrium-cli init
+./bin/atrium-cli init --mfa --output config.yaml
+./bin/atrium-cli init --hash argon2id
+./bin/atrium-cli init --force
 ```
 
-## oauth-cli commands
+## atrium-cli commands
 
 ```bash
-./bin/oauth-cli server status
-./bin/oauth-cli server discovery
+./bin/atrium-cli server status
+./bin/atrium-cli server discovery
 ```
 
 ### Clients
 
 ```bash
-./bin/oauth-cli client list
-./bin/oauth-cli client create --name "App" --redirect-uri "https://app.example/cb"
-./bin/oauth-cli client get <id>
-./bin/oauth-cli client update <id> --dpop
-./bin/oauth-cli client delete <id>
-./bin/oauth-cli client master
+./bin/atrium-cli client list
+./bin/atrium-cli client create --name "App" --redirect-uri "https://app.example/cb"
+./bin/atrium-cli client get <id>
+./bin/atrium-cli client update <id> --dpop
+./bin/atrium-cli client delete <id>
+./bin/atrium-cli client master
 ```
 
 `create` accepts repeated `--redirect-uri`, `--grant-type` (default
@@ -88,16 +88,16 @@ the grants used by conformance tools, including `password`.
 ### Users
 
 ```bash
-./bin/oauth-cli user list
-./bin/oauth-cli user create --username ada --password "correct horse" --email ada@example.com
-./bin/oauth-cli user get <id>
-./bin/oauth-cli user password <id> --password "a new secret"
-./bin/oauth-cli user disable <id>
-./bin/oauth-cli user enable <id>
-./bin/oauth-cli user import users.json
-./bin/oauth-cli user import users.json --mode upsert --dry-run
-./bin/oauth-cli user export --output users.json
-./bin/oauth-cli user export --include-secrets --output users.json
+./bin/atrium-cli user list
+./bin/atrium-cli user create --username ada --password "correct horse" --email ada@example.com
+./bin/atrium-cli user get <id>
+./bin/atrium-cli user password <id> --password "a new secret"
+./bin/atrium-cli user disable <id>
+./bin/atrium-cli user enable <id>
+./bin/atrium-cli user import users.json
+./bin/atrium-cli user import users.json --mode upsert --dry-run
+./bin/atrium-cli user export --output users.json
+./bin/atrium-cli user export --include-secrets --output users.json
 ```
 
 `import` reads the same JSON document as `POST /api/users/import`.
@@ -108,10 +108,10 @@ mode is `0600`. `init` does not call a remote server.
 ### Backup
 
 ```bash
-./bin/oauth-cli backup --output auth-backup.json
-./bin/oauth-cli restore auth-backup.json --dry-run
-./bin/oauth-cli restore auth-backup.json
-./bin/oauth-cli restore auth-backup.json --force
+./bin/atrium-cli backup --output auth-backup.json
+./bin/atrium-cli restore auth-backup.json --dry-run
+./bin/atrium-cli restore auth-backup.json
+./bin/atrium-cli restore auth-backup.json --force
 ```
 
 `backup` and `restore` call `GET /api/backup` and `POST /api/restore`.
@@ -129,11 +129,11 @@ subjects only match when that salt is unchanged.
 ### Tokens
 
 ```bash
-./bin/oauth-cli token list --client-id <id> --user-id <id>
-./bin/oauth-cli token revoke <access-token>
-./bin/oauth-cli token introspect <token>
-./bin/oauth-cli token refresh list
-./bin/oauth-cli token refresh revoke <id>
+./bin/atrium-cli token list --client-id <id> --user-id <id>
+./bin/atrium-cli token revoke <access-token>
+./bin/atrium-cli token introspect <token>
+./bin/atrium-cli token refresh list
+./bin/atrium-cli token refresh revoke <id>
 ```
 
 `refresh list` prints public ids. It does not print the refresh token
@@ -144,25 +144,25 @@ secret.
 Enrollment in the CLI is TOTP.
 
 ```bash
-./bin/oauth-cli mfa enable --user-id <id>
-./bin/oauth-cli mfa enable --user-id <id> --show-secret
-./bin/oauth-cli mfa verify --user-id <id> --code 123456
-./bin/oauth-cli mfa status --user-id <id>
+./bin/atrium-cli mfa enable --user-id <id>
+./bin/atrium-cli mfa enable --user-id <id> --show-secret
+./bin/atrium-cli mfa verify --user-id <id> --code 123456
+./bin/atrium-cli mfa status --user-id <id>
 ```
 
 ### CIBA, flows, and keys
 
 ```bash
-./bin/oauth-cli ciba pending
-./bin/oauth-cli ciba approve <auth-req-id> --user-id <id>
-./bin/oauth-cli ciba deny <auth-req-id> --reason "Denied"
+./bin/atrium-cli ciba pending
+./bin/atrium-cli ciba approve <auth-req-id> --user-id <id>
+./bin/atrium-cli ciba deny <auth-req-id> --reason "Denied"
 
-./bin/oauth-cli flow client-credentials --client-id <id> --client-secret <secret>
-./bin/oauth-cli flow device --client-id <id> --client-secret <secret>
-./bin/oauth-cli flow paste --client-id <id>
+./bin/atrium-cli flow client-credentials --client-id <id> --client-secret <secret>
+./bin/atrium-cli flow device --client-id <id> --client-secret <secret>
+./bin/atrium-cli flow paste --client-id <id>
 
-./bin/oauth-cli keys generate --output ./keys
-./bin/oauth-cli keys rotate
+./bin/atrium-cli keys generate --output ./keys
+./bin/atrium-cli keys rotate
 ```
 
 `flow paste` prints an authorize URL and waits for a code copied from the
@@ -182,31 +182,31 @@ the page address works as well. The flag is off unless you set it.
 ### Scopes, resources, and consents
 
 ```bash
-./bin/oauth-cli scope list
-./bin/oauth-cli scope create --name calendar --description "Calendar read"
-./bin/oauth-cli scope delete calendar
+./bin/atrium-cli scope list
+./bin/atrium-cli scope create --name calendar --description "Calendar read"
+./bin/atrium-cli scope delete calendar
 
-./bin/oauth-cli resource list
-./bin/oauth-cli resource create --uri https://api.example --name API
-./bin/oauth-cli resource delete https://api.example
+./bin/atrium-cli resource list
+./bin/atrium-cli resource create --uri https://api.example --name API
+./bin/atrium-cli resource delete https://api.example
 
-./bin/oauth-cli consent list --user-id <id>
-./bin/oauth-cli consent revoke --user-id <id> --client-id <id>
+./bin/atrium-cli consent list --user-id <id>
+./bin/atrium-cli consent revoke --user-id <id> --client-id <id>
 ```
 
 ### Webhooks, analytics, and audit
 
 ```bash
-./bin/oauth-cli webhook list
-./bin/oauth-cli webhook create --url https://app.example/hook --event login --event logout
-./bin/oauth-cli webhook create --url https://app.example/hook --event '*'
-./bin/oauth-cli webhook test <id>
-./bin/oauth-cli webhook delete <id>
+./bin/atrium-cli webhook list
+./bin/atrium-cli webhook create --url https://app.example/hook --event login --event logout
+./bin/atrium-cli webhook create --url https://app.example/hook --event '*'
+./bin/atrium-cli webhook test <id>
+./bin/atrium-cli webhook delete <id>
 
-./bin/oauth-cli analytics logins
-./bin/oauth-cli analytics logins --user-id <id> --window 24h
+./bin/atrium-cli analytics logins
+./bin/atrium-cli analytics logins --user-id <id> --window 24h
 
-./bin/oauth-cli audit list --window 720h --action client.create --actor-id <id>
+./bin/atrium-cli audit list --window 720h --action client.create --actor-id <id>
 ```
 
 `--event` repeats. `*` subscribes to every event. Omit `--secret` and
@@ -218,22 +218,22 @@ Organizations do nothing until `org.enabled` is true. See
 [Configuration](CONFIG.md).
 
 ```bash
-./bin/oauth-cli org create --name "North" --slug north --domain north.example --logo-url https://cdn.example/north.png
-./bin/oauth-cli org domain --org north --domain west.example
-./bin/oauth-cli org member --org north --user-id <id> --role member
+./bin/atrium-cli org create --name "North" --slug north --domain north.example --logo-url https://cdn.example/north.png
+./bin/atrium-cli org domain --org north --domain west.example
+./bin/atrium-cli org member --org north --user-id <id> --role member
 ```
 
 `--role` is `member` or `admin`. Omit `--logo-url` and the picker shows
 the first letter of the name.
 
-## oauth-mobile
+## atrium-mobile
 
 ```bash
-./bin/oauth-mobile list
-./bin/oauth-mobile poll
-./bin/oauth-mobile approve <auth-req-id> --user-id <id>
-./bin/oauth-mobile deny <auth-req-id>
-./bin/oauth-mobile status
+./bin/atrium-mobile list
+./bin/atrium-mobile poll
+./bin/atrium-mobile approve <auth-req-id> --user-id <id>
+./bin/atrium-mobile deny <auth-req-id>
+./bin/atrium-mobile status
 ```
 
 `poll` prints pending CIBA requests until you interrupt it. `status`

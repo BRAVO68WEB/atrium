@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/bravo68web/oauth-impl/internal/service"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/service"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 func (c *ManagementController) HandleImportUsers(w http.ResponseWriter, r *http.Request) {

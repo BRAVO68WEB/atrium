@@ -14,16 +14,16 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/bravo68web/oauth-impl/internal/branding"
-	"github.com/bravo68web/oauth-impl/internal/cache"
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/models"
-	"github.com/bravo68web/oauth-impl/internal/oidc"
-	"github.com/bravo68web/oauth-impl/internal/queue"
-	"github.com/bravo68web/oauth-impl/internal/repository"
-	"github.com/bravo68web/oauth-impl/internal/service"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
-	"github.com/bravo68web/oauth-impl/pkg/crypto"
+	"github.com/bravo68web/atrium/internal/branding"
+	"github.com/bravo68web/atrium/internal/cache"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/models"
+	"github.com/bravo68web/atrium/internal/oidc"
+	"github.com/bravo68web/atrium/internal/queue"
+	"github.com/bravo68web/atrium/internal/repository"
+	"github.com/bravo68web/atrium/internal/service"
+	"github.com/bravo68web/atrium/internal/telemetry"
+	"github.com/bravo68web/atrium/pkg/crypto"
 )
 
 type Handler struct {

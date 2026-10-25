@@ -1,8 +1,8 @@
 package service
 
 import (
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
-	"github.com/bravo68web/oauth-impl/pkg/crypto"
+	"github.com/bravo68web/atrium/internal/telemetry"
+	"github.com/bravo68web/atrium/pkg/crypto"
 )
 
 const ManagementScope = "management"

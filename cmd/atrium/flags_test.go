@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bravo68web/oauth-impl/internal/version"
+	"github.com/bravo68web/atrium/internal/version"
 )
 
 func TestVersionFlagPrintsTheBuild(t *testing.T) {
@@ -17,7 +17,7 @@ func TestVersionFlagPrintsTheBuild(t *testing.T) {
 		t.Fatalf("err %v", err)
 	}
 	got := strings.TrimSpace(buf.String())
-	want := "oauth-server " + version.Line()
+	want := "atrium " + version.Line()
 	if got != want {
 		t.Fatalf("got %q", got)
 	}
@@ -30,7 +30,7 @@ func TestHelpFlagListsTheFlags(t *testing.T) {
 		t.Fatalf("err %v", err)
 	}
 	text := buf.String()
-	for _, want := range []string{"Usage: oauth-server", "-config", "-port", "-db", "-version"} {
+	for _, want := range []string{"Usage: atrium", "-config", "-port", "-db", "-version"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("help missing %s:\n%s", want, text)
 		}

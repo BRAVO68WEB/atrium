@@ -9,7 +9,7 @@ import (
 	"math/big"
 	"net/http"
 
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 // ErrDeviceRevoked means the user has no active authenticator left.

@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/models"
-	"github.com/bravo68web/oauth-impl/internal/repository"
-	"github.com/bravo68web/oauth-impl/internal/testpg"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/models"
+	"github.com/bravo68web/atrium/internal/repository"
+	"github.com/bravo68web/atrium/internal/testpg"
 )
 
 func TestClaimMappingAndReservedSub(t *testing.T) {

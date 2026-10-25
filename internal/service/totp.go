@@ -10,9 +10,9 @@ import (
 	"github.com/pquerna/otp/totp"
 	qrcode "github.com/skip2/go-qrcode"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/repository"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/repository"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 type TOTPService struct {
@@ -39,7 +39,7 @@ func (s *TOTPService) GenerateEnrollment(username string) (*TOTPEnrollResult, er
 	defer telemetry.Step("service.TOTPService.GenerateEnrollment")()
 	issuer := s.cfg.Issuer
 	if issuer == "" {
-		issuer = "OAuthImplServer"
+		issuer = "Atrium"
 	}
 
 	key, err := totp.Generate(totp.GenerateOpts{
@@ -70,7 +70,7 @@ func (s *TOTPService) GenerateQRImage(secret string, size int) ([]byte, error) {
 	defer telemetry.Step("service.TOTPService.GenerateQRImage")()
 	issuer := s.cfg.Issuer
 	if issuer == "" {
-		issuer = "OAuthImplServer"
+		issuer = "Atrium"
 	}
 
 	key, err := totp.Generate(totp.GenerateOpts{
@@ -159,7 +159,7 @@ func (s *TOTPService) EnableMFA(userID, username string) (*TOTPEnrollResult, err
 	defer telemetry.Step("service.TOTPService.EnableMFA")()
 	issuer := s.cfg.Issuer
 	if issuer == "" {
-		issuer = "OAuthImplServer"
+		issuer = "Atrium"
 	}
 
 	key, err := totp.Generate(totp.GenerateOpts{

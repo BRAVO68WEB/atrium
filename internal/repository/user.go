@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/database"
+	"github.com/bravo68web/atrium/internal/database"
 
-	"github.com/bravo68web/oauth-impl/internal/models"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/models"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 const userColumns = `id, username, password_hash, COALESCE(email, ''), COALESCE(phone_number, ''), created_at,

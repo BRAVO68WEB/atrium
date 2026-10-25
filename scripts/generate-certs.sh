@@ -48,7 +48,7 @@ echo "3. Generating client certificate..."
 openssl genrsa -out "$CERT_DIR/client.key" 2048
 openssl req -new -key "$CERT_DIR/client.key" \
     -out "$CERT_DIR/client.csr" \
-    -subj "/C=US/ST=State/L=City/O=OAuth Test/CN=oauth-client"
+    -subj "/C=US/ST=State/L=City/O=OAuth Test/CN=atrium-client"
 
 cat > "$CERT_DIR/client.ext" << EOF
 authorityKeyIdentifier=keyid,issuer

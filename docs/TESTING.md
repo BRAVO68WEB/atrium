@@ -48,7 +48,7 @@ npm test
 ```
 
 `npm test` starts Postgres through `e2e/pgserve`, then starts
-`oauth-server` and drives Chromium. The same command is the E2E check
+`atrium` and drives Chromium. The same command is the E2E check
 on every pull request. The lockfile is `e2e/package-lock.json`.
 
 Show the browser:
@@ -78,7 +78,7 @@ A pull request to `main` runs:
 
 | Check | What it runs |
 | --- | --- |
-| Build | `oauth-server`, `oauth-cli`, `oauth-mobile` |
+| Build | `atrium`, `atrium-cli`, `atrium-mobile` |
 | Test | `go test ./...` with the race detector and a coverage profile |
 | Lint | golangci-lint |
 | Vet | `go vet ./...` |

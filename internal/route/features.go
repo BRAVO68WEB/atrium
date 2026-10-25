@@ -5,8 +5,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bravo68web/oauth-impl/internal/controller"
-	"github.com/bravo68web/oauth-impl/internal/handlers/oauth"
+	"github.com/bravo68web/atrium/internal/controller"
+	"github.com/bravo68web/atrium/internal/handlers/oauth"
 )
 
 func MountAccountAPI(api chi.Router, account *controller.AccountController, userMW func(http.Handler) http.Handler) {

@@ -1,6 +1,6 @@
 # Infrastructure
 
-oauth-impl is three binaries and one SQL database. Optional Redis holds
+Atrium is three binaries and one SQL database. Optional Redis holds
 only expiring data. Operator settings are in [Configuration](CONFIG.md).
 How to start the process is in [Deploy](DEPLOY.md).
 
@@ -8,9 +8,9 @@ How to start the process is in [Deploy](DEPLOY.md).
 
 | Binary | Role |
 | --- | --- |
-| `oauth-server` | HTTP issuer, browser pages, management API |
-| `oauth-cli` | Management client for that API |
-| `oauth-mobile` | Poll and approve CIBA requests |
+| `atrium` | HTTP issuer, browser pages, management API |
+| `atrium-cli` | Management client for that API |
+| `atrium-mobile` | Poll and approve CIBA requests |
 
 Build them with `just build`. Output goes to `bin/`.
 
@@ -32,7 +32,7 @@ document is `openapi/spec.yaml`.
 ## SQL
 
 `database.driver` is `sqlite` or `postgres`. SQLite is the default, at
-`database.path` (`./oauth.db`). The SQLite pool uses one connection.
+`database.path` (`./atrium.db`). The SQLite pool uses one connection.
 
 `database.Migrate` applies the schema when `database.migrations` is true.
 Files in `migrations/` record those steps. They are not a second
@@ -73,7 +73,7 @@ XAA, CIMD, and sector state are not.
 
 The process generates RSA and EC signing keys on startup and publishes
 them at `/oidc/jwks`. `oidc.key_rotation_interval` of `0s` leaves
-rotation off. `POST /api/keys/rotate`, or `oauth-cli keys rotate`,
+rotation off. `POST /api/keys/rotate`, or `atrium-cli keys rotate`,
 publishes a new pair and keeps the previous public keys until
 `oidc.key_retain` elapses (48 hours by default). Private keys stay in
 SQL.

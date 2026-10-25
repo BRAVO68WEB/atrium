@@ -13,15 +13,15 @@ import (
 	"github.com/go-chi/cors"
 	"gopkg.in/yaml.v3"
 
-	"github.com/bravo68web/oauth-impl/internal/aauth"
-	"github.com/bravo68web/oauth-impl/internal/auth"
-	"github.com/bravo68web/oauth-impl/internal/controller"
-	"github.com/bravo68web/oauth-impl/internal/handlers/oauth"
-	"github.com/bravo68web/oauth-impl/internal/oidc"
-	"github.com/bravo68web/oauth-impl/internal/push"
-	"github.com/bravo68web/oauth-impl/internal/service"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
-	"github.com/bravo68web/oauth-impl/internal/version"
+	"github.com/bravo68web/atrium/internal/aauth"
+	"github.com/bravo68web/atrium/internal/auth"
+	"github.com/bravo68web/atrium/internal/controller"
+	"github.com/bravo68web/atrium/internal/handlers/oauth"
+	"github.com/bravo68web/atrium/internal/oidc"
+	"github.com/bravo68web/atrium/internal/push"
+	"github.com/bravo68web/atrium/internal/service"
+	"github.com/bravo68web/atrium/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/version"
 )
 
 type Router struct {

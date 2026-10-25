@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/telemetry"
 	"github.com/redis/go-redis/v9"
 )
 

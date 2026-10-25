@@ -3,7 +3,7 @@ package database
 import (
 	"database/sql"
 
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 // WithTx runs fn in one transaction. The function must not use the outer

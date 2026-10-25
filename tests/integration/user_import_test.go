@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bravo68web/oauth-impl/pkg/passhash"
+	"github.com/bravo68web/atrium/pkg/passhash"
 	"golang.org/x/crypto/bcrypt"
 )
 

@@ -1,20 +1,20 @@
 version: 2
 
-project_name: oauth-impl
+project_name: atrium
 
 builds:
-  - id: oauth-server
-    main: ./cmd/oauth-server
-    binary: oauth-server
+  - id: atrium
+    main: ./cmd/atrium
+    binary: atrium
     env:
       - CGO_ENABLED=0
     flags:
       - -trimpath
     ldflags: &ldflags
       - -s -w
-      - -X github.com/bravo68web/oauth-impl/internal/version.Version={{.Version}}
-      - -X github.com/bravo68web/oauth-impl/internal/version.Commit={{.Commit}}
-      - -X github.com/bravo68web/oauth-impl/internal/version.Date={{.Date}}
+      - -X github.com/bravo68web/atrium/internal/version.Version={{.Version}}
+      - -X github.com/bravo68web/atrium/internal/version.Commit={{.Commit}}
+      - -X github.com/bravo68web/atrium/internal/version.Date={{.Date}}
     goos:
       - linux
       - windows
@@ -26,9 +26,9 @@ builds:
     ignore:
       - goos: darwin
         goarch: "386"
-  - id: oauth-cli
-    main: ./cmd/oauth-cli
-    binary: oauth-cli
+  - id: atrium-cli
+    main: ./cmd/atrium-cli
+    binary: atrium-cli
     env:
       - CGO_ENABLED=0
     flags:
@@ -45,9 +45,9 @@ builds:
     ignore:
       - goos: darwin
         goarch: "386"
-  - id: oauth-mobile
-    main: ./cmd/oauth-mobile
-    binary: oauth-mobile
+  - id: atrium-mobile
+    main: ./cmd/atrium-mobile
+    binary: atrium-mobile
     env:
       - CGO_ENABLED=0
     flags:

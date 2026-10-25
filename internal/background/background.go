@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/log"
+	"github.com/bravo68web/atrium/internal/log"
 )
 
 const waitTimeout = 20 * time.Second

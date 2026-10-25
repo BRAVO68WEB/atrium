@@ -1,6 +1,6 @@
-# justfile - Command runner for oauth-impl
+# justfile - Command runner for atrium
 
-ldflags := '-s -w -X github.com/bravo68web/oauth-impl/internal/version.Version=dev -X github.com/bravo68web/oauth-impl/internal/version.Commit=$(git rev-parse --short=12 HEAD 2>/dev/null || true) -X github.com/bravo68web/oauth-impl/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+ldflags := '-s -w -X github.com/bravo68web/atrium/internal/version.Version=dev -X github.com/bravo68web/atrium/internal/version.Commit=$(git rev-parse --short=12 HEAD 2>/dev/null || true) -X github.com/bravo68web/atrium/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)'
 
 # Default recipe - show available commands
 default:
@@ -8,25 +8,25 @@ default:
 
 # Build all binaries. Rebuild after editing internal/hashalgo/algo.go.
 build:
-    go build -trimpath -ldflags="{{ldflags}}" -o bin/oauth-server ./cmd/oauth-server
-    go build -trimpath -ldflags="{{ldflags}}" -o bin/oauth-cli ./cmd/oauth-cli
-    go build -trimpath -ldflags="{{ldflags}}" -o bin/oauth-mobile ./cmd/oauth-mobile
+    go build -trimpath -ldflags="{{ldflags}}" -o bin/atrium ./cmd/atrium
+    go build -trimpath -ldflags="{{ldflags}}" -o bin/atrium-cli ./cmd/atrium-cli
+    go build -trimpath -ldflags="{{ldflags}}" -o bin/atrium-mobile ./cmd/atrium-mobile
 
 # Build server only
 build-server:
-    go build -trimpath -ldflags="{{ldflags}}" -o bin/oauth-server ./cmd/oauth-server
+    go build -trimpath -ldflags="{{ldflags}}" -o bin/atrium ./cmd/atrium
 
 # Build CLI only
 build-cli:
-    go build -trimpath -ldflags="{{ldflags}}" -o bin/oauth-cli ./cmd/oauth-cli
+    go build -trimpath -ldflags="{{ldflags}}" -o bin/atrium-cli ./cmd/atrium-cli
 
 # Build mobile CLI only
 build-mobile:
-    go build -trimpath -ldflags="{{ldflags}}" -o bin/oauth-mobile ./cmd/oauth-mobile
+    go build -trimpath -ldflags="{{ldflags}}" -o bin/atrium-mobile ./cmd/atrium-mobile
 
 # Run the server from the project root. Loads config.yaml and recompiles algo.go.
 run:
-    go run -trimpath -ldflags="{{ldflags}}" cmd/oauth-server/main.go
+    go run -trimpath -ldflags="{{ldflags}}" cmd/atrium/main.go
 
 # Run the server with hot reload (requires air)
 dev:
@@ -65,7 +65,7 @@ tidy:
 # Clean build artifacts
 clean:
     rm -rf bin/
-    rm -f oauth.db
+    rm -f atrium.db
     rm -f coverage.out coverage.html
 
 # Show API docs info
@@ -86,7 +86,7 @@ install-tools:
 
 # Create database backup
 backup-db:
-    cp oauth.db oauth.db.bak.$(date +%Y%m%d%H%M%S)
+    cp atrium.db atrium.db.bak.$(date +%Y%m%d%H%M%S)
 
 # Show server logs
 logs:
@@ -94,19 +94,19 @@ logs:
 
 # Docker build
 docker-build:
-    docker build -t oauth-impl .
+    docker build -t atrium .
 
 # Docker run
 docker-run:
-    docker run -p 8080:8080 oauth-impl
+    docker run -p 8080:8080 atrium
 
 # Start with custom port
 run-port port:
-    go run cmd/oauth-server/main.go --port {{port}}
+    go run cmd/atrium/main.go --port {{port}}
 
 # Run with custom config
 run-config config:
-    go run cmd/oauth-server/main.go --config {{config}}
+    go run cmd/atrium/main.go --config {{config}}
 
 # Quick test flow
 test-flow:
@@ -123,7 +123,7 @@ test-flow:
       '    enabled: false' \
       > "$CFG"
     echo "=== Starting server ==="
-    go run cmd/oauth-server/main.go --config "$CFG" &
+    go run cmd/atrium/main.go --config "$CFG" &
     SERVER_PID=$!
     sleep 2
     
@@ -142,5 +142,5 @@ test-flow:
     
     echo "=== Cleanup ==="
     kill $SERVER_PID 2>/dev/null || true
-    rm -f oauth.db "$CFG"
+    rm -f atrium.db "$CFG"
     echo "Done!"

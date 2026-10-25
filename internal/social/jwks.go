@@ -11,7 +11,7 @@ import (
 	"math/big"
 	"net/http"
 
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/telemetry"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -25,7 +25,7 @@ func verifyIDToken(ctx context.Context, c *Client, jwksURL, raw, issuer, audienc
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "oauth-impl")
+	req.Header.Set("User-Agent", "atrium")
 	body, err := c.do(req)
 	if err != nil {
 		return nil, err

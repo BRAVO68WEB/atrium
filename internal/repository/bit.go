@@ -3,7 +3,7 @@ package repository
 import (
 	"fmt"
 
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/telemetry"
 	// bit scans an INTEGER 0/1 column. SQLite may return a bool and Postgres an int64.
 )
 

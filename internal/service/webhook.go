@@ -18,12 +18,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/bravo68web/oauth-impl/internal/background"
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/models"
-	"github.com/bravo68web/oauth-impl/internal/notify"
-	"github.com/bravo68web/oauth-impl/internal/repository"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/background"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/models"
+	"github.com/bravo68web/atrium/internal/notify"
+	"github.com/bravo68web/atrium/internal/repository"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 const (
@@ -300,7 +300,7 @@ func (d *WebhookDispatcher) post(hook *models.Webhook, event string, body []byte
 	_, _ = mac.Write([]byte("."))
 	_, _ = mac.Write(body)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "oauth-impl-webhooks")
+	req.Header.Set("User-Agent", "atrium-webhooks")
 	req.Header.Set("X-Webhook-Event", event)
 	req.Header.Set("X-Webhook-Timestamp", ts)
 	req.Header.Set("X-Webhook-Signature", "sha256="+hex.EncodeToString(mac.Sum(nil)))

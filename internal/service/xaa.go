@@ -17,10 +17,10 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/bravo68web/oauth-impl/internal/cache"
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/repository"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/cache"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/repository"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 const idJAGLifetime = 5 * time.Minute

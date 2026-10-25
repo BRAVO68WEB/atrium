@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 // StartRotation retires signing keys on a fixed interval. A zero interval does nothing.

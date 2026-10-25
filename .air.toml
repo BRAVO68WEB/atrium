@@ -5,8 +5,8 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  bin = "./tmp/oauth-server"
-  cmd = "go build -o ./tmp/oauth-server ./cmd/oauth-server"
+  bin = "./tmp/atrium"
+  cmd = "go build -o ./tmp/atrium ./cmd/atrium"
   delay = 1000
   exclude_dir = ["assets", "tmp", "vendor", "docs", "tests", "bin"]
   exclude_file = []

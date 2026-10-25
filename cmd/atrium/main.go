@@ -15,15 +15,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/app"
-	"github.com/bravo68web/oauth-impl/internal/background"
-	"github.com/bravo68web/oauth-impl/internal/cache"
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/database"
-	"github.com/bravo68web/oauth-impl/internal/log"
-	"github.com/bravo68web/oauth-impl/internal/queue"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
-	"github.com/bravo68web/oauth-impl/internal/version"
+	"github.com/bravo68web/atrium/internal/app"
+	"github.com/bravo68web/atrium/internal/background"
+	"github.com/bravo68web/atrium/internal/cache"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/database"
+	"github.com/bravo68web/atrium/internal/log"
+	"github.com/bravo68web/atrium/internal/queue"
+	"github.com/bravo68web/atrium/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/version"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -60,7 +60,7 @@ type serverOptions struct {
 }
 
 func parseArgs(args []string, out io.Writer) (serverOptions, error) {
-	fs := flag.NewFlagSet("oauth-server", flag.ContinueOnError)
+	fs := flag.NewFlagSet("atrium", flag.ContinueOnError)
 	fs.SetOutput(out)
 	var opt serverOptions
 	var showVersion bool
@@ -69,15 +69,15 @@ func parseArgs(args []string, out io.Writer) (serverOptions, error) {
 	fs.StringVar(&opt.dbPath, "db", "", "Database path (overrides config)")
 	fs.BoolVar(&showVersion, "version", false, "Print the version and exit")
 	fs.Usage = func() {
-		_, _ = fmt.Fprintf(out, "Usage: oauth-server [flags]\n\n")
-		_, _ = fmt.Fprintf(out, "oauth-server is the OAuth and OIDC server.\n\n")
+		_, _ = fmt.Fprintf(out, "Usage: atrium [flags]\n\n")
+		_, _ = fmt.Fprintf(out, "atrium is the OAuth and OIDC server.\n\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		return serverOptions{}, err
 	}
 	if showVersion {
-		_, _ = fmt.Fprintf(out, "oauth-server %s\n", version.Line())
+		_, _ = fmt.Fprintf(out, "atrium %s\n", version.Line())
 		return serverOptions{}, errVersion
 	}
 	return opt, nil
@@ -213,7 +213,7 @@ func main() {
 
 	fmt.Printf(`
 ╔══════════════════════════════════════════════════════════════╗
-║                    OAuth Implementation Server               ║
+║                    Atrium               ║
 ╠══════════════════════════════════════════════════════════════╣
 ║  Server:      %s://%s:%-25s ║
 ║  Version:     %-46s ║

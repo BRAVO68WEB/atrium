@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/testpg"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/testpg"
 	"github.com/golang-jwt/jwt/v5"
 )
 

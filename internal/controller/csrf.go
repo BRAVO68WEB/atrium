@@ -4,9 +4,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/bravo68web/oauth-impl/internal/auth"
-	"github.com/bravo68web/oauth-impl/internal/service"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/auth"
+	"github.com/bravo68web/atrium/internal/service"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 func issueCSRF(w http.ResponseWriter, r *http.Request, secure bool) string {

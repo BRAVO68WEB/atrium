@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/queue"
-	"github.com/bravo68web/oauth-impl/internal/server"
-	"github.com/bravo68web/oauth-impl/internal/testpg"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/queue"
+	"github.com/bravo68web/atrium/internal/server"
+	"github.com/bravo68web/atrium/internal/testpg"
 	"github.com/golang-jwt/jwt/v5"
 )
 

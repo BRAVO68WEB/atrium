@@ -1,6 +1,6 @@
 package hashalgo
 
-import "github.com/bravo68web/oauth-impl/pkg/passhash"
+import "github.com/bravo68web/atrium/pkg/passhash"
 
 // Hash is the only exported function in this file.
 // Replace the body. Keep the name, the signature, and the package.

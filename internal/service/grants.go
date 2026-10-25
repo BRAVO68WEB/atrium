@@ -5,8 +5,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/bravo68web/oauth-impl/internal/repository"
-	"github.com/bravo68web/oauth-impl/internal/telemetry"
+	"github.com/bravo68web/atrium/internal/repository"
+	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
 // GrantedApp is one client the user has allowed to act for them.

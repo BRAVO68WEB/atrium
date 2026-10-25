@@ -1,4 +1,4 @@
-module github.com/bravo68web/oauth-impl
+module github.com/bravo68web/atrium
 
 go 1.26.4
 

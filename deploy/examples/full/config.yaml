@@ -7,7 +7,7 @@ database:
   migrations: true
 redis:
   addr: redis:6379
-  prefix: oauth
+  prefix: atrium
 cache:
   provider: redis
 queue:
@@ -20,7 +20,7 @@ notify:
     queue: oauth.notify
 telemetry:
   enabled: true
-  service_name: oauth-server
+  service_name: atrium
   otlp_endpoint: http://otel-collector:4318/v1/traces
   insecure: true
   sample_ratio: 1

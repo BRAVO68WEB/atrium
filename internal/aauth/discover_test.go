@@ -7,11 +7,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/database"
-	"github.com/bravo68web/oauth-impl/internal/queue"
-	"github.com/bravo68web/oauth-impl/internal/server"
-	"github.com/bravo68web/oauth-impl/internal/testpg"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/database"
+	"github.com/bravo68web/atrium/internal/queue"
+	"github.com/bravo68web/atrium/internal/server"
+	"github.com/bravo68web/atrium/internal/testpg"
 )
 
 func TestDiscoveryStaysOff(t *testing.T) {

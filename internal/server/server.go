@@ -11,12 +11,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bravo68web/oauth-impl/internal/app"
-	"github.com/bravo68web/oauth-impl/internal/background"
-	"github.com/bravo68web/oauth-impl/internal/config"
-	"github.com/bravo68web/oauth-impl/internal/database"
-	"github.com/bravo68web/oauth-impl/internal/log"
-	"github.com/bravo68web/oauth-impl/internal/queue"
+	"github.com/bravo68web/atrium/internal/app"
+	"github.com/bravo68web/atrium/internal/background"
+	"github.com/bravo68web/atrium/internal/config"
+	"github.com/bravo68web/atrium/internal/database"
+	"github.com/bravo68web/atrium/internal/log"
+	"github.com/bravo68web/atrium/internal/queue"
 )
 
 type Server struct {

@@ -4,7 +4,7 @@ set -e
 SERVER_URL="${1:-http://127.0.0.1:8080}"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║              OAuth Server Setup Script                       ║"
+echo "║              Atrium Setup Script                       ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 
@@ -13,7 +13,7 @@ echo "1. Checking server status..."
 if ! curl -s "$SERVER_URL/health" > /dev/null 2>&1; then
     echo "   Server not reachable at $SERVER_URL"
     echo "   Starting server..."
-    go run ./cmd/oauth-server/ &
+    go run ./cmd/atrium/ &
     SERVER_PID=$!
     sleep 3
     echo "   Server started (PID: $SERVER_PID)"
@@ -28,7 +28,7 @@ if [ -z "$MGMT_ID" ] && [ -f config.yaml ]; then
     MGMT_SECRET=$(awk '/^management:/{f=1} f && /client_secret:/{gsub(/"/,"",$2); print $2; exit}' config.yaml)
 fi
 if [ -z "$MGMT_ID" ] || [ -z "$MGMT_SECRET" ]; then
-    echo "Set management.client_id and management.client_secret (oauth-cli init writes them), then restart the server."
+    echo "Set management.client_id and management.client_secret (atrium-cli init writes them), then restart the server."
     exit 1
 fi
 MGMT_TOKEN=$(curl -s -X POST "$SERVER_URL/oauth/token" -u "$MGMT_ID:$MGMT_SECRET" -d "grant_type=client_credentials&scope=management" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)

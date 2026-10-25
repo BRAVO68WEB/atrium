@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	root "github.com/bravo68web/oauth-impl"
-	"github.com/bravo68web/oauth-impl/internal/config"
+	root "github.com/bravo68web/atrium"
+	"github.com/bravo68web/atrium/internal/config"
 	"github.com/go-chi/chi/v5"
 )
 
