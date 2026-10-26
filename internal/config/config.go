@@ -796,7 +796,7 @@ func ValidateSocial(cfg *Config) error {
 
 var reservedClaims = map[string]bool{
 	"iss": true, "sub": true, "aud": true, "exp": true, "iat": true, "nbf": true,
-	"nonce": true, "sid": true, "auth_time": true, "org_id": true, "org_slug": true,
+	"nonce": true, "sid": true, "auth_time": true, "org_id": true, "org_slug": true, "org_role": true,
 }
 
 var claimSources = map[string]bool{

@@ -347,7 +347,8 @@ the salt is empty. `init` generates a salt. Changing the salt changes
 every pairwise subject.
 
 `oidc.claim_mappings` can add claims from the user record. A mapping
-cannot set `sub`, `iss`, `aud`, `exp`, `iat`, `org_id`, or `org_slug`.
+cannot set `sub`, `iss`, `aud`, `exp`, `iat`, `org_id`, `org_slug`,
+or `org_role`.
 
 ## Social login
 

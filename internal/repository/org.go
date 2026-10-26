@@ -153,6 +153,13 @@ func (r *OrgRepository) RemoveMember(orgID, userID string) error {
 	return nil
 }
 
+func (r *OrgRepository) MemberRole(orgID, userID string) (string, error) {
+	defer telemetry.Step("repository.OrgRepository.MemberRole")()
+	var role string
+	err := r.db.QueryRow(`SELECT role FROM org_memberships WHERE org_id = ? AND user_id = ?`, orgID, userID).Scan(&role)
+	return role, err
+}
+
 func (r *OrgRepository) IsMember(orgID, userID string) (bool, error) {
 	defer telemetry.Step("repository.OrgRepository.IsMember")()
 	var n int

@@ -90,6 +90,23 @@ func NewHandler(db *database.DB, cfg *config.Config) (*Handler, error) {
 	return h, nil
 }
 
+func (h *Handler) orgRole(orgID, userID string) string {
+	defer telemetry.Step("oidc.Handler.orgRole")()
+	if h == nil || h.orgs == nil || orgID == "" || userID == "" {
+		return ""
+	}
+	role, err := h.orgs.MemberRole(orgID, userID)
+	if err != nil {
+		return ""
+	}
+	return role
+}
+
+func (h *Handler) OrgRole(orgID, userID string) string {
+	defer telemetry.Step("oidc.Handler.OrgRole")()
+	return h.orgRole(orgID, userID)
+}
+
 func generateKid() string {
 	defer telemetry.Step("oidc.generateKid")()
 	b := make([]byte, 16)
@@ -116,6 +133,7 @@ type IDTokenClaims struct {
 	Sub               string `json:"sub"`
 	OrgID             string `json:"org_id,omitempty"`
 	OrgSlug           string `json:"org_slug,omitempty"`
+	OrgRole           string `json:"org_role,omitempty"`
 }
 
 type IDTokenExtra struct {
@@ -194,6 +212,9 @@ func (h *Handler) CreateAccessTokenJWT(ctx context.Context, clientID, userID, sc
 	}
 	if orgSlug != "" {
 		claims["org_slug"] = orgSlug
+	}
+	if role := h.orgRole(orgID, userID); role != "" {
+		claims["org_role"] = role
 	}
 	if actor != "" {
 		claims["act"] = map[string]string{"sub": actor}
@@ -289,6 +310,9 @@ func (h *Handler) identityClaims(ctx context.Context, clientID, userID, nonce st
 		if ex.OrgSlug != "" {
 			claims["org_slug"] = ex.OrgSlug
 		}
+		if role := h.orgRole(ex.OrgID, userID); role != "" {
+			claims["org_role"] = role
+		}
 		for key, value := range applyClaimMappings(mappings, user, scopes) {
 			claims[key] = value
 		}
@@ -309,6 +333,7 @@ func (h *Handler) identityClaims(ctx context.Context, clientID, userID, nonce st
 		SID:     ex.SID,
 		OrgID:   ex.OrgID,
 		OrgSlug: ex.OrgSlug,
+		OrgRole: h.orgRole(ex.OrgID, userID),
 	}
 	if !ex.AuthTime.IsZero() {
 		claims.AuthTime = ex.AuthTime.Unix()
@@ -388,6 +413,9 @@ func (h *Handler) HandleUserInfo(w http.ResponseWriter, r *http.Request) {
 		if h.orgs != nil {
 			if org, err := h.orgs.Get(at.OrgID); err == nil && org != nil && org.Slug != "" {
 				response["org_slug"] = org.Slug
+			}
+			if role := h.orgRole(at.OrgID, user.ID); role != "" {
+				response["org_role"] = role
 			}
 		}
 	}

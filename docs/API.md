@@ -178,8 +178,9 @@ pairwise` receives a sector subject. See [Configuration](CONFIG.md).
 | GET | `/branding/assets/{name}` | One branding file |
 
 `/organization` appears when organizations are on, the request did not
-name one, and the user has more than one membership. See
-[Configuration](CONFIG.md).
+name one, and the user has more than one membership. A token for
+that organization carries `org_id`, `org_slug`, and `org_role`.
+The role is `member` or `admin`. See [Configuration](CONFIG.md).
 
 ## Account API
 

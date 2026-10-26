@@ -30,7 +30,7 @@ func applyClaimMappings(mappings []config.ClaimMapping, user *models.User, scope
 func reservedClaim(claim string) bool {
 	defer telemetry.Step("oidc.reservedClaim")()
 	switch claim {
-	case "iss", "sub", "aud", "exp", "iat", "nbf", "nonce", "sid", "auth_time", "org_id", "org_slug":
+	case "iss", "sub", "aud", "exp", "iat", "nbf", "nonce", "sid", "auth_time", "org_id", "org_slug", "org_role":
 		return true
 	default:
 		return false
