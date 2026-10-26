@@ -158,6 +158,10 @@ func TestManagementAPI(t *testing.T) {
 		t.Fatalf("enable %v", enabled)
 	}
 
+	// The consent helper authorizes directly. PAR stays on only for the flag check above.
+	apiObject(t, http.MethodPut, base+"/api/clients/"+clientID, token, map[string]any{
+		"require_pushed_authorization_requests": false,
+	})
 	approveBrowserConsent(t, base, "ada", "brand new horse", clientID, "https://app.example/cb", "openid profile")
 	consents := apiList(t, http.MethodGet, base+"/api/consents?user_id="+url.QueryEscape(userID), token, nil)
 	if !listHas(consents, "client_id", clientID) {

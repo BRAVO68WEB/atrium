@@ -95,6 +95,9 @@ func GenerateCodeChallenge(verifier string) string {
 }
 
 func ValidateCodeChallenge(verifier, challenge, method string) bool {
+	if !ValidateCodeVerifier(verifier) {
+		return false
+	}
 	switch method {
 	case "S256":
 		computed := GenerateCodeChallenge(verifier)

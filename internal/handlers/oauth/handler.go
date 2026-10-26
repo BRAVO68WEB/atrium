@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -356,6 +357,10 @@ func (h *Handler) HandleToken(w http.ResponseWriter, r *http.Request) {
 		writeTokenError(w, http.StatusBadRequest, "invalid_request", "Duplicate parameters are not allowed")
 		return
 	}
+	if credentialsInURI(r) {
+		writeTokenError(w, http.StatusBadRequest, "invalid_request", "Client credentials must not be in the request URI")
+		return
+	}
 
 	grantType := r.Form.Get("grant_type")
 	defer telemetry.Step("oauth.grant")()
@@ -392,6 +397,10 @@ func (h *Handler) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 		writeTokenError(w, http.StatusBadRequest, "invalid_request", "Failed to parse request")
 		return
 	}
+	if credentialsInURI(r) {
+		writeTokenError(w, http.StatusBadRequest, "invalid_request", "Client credentials must not be in the request URI")
+		return
+	}
 
 	token := r.Form.Get("token")
 	tokenTypeHint := r.Form.Get("token_type_hint")
@@ -407,9 +416,13 @@ func (h *Handler) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 	clientID := client.ID
 
-	kind := h.ownedToken(clientID, token, tokenTypeHint)
-	if kind == "" {
+	kind, owner, found := h.tokenOwner(token, tokenTypeHint)
+	if !found {
 		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if owner != clientID {
+		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "token was issued to another client")
 		return
 	}
 	if !h.revokeDPoP(w, r, client, token) {
@@ -433,12 +446,11 @@ func (h *Handler) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// ownedToken reports which token type belongs to clientID.
-// RFC 7009 searches the hinted type first, then the other type.
-// A token issued to someone else is treated as not found so the response
-// does not reveal that the token exists.
-func (h *Handler) ownedToken(clientID, token, hint string) string {
-	defer telemetry.Step("oauth.Handler.ownedToken")()
+// tokenOwner reports the token type and the client that owns it.
+// An unknown token is not found. A token owned by someone else is found
+// so the caller can refuse the revocation.
+func (h *Handler) tokenOwner(token, hint string) (kind, owner string, found bool) {
+	defer telemetry.Step("oauth.Handler.tokenOwner")()
 	hint = strings.ToLower(strings.TrimSpace(hint))
 	order := []string{"refresh_token", "access_token"}
 	if hint == "access_token" {
@@ -451,22 +463,16 @@ func (h *Handler) ownedToken(clientID, token, hint string) string {
 			if err != nil || rt == nil {
 				continue
 			}
-			if rt.ClientID != clientID {
-				return ""
-			}
-			return kind
+			return kind, rt.ClientID, true
 		default:
 			at, err := h.tokenRepo.GetAccessToken(token)
 			if err != nil || at == nil {
 				continue
 			}
-			if at.ClientID != clientID {
-				return ""
-			}
-			return kind
+			return kind, at.ClientID, true
 		}
 	}
-	return ""
+	return "", "", false
 }
 
 func (h *Handler) HandleIntrospect(w http.ResponseWriter, r *http.Request) {
@@ -475,8 +481,16 @@ func (h *Handler) HandleIntrospect(w http.ResponseWriter, r *http.Request) {
 		writeTokenError(w, http.StatusBadRequest, "invalid_request", "Failed to parse request")
 		return
 	}
+	if credentialsInURI(r) {
+		writeTokenError(w, http.StatusBadRequest, "invalid_request", "Client credentials must not be in the request URI")
+		return
+	}
 
-	clientID, clientSecret := presentedClient(r)
+	clientID, clientSecret, authErr := h.credentials(r)
+	if authErr != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_client"})
+		return
+	}
 	client, err := h.clientRepo.GetByID(clientID)
 	if err != nil || client == nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_client"})
@@ -615,12 +629,28 @@ func (h *Handler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, response)
 }
 
+// regexRedirectPrefix marks a saved redirect as a full-match regular
+// expression. Every other saved value is compared as an exact string, so a
+// dot in https://app.example/cb stays a dot.
+const regexRedirectPrefix = "regex:"
+
 func isValidRedirectURI(uri string, allowedURIs []string) bool {
 	defer telemetry.Step("oauth.isValidRedirectURI")()
 	if uri == "" {
 		return false
 	}
 	for _, allowed := range allowedURIs {
+		if strings.HasPrefix(allowed, regexRedirectPrefix) {
+			pattern := strings.TrimPrefix(allowed, regexRedirectPrefix)
+			re, err := regexp.Compile(`\A(?:` + pattern + `)\z`)
+			if err != nil {
+				continue
+			}
+			if re.MatchString(uri) {
+				return true
+			}
+			continue
+		}
 		if allowed == uri {
 			return true
 		}
@@ -677,6 +707,10 @@ func isValidURI(uri string) bool {
 	if IsOutOfBandRedirect(uri) {
 		return true
 	}
+	if strings.HasPrefix(uri, regexRedirectPrefix) {
+		_, err := regexp.Compile(`\A(?:` + strings.TrimPrefix(uri, regexRedirectPrefix) + `)\z`)
+		return err == nil && strings.TrimPrefix(uri, regexRedirectPrefix) != ""
+	}
 	parsed, err := url.Parse(uri)
 	if err != nil || parsed.Fragment != "" || parsed.Hostname() == "" {
 		return false
@@ -685,6 +719,18 @@ func isValidURI(uri string) bool {
 		return true
 	}
 	return parsed.Scheme == "http" && parsed.Hostname() == "localhost"
+}
+
+func (h *Handler) stampCert(r *http.Request, token *models.AccessToken) {
+	defer telemetry.Step("oauth.Handler.stampCert")()
+	if token == nil || r == nil || h == nil || h.mtlsSvc == nil || h.cfg == nil || !h.cfg.Security.MTLS.CertBinding {
+		return
+	}
+	cert := h.mtlsSvc.ExtractClientCertificate(r)
+	if cert == nil {
+		return
+	}
+	token.CertThumbprint = h.mtlsSvc.GetCertificateThumbprint(cert)
 }
 
 func (h *Handler) issueAccessToken(ctx context.Context, clientID, userID, scope, tokenType string) (string, error) {

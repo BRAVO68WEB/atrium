@@ -48,6 +48,11 @@ func (h *Handler) revokeDPoP(w http.ResponseWriter, r *http.Request, client *mod
 	if !needs {
 		return true
 	}
+	// A confidential client has already authenticated as the token owner.
+	// Presenting the token to a resource still requires the DPoP proof.
+	if client != nil && client.TokenEndpointAuthMethod != "none" && client.Secret != "" && r.Header.Get("DPoP") == "" {
+		return true
+	}
 	proof, err := h.ValidateDPoPProof(r, proofToken)
 	if err != nil {
 		writeTokenError(w, http.StatusBadRequest, "invalid_token", err.Error())

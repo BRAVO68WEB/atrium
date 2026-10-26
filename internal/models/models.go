@@ -89,19 +89,20 @@ type OrgMembership struct {
 }
 
 type AccessToken struct {
-	Token     string    `json:"token"`
-	ClientID  string    `json:"client_id"`
-	UserID    string    `json:"user_id,omitempty"`
-	Scopes    []string  `json:"scopes"`
-	Resource  string    `json:"resource,omitempty"`
-	TokenType string    `json:"token_type"`
-	DPoPJKT   string    `json:"dpop_jkt,omitempty"`
-	IssuedAt  time.Time `json:"iat,omitempty"`
-	JTI       string    `json:"jti,omitempty"`
-	OrgID     string    `json:"org_id,omitempty"`
-	Act       string    `json:"act,omitempty"`
-	ExpiresAt time.Time `json:"expires_at"`
-	Revoked   bool      `json:"revoked"`
+	Token          string    `json:"token"`
+	ClientID       string    `json:"client_id"`
+	UserID         string    `json:"user_id,omitempty"`
+	Scopes         []string  `json:"scopes"`
+	Resource       string    `json:"resource,omitempty"`
+	TokenType      string    `json:"token_type"`
+	DPoPJKT        string    `json:"dpop_jkt,omitempty"`
+	CertThumbprint string    `json:"cert_thumbprint,omitempty"`
+	IssuedAt       time.Time `json:"iat,omitempty"`
+	JTI            string    `json:"jti,omitempty"`
+	OrgID          string    `json:"org_id,omitempty"`
+	Act            string    `json:"act,omitempty"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	Revoked        bool      `json:"revoked"`
 }
 
 type RefreshToken struct {
@@ -162,6 +163,7 @@ type PushedAuthRequest struct {
 	ClientID      string    `json:"client_id"`
 	RequestParams string    `json:"request_params"`
 	ExpiresAt     time.Time `json:"expires_at"`
+	Used          bool      `json:"used"`
 }
 
 type CIBARequest struct {

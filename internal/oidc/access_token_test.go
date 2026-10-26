@@ -49,6 +49,17 @@ func TestAccessTokenUsesJWTProfile(t *testing.T) {
 	if empty["aud"] != config.DefaultConfig().Security.Issuer || empty["sub"] != "app" {
 		t.Fatalf("client token %v", empty)
 	}
+	idToken, err := handler.CreateIDToken(context.Background(), "app", "user-1", "nonce-1", []string{"openid"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	idClaims := jwt.MapClaims{}
+	if _, _, err := jwt.NewParser(jwt.WithoutClaimsValidation()).ParseUnverified(idToken, idClaims); err != nil {
+		t.Fatal(err)
+	}
+	if idClaims["azp"] != "app" {
+		t.Fatalf("id token azp %v", idClaims["azp"])
+	}
 	if _, ok := empty["act"]; ok {
 		t.Fatalf("act should be absent: %v", empty["act"])
 	}

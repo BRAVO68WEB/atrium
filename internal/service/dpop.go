@@ -20,6 +20,7 @@ import (
 
 type DPoPService struct {
 	replay cache.Cache
+	maxAge time.Duration
 }
 
 type DPoPProof struct {
@@ -52,6 +53,20 @@ func NewDPoPServiceWithCache(store cache.Cache) *DPoPService {
 		store = cache.NewMemory()
 	}
 	return &DPoPService{replay: store}
+}
+
+func (s *DPoPService) SetMaxAge(age time.Duration) {
+	if s == nil || age <= 0 {
+		return
+	}
+	s.maxAge = age
+}
+
+func (s *DPoPService) maxProofAge() time.Duration {
+	if s != nil && s.maxAge > 0 {
+		return s.maxAge
+	}
+	return 5 * time.Minute
 }
 
 // ValidateDPoPProof validates a DPoP proof JWT
@@ -87,10 +102,21 @@ func (s *DPoPService) ValidateDPoPProof(ctx context.Context, dpopHeader string, 
 	if err != nil {
 		return nil, fmt.Errorf("DPoP signature verification failed: %w", err)
 	}
+	typ, _ := token.Header["typ"].(string)
+	if typ != "dpop+jwt" {
+		return nil, fmt.Errorf("DPoP typ must be dpop+jwt")
+	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
 		return nil, fmt.Errorf("invalid DPoP claims")
+	}
+	issued, err := claims.GetIssuedAt()
+	if err != nil || issued == nil {
+		return nil, fmt.Errorf("missing iat claim")
+	}
+	if time.Since(issued.Time) > s.maxProofAge() || issued.Time.After(time.Now().Add(30*time.Second)) {
+		return nil, fmt.Errorf("DPoP proof is expired")
 	}
 
 	// Extract claims

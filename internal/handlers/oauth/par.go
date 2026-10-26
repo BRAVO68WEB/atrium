@@ -3,6 +3,8 @@ package oauth
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -11,6 +13,50 @@ import (
 	"github.com/bravo68web/atrium/internal/telemetry"
 	"github.com/bravo68web/atrium/pkg/crypto"
 )
+
+// parMayMintRedirect is RFC 9126 section 2.4. An authenticated confidential
+// client may name a redirect URI in this pushed request that was not
+// registered ahead of time. A public client may not.
+func parMayMintRedirect(client *models.Client, redirectURI string) bool {
+	defer telemetry.Step("oauth.parMayMintRedirect")()
+	if client == nil || client.TokenEndpointAuthMethod == "" || client.TokenEndpointAuthMethod == "none" {
+		return false
+	}
+	switch client.TokenEndpointAuthMethod {
+	case "client_secret_basic", "client_secret_post", "client_secret_jwt":
+		if client.Secret == "" {
+			return false
+		}
+	}
+	return isValidURI(redirectURI)
+}
+
+// applyJARParams copies the request object over the authorization fields.
+// A field the object omits is removed, so an outer copy cannot supply it.
+func applyJARParams(form url.Values, claims map[string]string) {
+	defer telemetry.Step("oauth.applyJARParams")()
+	authoritative := []string{
+		"response_type", "redirect_uri", "scope", "state", "nonce",
+		"response_mode", "code_challenge", "code_challenge_method",
+	}
+	seen := map[string]bool{}
+	for _, key := range authoritative {
+		seen[key] = true
+		if claims[key] != "" {
+			form.Set(key, claims[key])
+			continue
+		}
+		form.Del(key)
+	}
+	for key, value := range claims {
+		if seen[key] || key == "client_id" || value == "" {
+			continue
+		}
+		if form.Get(key) == "" {
+			form.Set(key, value)
+		}
+	}
+}
 
 func (h *Handler) HandlePAR(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("oauth.Handler.HandlePAR")()
@@ -30,8 +76,22 @@ func (h *Handler) HandlePAR(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	if credentialsInURI(r) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error":             "invalid_request",
+			"error_description": "Client credentials must not be in the request URI",
+		})
+		return
+	}
 
-	clientID, clientSecret := presentedClient(r)
+	clientID, clientSecret, authErr := h.credentials(r)
+	if authErr != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error":             "invalid_client",
+			"error_description": "Invalid client credentials",
+		})
+		return
+	}
 
 	// Check for JAR request parameter
 	requestJWT := r.Form.Get("request")
@@ -76,6 +136,14 @@ func (h *Handler) HandlePAR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.TrimSpace(client.RequestObjectSigningAlg) != "" && requestJWT == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error":             "invalid_request",
+			"error_description": "request object is required",
+		})
+		return
+	}
+
 	// Parse JAR request object if present
 	if requestJWT != "" && h.jarSvc != nil {
 		claims, err := h.jarSvc.ValidateRequestObject(requestJWT, client)
@@ -87,12 +155,9 @@ func (h *Handler) HandlePAR(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Merge JWT claims with form params (form params take precedence)
-		for k, v := range claims {
-			if r.Form.Get(k) == "" {
-				r.Form.Set(k, v)
-			}
-		}
+		// The request object is the authorization request. An outer value does
+		// not fill a parameter the object omitted.
+		applyJARParams(r.Form, claims)
 	}
 
 	responseType := r.Form.Get("response_type")
@@ -113,18 +178,15 @@ func (h *Handler) HandlePAR(w http.ResponseWriter, r *http.Request) {
 	}
 
 	redirectURI := r.Form.Get("redirect_uri")
-	if redirectURI == "" && len(client.RedirectURIs) > 1 {
+	if redirectURI == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error":             "invalid_request",
-			"error_description": "redirect_uri is required when multiple redirect URIs are registered",
+			"error_description": "redirect_uri is required",
 		})
 		return
 	}
-	if redirectURI == "" && len(client.RedirectURIs) == 1 {
-		redirectURI = client.RedirectURIs[0]
-	}
 
-	if !isValidRedirectURI(redirectURI, client.RedirectURIs) {
+	if !isValidRedirectURI(redirectURI, client.RedirectURIs) && !parMayMintRedirect(client, redirectURI) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error":             "invalid_request",
 			"error_description": "Invalid redirect_uri",
@@ -154,6 +216,13 @@ func (h *Handler) HandlePAR(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{
 				"error":             "invalid_request",
 				"error_description": "Only S256 and plain code_challenge_method are supported",
+			})
+			return
+		}
+		if codeChallengeMethod == "plain" && (h.cfg == nil || !h.cfg.Security.AllowPlainPKCE) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error":             "invalid_request",
+				"error_description": "plain PKCE is disabled",
 			})
 			return
 		}

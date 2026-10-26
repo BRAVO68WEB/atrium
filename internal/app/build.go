@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
@@ -148,6 +149,9 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue, shared *redis.Cli
 	}
 
 	dpopSvc := service.NewDPoPServiceWithCache(store)
+	if cfg.Security.DPoP.ProofLifetime > 0 {
+		dpopSvc.SetMaxAge(time.Duration(cfg.Security.DPoP.ProofLifetime) * time.Second)
+	}
 	mtlsSvc := service.NewMTLSService()
 	if cfg.Server.TLS.CRLFile != "" {
 		if err := mtlsSvc.SetCRLPath(cfg.Server.TLS.CRLFile); err != nil {

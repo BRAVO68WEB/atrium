@@ -48,23 +48,24 @@ func TestActorTokenMustMatchAndRefreshKeepsIt(t *testing.T) {
 
 	badType, _ := url.ParseQuery(actorAuthorizeQuery(app.ID, actor.ID, challenge, "S256"))
 	badType.Set("response_type", "token")
-	rejected, err := http.Get(ts.URL + "/oauth/authorize?" + badType.Encode())
+	noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	rejected, err := noFollow.Get(ts.URL + "/oauth/authorize?" + badType.Encode())
 	if err != nil {
 		t.Fatal(err)
 	}
 	rejectedBody, _ := io.ReadAll(rejected.Body)
 	_ = rejected.Body.Close()
-	if rejected.StatusCode != http.StatusBadRequest || !strings.Contains(string(rejectedBody), "response_type code") {
-		t.Fatalf("response type %d %s", rejected.StatusCode, rejectedBody)
+	if rejected.StatusCode != http.StatusFound || !strings.Contains(rejected.Header.Get("Location"), "response_type+code") {
+		t.Fatalf("response type %d %s %s", rejected.StatusCode, rejected.Header.Get("Location"), rejectedBody)
 	}
-	plainResp, err := http.Get(ts.URL + "/oauth/authorize?" + actorAuthorizeQuery(app.ID, actor.ID, challenge, "plain"))
+	plainResp, err := noFollow.Get(ts.URL + "/oauth/authorize?" + actorAuthorizeQuery(app.ID, actor.ID, challenge, "plain"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	plainBody, _ := io.ReadAll(plainResp.Body)
 	_ = plainResp.Body.Close()
-	if plainResp.StatusCode != http.StatusBadRequest || !strings.Contains(string(plainBody), "S256") {
-		t.Fatalf("plain pkce %d %s", plainResp.StatusCode, plainBody)
+	if plainResp.StatusCode != http.StatusFound || !strings.Contains(plainResp.Header.Get("Location"), "S256") {
+		t.Fatalf("plain pkce %d %s %s", plainResp.StatusCode, plainResp.Header.Get("Location"), plainBody)
 	}
 
 	browser := signInAda(t, ts.URL)
@@ -76,8 +77,9 @@ func TestActorTokenMustMatchAndRefreshKeepsIt(t *testing.T) {
 	}
 	silentBody, _ := io.ReadAll(silent.Body)
 	_ = silent.Body.Close()
-	if silent.StatusCode != http.StatusFound || !strings.Contains(string(silentBody), "consent_required") {
-		t.Fatalf("prompt none %d %s", silent.StatusCode, silentBody)
+	silentLoc := silent.Header.Get("Location")
+	if silent.StatusCode != http.StatusFound || !strings.HasPrefix(silentLoc, "https://app.example/cb?") || !strings.Contains(silentLoc, "error=consent_required") {
+		t.Fatalf("prompt none %d %s %s", silent.StatusCode, silentLoc, silentBody)
 	}
 
 	userQuery := url.Values{}
