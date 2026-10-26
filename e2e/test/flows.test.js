@@ -3,7 +3,7 @@ const http = require("node:http");
 const { startServer } = require("../support/server");
 const { pkcePair, shortID } = require("../support/pkce");
 const {
-  createUser, createClient, tokenRequest, introspect, revoke, userInfo, decodeJwt, readBody,
+  createUser, createClient, tokenRequest, introspect, revoke, userInfo, decodeJwt, readBody, redirectError,
 } = require("../support/oauth");
 const { newPage, authorize, closeBrowser, submitLogin, waitForCallback, callbackURL } = require("../support/browser");
 
@@ -387,8 +387,8 @@ describe("standard OAuth flows", function () {
     url.searchParams.set("code_challenge", pkce.challenge);
     url.searchParams.set("code_challenge_method", pkce.method);
     const response = await fetch(url, { redirect: "manual" });
-    const body = await response.json();
-    assert.equal(response.status, 302);
+    const body = redirectError(response);
+    assert.equal(body.status, 302);
     assert.equal(body.error, "login_required");
     assert.doesNotMatch(JSON.stringify(body), /<form/);
   });
@@ -431,9 +431,9 @@ describe("standard OAuth flows", function () {
     url.searchParams.set("redirect_uri", redirectURI);
     url.searchParams.set("response_type", "token");
     url.searchParams.set("scope", "openid");
-    const response = await fetch(url);
-    const body = await response.json();
-    assert.equal(response.status, 400);
+    const response = await fetch(url, { redirect: "manual" });
+    const body = redirectError(response);
+    assert.equal(body.status, 302);
     assert.equal(body.error, "unauthorized_client");
   });
 

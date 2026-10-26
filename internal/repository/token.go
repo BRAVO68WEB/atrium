@@ -31,12 +31,12 @@ func (r *TokenRepository) SaveAccessToken(token *models.AccessToken) error {
 		token.JTI = compactJTI(token.Token)
 	}
 	scopes, _ := json.Marshal(token.Scopes)
-	query := `INSERT INTO access_tokens (token, client_id, user_id, scopes, token_type, dpop_jkt, expires_at, revoked, resource, iat, jti, org_id, act)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO access_tokens (token, client_id, user_id, scopes, token_type, dpop_jkt, cert_thumbprint, expires_at, revoked, resource, iat, jti, org_id, act)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err := r.db.Exec(query,
 		token.Token, token.ClientID, token.UserID,
-		string(scopes), token.TokenType, token.DPoPJKT,
+		string(scopes), token.TokenType, token.DPoPJKT, token.CertThumbprint,
 		token.ExpiresAt, boolInt(token.Revoked),
 		token.Resource, token.IssuedAt, token.JTI, token.OrgID, token.Act,
 	)
@@ -45,7 +45,7 @@ func (r *TokenRepository) SaveAccessToken(token *models.AccessToken) error {
 
 func (r *TokenRepository) GetAccessToken(token string) (*models.AccessToken, error) {
 	defer telemetry.Step("repository.TokenRepository.GetAccessToken")()
-	query := `SELECT token, client_id, user_id, scopes, token_type, dpop_jkt, expires_at, revoked,
+	query := `SELECT token, client_id, user_id, scopes, token_type, dpop_jkt, COALESCE(cert_thumbprint, ''), expires_at, revoked,
 		COALESCE(resource, ''), iat, COALESCE(jti, ''), COALESCE(org_id, ''), COALESCE(act, '')
 		FROM access_tokens WHERE token = ?`
 
@@ -56,7 +56,7 @@ func (r *TokenRepository) GetAccessToken(token string) (*models.AccessToken, err
 
 	err := r.db.QueryRow(query, token).Scan(
 		&at.Token, &at.ClientID, &at.UserID,
-		&scopes, &at.TokenType, &at.DPoPJKT,
+		&scopes, &at.TokenType, &at.DPoPJKT, &at.CertThumbprint,
 		&at.ExpiresAt, &revoked,
 		&at.Resource, &issued, &at.JTI, &at.OrgID, &at.Act,
 	)

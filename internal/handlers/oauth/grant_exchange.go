@@ -98,6 +98,7 @@ func (h *Handler) handleTokenExchange(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt: time.Now().Add(h.cfg.Security.AccessTokenLifetime),
 	}
 
+	h.stampCert(r, accessTok)
 	if err := h.tokenRepo.SaveAccessToken(accessTok); err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to save access token")
 		return

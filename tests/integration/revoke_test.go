@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestRevokeDoesNotRevealAnotherClientsToken(t *testing.T) {
+func TestRevokeRejectsAnotherClientsToken(t *testing.T) {
 	ts, cleanup := setupTestServer(t)
 	defer cleanup()
 	mgmt := managementToken(t, ts.URL)
@@ -29,7 +29,7 @@ func TestRevokeDoesNotRevealAnotherClientsToken(t *testing.T) {
 	status, body := postForm(t, ts.URL+"/oauth/revoke", other["id"].(string), other["secret"].(string), url.Values{
 		"token": {access},
 	})
-	if status != http.StatusOK || body["error"] != nil {
+	if status != http.StatusBadRequest || body["error"] != "invalid_grant" {
 		t.Fatalf("cross-client revoke %d %v", status, body)
 	}
 	active := introspectAs(t, ts.URL, owner, access)
