@@ -14,10 +14,10 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v5.6.0
         with:
           go-version: "1.26"
 
@@ -28,7 +28,7 @@ jobs:
           go build -o bin/atrium-mobile ./cmd/atrium-mobile
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: binaries
           path: bin/
@@ -37,12 +37,12 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v5.6.0
         with:
           go-version: "1.26"
 
@@ -51,7 +51,7 @@ jobs:
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() && hashFiles('junit.xml') != '' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.5.5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: junit.xml
@@ -60,7 +60,7 @@ jobs:
 
       - name: Upload coverage reports to Codecov
         if: ${{ !cancelled() && hashFiles('coverage.out') != '' }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v5.5.5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.out
@@ -70,15 +70,15 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v5.6.0
         with:
           go-version: "1.26"
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@v9.3.0
         with:
           version: latest
           args: --timeout=5m
@@ -87,10 +87,10 @@ jobs:
     name: Vet
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v5.6.0
         with:
           go-version: "1.26"
 
@@ -101,10 +101,10 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v5.6.0
         with:
           go-version: "1.26"
 
@@ -121,10 +121,10 @@ jobs:
     name: Tidy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v5.6.0
         with:
           go-version: "1.26"
 
@@ -137,10 +137,10 @@ jobs:
     name: Test Postgres
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v5.6.0
         with:
           go-version: "1.26"
 
@@ -154,15 +154,18 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - name: Configure a fast APT mirror
+        uses: vegardit/fast-apt-mirror.sh@1.4.5
+
+      - uses: actions/checkout@v4.4.0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v5.6.0
         with:
           go-version: "1.26"
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -174,7 +177,7 @@ jobs:
 
       - name: Cache Playwright browsers
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v4.3.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('e2e/package-lock.json') }}
@@ -190,7 +193,7 @@ jobs:
         run: npx playwright install-deps chromium
 
       - name: Cache the Go build
-        uses: actions/cache@v4
+        uses: actions/cache@v4.3.0
         with:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-${{ hashFiles('go.sum') }}
