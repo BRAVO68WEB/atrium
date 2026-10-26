@@ -48,6 +48,7 @@ type User struct {
 	EmailVerified bool              `json:"email_verified"`
 	Disabled      bool              `json:"disabled"`
 	Attributes    map[string]string `json:"attributes,omitempty"`
+	UserMetadata  map[string]string `json:"user_metadata,omitempty"`
 	LastLoginAt   *time.Time        `json:"last_login_at,omitempty"`
 	CreatedAt     time.Time         `json:"created_at"`
 }
@@ -229,4 +230,41 @@ type Resource struct {
 	Description string    `json:"description,omitempty"`
 	Scopes      []string  `json:"scopes,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// Role is a named set of resource scopes.
+type Role struct {
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Description string      `json:"description,omitempty"`
+	Scopes      []RoleScope `json:"scopes,omitempty"`
+	CreatedAt   time.Time   `json:"created_at"`
+}
+
+// RoleScope is one resource scope that belongs to a role.
+type RoleScope struct {
+	Resource string `json:"resource"`
+	Scope    string `json:"scope"`
+}
+
+// UserRole is a role assigned to a user. An empty OrgID is global.
+type UserRole struct {
+	UserID string `json:"user_id,omitempty"`
+	RoleID string `json:"role_id"`
+	Name   string `json:"name,omitempty"`
+	OrgID  string `json:"org_id,omitempty"`
+}
+
+// UserScope is a resource scope assigned to a user without a role.
+type UserScope struct {
+	UserID   string `json:"user_id,omitempty"`
+	Resource string `json:"resource"`
+	Scope    string `json:"scope"`
+	OrgID    string `json:"org_id,omitempty"`
+}
+
+// UserAccess is the stored role and direct-scope grants for one user.
+type UserAccess struct {
+	Roles  []UserRole  `json:"roles"`
+	Scopes []UserScope `json:"scopes"`
 }

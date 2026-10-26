@@ -13,10 +13,10 @@ import (
 )
 
 const userColumns = `id, username, password_hash, COALESCE(email, ''), COALESCE(phone_number, ''), created_at,
-	last_login_at, COALESCE(email_verified, 0), COALESCE(disabled, 0), COALESCE(given_name, ''), COALESCE(family_name, ''), COALESCE(attributes, '{}')`
+	last_login_at, COALESCE(email_verified, 0), COALESCE(disabled, 0), COALESCE(given_name, ''), COALESCE(family_name, ''), COALESCE(attributes, '{}'), COALESCE(user_metadata, '{}')`
 
-func decodeAttributes(raw string) map[string]string {
-	defer telemetry.Step("repository.decodeAttributes")()
+func decodeStringMap(raw string) map[string]string {
+	defer telemetry.Step("repository.decodeStringMap")()
 	out := map[string]string{}
 	if raw == "" || raw == "{}" {
 		return out
@@ -30,6 +30,19 @@ func decodeAttributes(raw string) map[string]string {
 
 func (r *UserRepository) SetAttributes(id string, attrs map[string]string) error {
 	defer telemetry.Step("repository.UserRepository.SetAttributes")()
+	return r.setStringMap(id, "attributes", attrs)
+}
+
+func (r *UserRepository) SetUserMetadata(id string, attrs map[string]string) error {
+	defer telemetry.Step("repository.UserRepository.SetUserMetadata")()
+	return r.setStringMap(id, "user_metadata", attrs)
+}
+
+func (r *UserRepository) setStringMap(id, column string, attrs map[string]string) error {
+	defer telemetry.Step("repository.UserRepository.setStringMap")()
+	if column != "attributes" && column != "user_metadata" {
+		return fmt.Errorf("unknown user field")
+	}
 	if attrs == nil {
 		attrs = map[string]string{}
 	}
@@ -37,7 +50,7 @@ func (r *UserRepository) SetAttributes(id string, attrs map[string]string) error
 	if err != nil {
 		return err
 	}
-	_, err = r.db.Exec(`UPDATE users SET attributes = ? WHERE id = ?`, string(raw), id)
+	_, err = r.db.Exec(`UPDATE users SET `+column+` = ? WHERE id = ?`, string(raw), id)
 	return err
 }
 
@@ -46,15 +59,16 @@ func scanUser(scan func(dest ...any) error) (*models.User, error) {
 	user := &models.User{}
 	var lastLogin sql.NullTime
 	var emailVerified, disabled int
-	var attrs string
+	var attrs, meta string
 	if err := scan(
 		&user.ID, &user.Username, &user.PasswordHash,
 		&user.Email, &user.PhoneNumber, &user.CreatedAt,
-		&lastLogin, &emailVerified, &disabled, &user.GivenName, &user.FamilyName, &attrs,
+		&lastLogin, &emailVerified, &disabled, &user.GivenName, &user.FamilyName, &attrs, &meta,
 	); err != nil {
 		return nil, err
 	}
-	user.Attributes = decodeAttributes(attrs)
+	user.Attributes = decodeStringMap(attrs)
+	user.UserMetadata = decodeStringMap(meta)
 	if lastLogin.Valid {
 		t := lastLogin.Time
 		user.LastLoginAt = &t
@@ -75,20 +89,36 @@ func NewUserRepository(db database.SQL) *UserRepository {
 
 func (r *UserRepository) Create(user *models.User) error {
 	defer telemetry.Step("repository.UserRepository.Create")()
-	rawAttrs, _ := json.Marshal(user.Attributes)
-	if user.Attributes == nil {
-		rawAttrs = []byte("{}")
+	rawAttrs, err := marshalStringMap(user.Attributes)
+	if err != nil {
+		return err
+	}
+	rawMeta, err := marshalStringMap(user.UserMetadata)
+	if err != nil {
+		return err
 	}
 	query := `INSERT INTO users (id, username, password_hash, email, phone_number, created_at,
-		email_verified, disabled, given_name, family_name, attributes)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		email_verified, disabled, given_name, family_name, attributes, user_metadata)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := r.db.Exec(query,
+	_, err = r.db.Exec(query,
 		user.ID, user.Username, user.PasswordHash,
 		user.Email, user.PhoneNumber, user.CreatedAt,
-		boolInt(user.EmailVerified), boolInt(user.Disabled), user.GivenName, user.FamilyName, string(rawAttrs),
+		boolInt(user.EmailVerified), boolInt(user.Disabled), user.GivenName, user.FamilyName, rawAttrs, rawMeta,
 	)
 	return err
+}
+
+func marshalStringMap(attrs map[string]string) (string, error) {
+	defer telemetry.Step("repository.marshalStringMap")()
+	if attrs == nil {
+		attrs = map[string]string{}
+	}
+	raw, err := json.Marshal(attrs)
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }
 
 func (r *UserRepository) GetByID(id string) (*models.User, error) {

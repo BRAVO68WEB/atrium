@@ -300,6 +300,15 @@ func mountManagement(mgmt chi.Router, r *Router) {
 		r3.Get("/{uri}/scopes", r.managementCtrl.HandleListResourceScopes)
 	})
 
+	mgmt.Route("/roles", func(r3 chi.Router) {
+		r3.Get("/", r.managementCtrl.HandleListRoles)
+		r3.Post("/", r.managementCtrl.HandleCreateRole)
+		r3.Get("/{roleID}", r.managementCtrl.HandleGetRole)
+		r3.Patch("/{roleID}", r.managementCtrl.HandlePatchRole)
+		r3.Delete("/{roleID}", r.managementCtrl.HandleDeleteRole)
+		r3.Put("/{roleID}/scopes", r.managementCtrl.HandleSetRoleScopes)
+	})
+
 	mgmt.Route("/consents", func(r3 chi.Router) {
 		r3.Get("/", r.managementCtrl.HandleListConsents)
 		r3.Delete("/", r.managementCtrl.HandleRevokeConsent)

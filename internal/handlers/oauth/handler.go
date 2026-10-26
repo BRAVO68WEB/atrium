@@ -52,6 +52,7 @@ type Handler struct {
 	cimd         cache.Cache
 	introspect   *service.Introspector
 	orgs         *service.OrgService
+	access       *service.AccessService
 	actorMu      sync.Mutex
 	actorGrants  map[string]time.Time
 	deviceLogin  DeviceLogin
@@ -492,6 +493,9 @@ func (h *Handler) HandleIntrospect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result != nil && result.Active && result.Sub != "" && h.oidcHandler != nil {
+		if result.OrgID != "" {
+			result.OrgRole = h.oidcHandler.OrgRole(result.OrgID, result.Sub)
+		}
 		computed, err := h.oidcHandler.SubjectFor(r.Context(), result.ClientID, result.Sub)
 		if err != nil {
 			writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to resolve subject")

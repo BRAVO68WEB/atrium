@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.26.4-bookworm AS build
+FROM --platform=$BUILDPLATFORM golang:1.26.10-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -13,15 +13,16 @@ RUN variant="$TARGETVARIANT"; \
     CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" GOARM="${variant#v}" \
     go build -trimpath \
       -ldflags="-s -w -X github.com/bravo68web/atrium/internal/version.Version=${VERSION} -X github.com/bravo68web/atrium/internal/version.Commit=${COMMIT} -X github.com/bravo68web/atrium/internal/version.Date=${DATE}" \
-      -o /atrium ./cmd/atrium
+      -o /atrium ./cmd/atrium \
+    && mkdir -p /out/app \
+    && chown 65534:65534 /out/app
 
-FROM alpine:3.22
-RUN apk add --no-cache ca-certificates \
-    && mkdir -p /app/internal/hashalgo \
-    && chown -R nobody:nobody /app
-COPY --from=build --chown=nobody:nobody /atrium /usr/local/bin/atrium
-COPY --from=build --chown=nobody:nobody /src/internal/hashalgo/algo.go /app/internal/hashalgo/algo.go
+FROM scratch
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build --chown=65534:65534 /atrium /usr/local/bin/atrium
+COPY --from=build --chown=65534:65534 /out/app /app
+COPY --from=build --chown=65534:65534 /src/internal/hashalgo/algo.go /app/internal/hashalgo/algo.go
 WORKDIR /app
-USER nobody
+USER 65534:65534
 EXPOSE 8080
-ENTRYPOINT ["atrium"]
+ENTRYPOINT ["/usr/local/bin/atrium"]

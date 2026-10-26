@@ -198,6 +198,9 @@ paths:
     get:
       tags: [CIAM]
       summary: Current user profile
+      description: |
+        Returns the signed-in profile, including `user_metadata`.
+        Does not return `attributes`.
       security: [{ bearerAuth: [] }]
       responses:
         "200":
@@ -205,10 +208,17 @@ paths:
     patch:
       tags: [CIAM]
       summary: Update the current user profile
+      description: |
+        Merges `user_metadata`. A string sets one key and `null` deletes one key.
+        Omitting `user_metadata` leaves it unchanged. Rejects `attributes`,
+        `disabled`, and `email_verified`. The stored object must stay within
+        16 KiB and 50 keys.
       security: [{ bearerAuth: [] }]
       responses:
         "200":
           description: Updated profile
+        "400":
+          description: Invalid metadata, or a field this route cannot change
 
   /api/me/consents:
     get:
@@ -1643,8 +1653,12 @@ paths:
                 $ref: "#/components/schemas/OAuthError"
     patch:
       tags: [Management]
-      summary: Update a user profile or attributes
-      description: Management can set `attributes`. Self-service `PATCH /api/me` cannot.
+      summary: Update a user profile or metadata
+      description: |
+        Merges `attributes` and `user_metadata` when either object is present.
+        A string sets one key and `null` deletes one key. An omitted object
+        stays unchanged. Each stored object must stay within 16 KiB and 50 keys.
+        Self-service `PATCH /api/me` can merge `user_metadata` only.
       security: [{ bearerAuth: [] }]
       parameters:
         - name: userID
@@ -1656,6 +1670,156 @@ paths:
           description: Updated user
         "404":
           description: User not found
+
+  /api/roles:
+    get:
+      tags: [Management]
+      summary: List roles
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Roles and the resource scopes on each role
+    post:
+      tags: [Management]
+      summary: Create a role
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201":
+          description: Role created
+        "409":
+          description: A role with that name already exists
+
+  /api/roles/{roleID}:
+    get:
+      tags: [Management]
+      summary: Get a role
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: roleID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Role
+        "404":
+          description: Role not found
+    patch:
+      tags: [Management]
+      summary: Rename a role or change its description
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: roleID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated role
+    delete:
+      tags: [Management]
+      summary: Delete a role and its assignments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: roleID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Role deleted
+
+  /api/roles/{roleID}/scopes:
+    put:
+      tags: [Management]
+      summary: Replace the scopes on a role
+      description: |
+        Each scope must already exist on the named resource.
+        `management` is rejected. This call replaces the previous set.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: roleID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Role with its new scopes
+        "400":
+          description: A scope is not on that resource
+
+  /api/users/{userID}/roles:
+    post:
+      tags: [Management]
+      summary: Assign a role to a user
+      description: |
+        `org_id` empty grants the role on every token. A set `org_id`
+        grants it only on tokens for that organization.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Role assigned
+    delete:
+      tags: [Management]
+      summary: Remove a role from a user
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Role removed
+
+  /api/users/{userID}/scopes:
+    post:
+      tags: [Management]
+      summary: Grant one resource scope directly
+      description: A direct grant is not wrapped in a role. `org_id` follows the same rule as a role assignment.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Scope granted
+        "400":
+          description: The scope is not on that resource, or the scope is management
+    delete:
+      tags: [Management]
+      summary: Remove one direct scope grant
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Scope removed
+
+  /api/users/{userID}/access:
+    get:
+      tags: [Management]
+      summary: List a user's stored roles and direct scopes
+      description: Returns the stored grants. It does not add scopes that were not assigned.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Stored roles and direct scopes
 
   /api/tokens:
     get:
@@ -3005,6 +3169,16 @@ components:
           type: string
           description: User phone number (E.164 format recommended)
           example: "+1-555-123-4567"
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+          description: Operator-owned string map stored on the new user.
+        user_metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Person-owned string map stored on the new user.
 
     User:
       type: object
@@ -3037,6 +3211,16 @@ components:
           format: date-time
           description: Account creation timestamp
           example: "2026-06-16T10:00:00Z"
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+          description: Operator-owned string map. Management reads and merges it.
+        user_metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Person-owned string map. The person reads and merges it at /api/me.
 
     # ── Token ──
 

@@ -422,6 +422,33 @@ func (db *DB) Migrate() error {
 			scopes TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS roles (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL UNIQUE,
+			description TEXT NOT NULL DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS role_scopes (
+			role_id TEXT NOT NULL,
+			resource_uri TEXT NOT NULL,
+			scope TEXT NOT NULL,
+			PRIMARY KEY (role_id, resource_uri, scope)
+		)`,
+		`CREATE TABLE IF NOT EXISTS user_roles (
+			user_id TEXT NOT NULL,
+			role_id TEXT NOT NULL,
+			org_id TEXT NOT NULL DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (user_id, role_id, org_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS user_scopes (
+			user_id TEXT NOT NULL,
+			resource_uri TEXT NOT NULL,
+			scope TEXT NOT NULL,
+			org_id TEXT NOT NULL DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (user_id, resource_uri, scope, org_id)
+		)`,
 		`CREATE TABLE IF NOT EXISTS push_registration_tokens (
 			jti TEXT PRIMARY KEY,
 			user_id TEXT NOT NULL,
@@ -486,6 +513,7 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE authorization_codes ADD COLUMN session_id TEXT`,
 		`ALTER TABLE authorization_codes ADD COLUMN auth_time DATETIME`,
 		`ALTER TABLE users ADD COLUMN attributes TEXT NOT NULL DEFAULT '{}'`,
+		`ALTER TABLE users ADD COLUMN user_metadata TEXT NOT NULL DEFAULT '{}'`,
 		`ALTER TABLE clients ADD COLUMN registration_source TEXT NOT NULL DEFAULT 'management'`,
 		`ALTER TABLE clients ADD COLUMN dcr_enabled INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE clients ADD COLUMN cimd_enabled INTEGER NOT NULL DEFAULT 0`,

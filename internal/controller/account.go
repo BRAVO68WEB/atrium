@@ -172,11 +172,37 @@ func (c *AccountController) HandlePatchMe(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	var req userPatch
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var fields map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&fields); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
 		return
 	}
+	for _, key := range []string{"attributes", "disabled", "email_verified"} {
+		if _, ok := fields[key]; ok {
+			writeError(w, http.StatusBadRequest, "invalid_request", "cannot change "+key)
+			return
+		}
+	}
+	blob, err := json.Marshal(fields)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
+		return
+	}
+	var req userPatch
+	if err := json.Unmarshal(blob, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
+		return
+	}
+	nextMeta, metaSet, err := mergedBag(user.UserMetadata, fields["user_metadata"])
+	if err != nil {
+		if writeMetadataError(w, err) {
+			return
+		}
+		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
+		return
+	}
+	req.Disabled = nil
+	req.EmailVerified = nil
 	emailChanged := applyProfile(user, req)
 	if emailChanged {
 		user.EmailVerified = false
@@ -187,6 +213,16 @@ func (c *AccountController) HandlePatchMe(w http.ResponseWriter, r *http.Request
 		}
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to update profile")
 		return
+	}
+	if metaSet {
+		if err := c.users.SetUserMetadata(user.ID, nextMeta); err != nil {
+			if writeMetadataError(w, err) {
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "server_error", "Failed to update user metadata")
+			return
+		}
+		user.UserMetadata = nextMeta
 	}
 	if emailChanged {
 		_ = c.account.SendVerification(user)
@@ -864,6 +900,10 @@ func publicUser(user *models.User) map[string]any {
 	if user.LastLoginAt != nil {
 		last = user.LastLoginAt.Format(time.RFC3339)
 	}
+	meta := user.UserMetadata
+	if meta == nil {
+		meta = map[string]string{}
+	}
 	return map[string]any{
 		"id":             user.ID,
 		"username":       user.Username,
@@ -873,6 +913,7 @@ func publicUser(user *models.User) map[string]any {
 		"given_name":     user.GivenName,
 		"family_name":    user.FamilyName,
 		"disabled":       user.Disabled,
+		"user_metadata":  meta,
 		"last_login_at":  last,
 		"created_at":     user.CreatedAt,
 	}

@@ -54,6 +54,7 @@ type BackupUser struct {
 	Disabled      bool              `json:"disabled,omitempty"`
 	TOTPSecret    string            `json:"totp_secret,omitempty"`
 	Attributes    map[string]string `json:"attributes,omitempty"`
+	UserMetadata  map[string]string `json:"user_metadata,omitempty"`
 	Orgs          []string          `json:"orgs,omitempty"`
 	CreatedAt     time.Time         `json:"created_at,omitempty"`
 }
@@ -360,7 +361,8 @@ func (b *Backup) exportUsers() ([]BackupUser, error) {
 			EmailVerified: user.EmailVerified, PasswordHash: user.PasswordHash,
 			GivenName: user.GivenName, FamilyName: user.FamilyName,
 			PhoneNumber: user.PhoneNumber, Disabled: user.Disabled,
-			Attributes: user.Attributes, CreatedAt: user.CreatedAt,
+			Attributes: user.Attributes, UserMetadata: user.UserMetadata,
+			CreatedAt: user.CreatedAt,
 		}
 		if enabled {
 			item.TOTPSecret = secret
@@ -656,11 +658,17 @@ func validSigningKey(row BackupSigningKey) error {
 }
 
 func upsertUser(q database.SQL, user BackupUser) error {
-	attrs := user.Attributes
-	if attrs == nil {
-		attrs = map[string]string{}
+	if err := CheckMetadata(user.Attributes); err != nil {
+		return err
 	}
-	raw, err := json.Marshal(attrs)
+	if err := CheckMetadata(user.UserMetadata); err != nil {
+		return err
+	}
+	raw, err := json.Marshal(metadataOrEmpty(user.Attributes))
+	if err != nil {
+		return err
+	}
+	rawMeta, err := json.Marshal(metadataOrEmpty(user.UserMetadata))
 	if err != nil {
 		return err
 	}
@@ -669,16 +677,25 @@ func upsertUser(q database.SQL, user BackupUser) error {
 		created = time.Now().UTC()
 	}
 	_, err = q.Exec(`INSERT INTO users (id, username, password_hash, email, phone_number, created_at,
-		email_verified, disabled, given_name, family_name, attributes, mfa_enabled, mfa_secret)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		email_verified, disabled, given_name, family_name, attributes, user_metadata, mfa_enabled, mfa_secret)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (id) DO UPDATE SET username = excluded.username, password_hash = excluded.password_hash,
 		email = excluded.email, phone_number = excluded.phone_number, email_verified = excluded.email_verified,
 		disabled = excluded.disabled, given_name = excluded.given_name, family_name = excluded.family_name,
-		attributes = excluded.attributes, mfa_enabled = excluded.mfa_enabled, mfa_secret = excluded.mfa_secret`,
+		attributes = excluded.attributes, user_metadata = excluded.user_metadata,
+		mfa_enabled = excluded.mfa_enabled, mfa_secret = excluded.mfa_secret`,
 		user.ID, user.Username, user.PasswordHash, user.Email, user.PhoneNumber, created,
-		bit(user.EmailVerified), bit(user.Disabled), user.GivenName, user.FamilyName, string(raw),
+		bit(user.EmailVerified), bit(user.Disabled), user.GivenName, user.FamilyName, string(raw), string(rawMeta),
 		bit(user.TOTPSecret != ""), user.TOTPSecret)
 	return err
+}
+
+func metadataOrEmpty(attrs map[string]string) map[string]string {
+	defer telemetry.Step("service.metadataOrEmpty")()
+	if attrs == nil {
+		return map[string]string{}
+	}
+	return attrs
 }
 
 func upsertOrg(q database.SQL, org BackupOrg) error {

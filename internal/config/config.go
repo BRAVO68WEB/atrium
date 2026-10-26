@@ -796,7 +796,7 @@ func ValidateSocial(cfg *Config) error {
 
 var reservedClaims = map[string]bool{
 	"iss": true, "sub": true, "aud": true, "exp": true, "iat": true, "nbf": true,
-	"nonce": true, "sid": true, "auth_time": true, "org_id": true, "org_slug": true,
+	"nonce": true, "sid": true, "auth_time": true, "org_id": true, "org_slug": true, "org_role": true,
 }
 
 var claimSources = map[string]bool{
@@ -889,6 +889,7 @@ func ValidatePlatform(cfg *Config) error {
 		case claimSources[src]:
 		case strings.HasPrefix(src, "const:"):
 		case strings.HasPrefix(src, "attr.") && len(src) > len("attr."):
+		case strings.HasPrefix(src, "user.") && len(src) > len("user."):
 		default:
 			return fmt.Errorf("oidc claim %q has unknown source %q", m.Claim, src)
 		}

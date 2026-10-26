@@ -178,8 +178,9 @@ pairwise` receives a sector subject. See [Configuration](CONFIG.md).
 | GET | `/branding/assets/{name}` | One branding file |
 
 `/organization` appears when organizations are on, the request did not
-name one, and the user has more than one membership. See
-[Configuration](CONFIG.md).
+name one, and the user has more than one membership. A token for
+that organization carries `org_id`, `org_slug`, and `org_role`.
+The role is `member` or `admin`. See [Configuration](CONFIG.md).
 
 ## Account API
 
@@ -210,6 +211,13 @@ off an authenticator after a valid code, and signs out other browsers.
 The current browser has no sign-out button on that list.
 
 `window` is a Go duration. The default is 30 days (`720h`).
+
+`GET /api/me` returns `user_metadata`, a string map you own.
+`PATCH /api/me` merges that map. A string sets one key, and `null`
+deletes one key. Leave `user_metadata` out and the map stays as it is.
+The stored JSON must stay within 16 KiB and 50 keys. This route does
+not return `attributes`. It rejects `attributes`, `disabled`, and
+`email_verified`.
 
 ## Management API
 
@@ -244,6 +252,15 @@ POST   /api/refresh-tokens/{id}/revoke
 
 Refresh-token lists use the public id and omit the secret.
 
+`attributes` is a string map you set for the person.
+`user_metadata` is a string map the person can edit from `/api/me`.
+`POST /api/users` stores either map when you send it.
+`PATCH /api/users/{id}` merges a map when you send it. A string sets
+one key, and `null` deletes one key. A map you leave out stays as it
+is. Each stored JSON object must stay within 16 KiB and 50 keys.
+Import and backup carry both maps. `GET /api/users/{id}` returns both.
+`GET /api/me` returns only `user_metadata`.
+
 Scopes, resources, and consents:
 
 ```
@@ -259,9 +276,41 @@ PUT    /api/resources/{uri}
 DELETE /api/resources/{uri}
 GET    /api/resources/{uri}/scopes
 
+GET    /api/roles
+POST   /api/roles
+GET    /api/roles/{id}
+PATCH  /api/roles/{id}
+DELETE /api/roles/{id}
+PUT    /api/roles/{id}/scopes
+
+POST   /api/users/{id}/roles
+DELETE /api/users/{id}/roles
+POST   /api/users/{id}/scopes
+DELETE /api/users/{id}/scopes
+GET    /api/users/{id}/access
+
 GET    /api/consents
 DELETE /api/consents
 ```
+
+A role is a name plus scopes that already exist on an API resource.
+Assign that role to a user, or assign one resource scope directly.
+Leave `org_id` empty and the grant is on every token. Set `org_id`
+and the grant is only on tokens for that organization. `PUT` replaces
+the role's scopes. `management` cannot be granted this way.
+
+A user token starts from the scopes the client asked for. An empty
+request means every scope registered on the client. Scopes the client
+is not registered for are rejected. `openid`, `profile`, `email`,
+`address`, `phone`, and `offline_access` stay when the client has
+them. Every other scope stays only when the user holds it for this
+token. Holdings are the global grants plus, when the token has an
+organization, the grants for that organization. A client-credentials
+token is unchanged. A redeemed ID-JAG keeps the scopes named in that
+grant. A new token drops a permission you removed. An
+access token that was already issued keeps its scopes until it
+expires. `GET /api/users/{id}/access` returns the stored grants. It
+does not invent extra permissions.
 
 Organizations, webhooks, audit, analytics, CIBA, and keys:
 

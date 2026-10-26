@@ -231,6 +231,13 @@ func (h *Handler) HandleDeviceToken(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	scopes, err := h.narrowScopes(userID, "", dc.Scopes)
+	if err != nil {
+		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to resolve scopes")
+		return
+	}
+	dc.Scopes = scopes
+
 	accessToken, err := h.issueAccessToken(r.Context(), dc.ClientID, userID, strings.Join(dc.Scopes, " "), tokenType)
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
