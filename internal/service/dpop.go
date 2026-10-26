@@ -115,7 +115,7 @@ func (s *DPoPService) ValidateDPoPProof(ctx context.Context, dpopHeader string, 
 	if err != nil || issued == nil {
 		return nil, fmt.Errorf("missing iat claim")
 	}
-	if time.Since(issued.Time) > s.maxProofAge() || issued.Time.After(time.Now().Add(30*time.Second)) {
+	if time.Since(issued.Time) > s.maxProofAge() || issued.After(time.Now().Add(30*time.Second)) {
 		return nil, fmt.Errorf("DPoP proof is expired")
 	}
 

@@ -446,11 +446,8 @@ func assertionToken(t *testing.T, base, assertion string) map[string]any {
 	defer func() { _ = resp.Body.Close() }()
 	var body map[string]any
 	_ = json.NewDecoder(resp.Body).Decode(&body)
-	if resp.StatusCode != http.StatusOK {
-		body["error"] = body["error"]
-		if body["error"] == nil {
-			body["error"] = "status"
-		}
+	if resp.StatusCode != http.StatusOK && body["error"] == nil {
+		body["error"] = "status"
 	}
 	return body
 }
