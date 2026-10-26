@@ -3,7 +3,7 @@ const { createRemoteJWKSet, jwtVerify } = require("jose");
 const { startServer } = require("../support/server");
 const { pkcePair, shortID } = require("../support/pkce");
 const {
-  MGMT_ID, MGMT_SECRET, createUser, createClient, tokenRequest, introspect,
+  MGMT_ID, MGMT_SECRET, createUser, createClient, tokenRequest, introspect, redirectError,
 } = require("../support/oauth");
 const { newPage, authorize, closeBrowser, callbackURL, waitForCallback } = require("../support/browser");
 
@@ -70,21 +70,21 @@ describe("on-behalf-of delegation", function () {
 
   it("rejects a request that is not S256 code for a known agent", async function () {
     const pkce = pkcePair();
-    const missing = await fetch(authorizeURL(server, app, redirectURI, null, { requested_actor: actor.id }));
-    const missingBody = await missing.json();
-    assert.equal(missing.status, 400);
+    const missing = await fetch(authorizeURL(server, app, redirectURI, null, { requested_actor: actor.id }), { redirect: "manual" });
+    const missingBody = redirectError(missing);
+    assert.equal(missing.status, 302);
     assert.match(missingBody.error_description, /S256/);
 
     const implicit = authorizeURL(server, app, redirectURI, pkce, { requested_actor: actor.id });
     implicit.searchParams.set("response_type", "token");
-    const rejected = await fetch(implicit);
-    const rejectedBody = await rejected.json();
-    assert.equal(rejected.status, 400);
+    const rejected = await fetch(implicit, { redirect: "manual" });
+    const rejectedBody = redirectError(rejected);
+    assert.equal(rejected.status, 302);
     assert.match(rejectedBody.error_description, /response_type code/);
 
-    const unknown = await fetch(authorizeURL(server, app, redirectURI, pkce, { requested_actor: "not-an-agent" }));
-    const unknownBody = await unknown.json();
-    assert.equal(unknown.status, 400);
+    const unknown = await fetch(authorizeURL(server, app, redirectURI, pkce, { requested_actor: "not-an-agent" }), { redirect: "manual" });
+    const unknownBody = redirectError(unknown);
+    assert.equal(unknown.status, 302);
     assert.match(unknownBody.error_description, /not recognized/);
   });
 
@@ -179,7 +179,7 @@ describe("on-behalf-of delegation", function () {
       headers: { cookie: cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ") },
       redirect: "manual",
     });
-    const quietBody = await quiet.json();
+    const quietBody = redirectError(quiet);
     assert.equal(quiet.status, 302);
     assert.equal(quietBody.error, "consent_required");
 
