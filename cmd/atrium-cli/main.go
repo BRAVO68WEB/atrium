@@ -71,6 +71,7 @@ func newRootCmd() *cobra.Command {
 		mfaCmd(),
 		scopeCmd(),
 		resourceCmd(),
+		roleCmd(),
 		consentCmd(),
 		webhookCmd(),
 		analyticsCmd(),

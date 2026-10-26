@@ -195,9 +195,23 @@ the page address works as well. The flag is off unless you set it.
 ./bin/atrium-cli resource create --uri https://api.example --name API
 ./bin/atrium-cli resource delete https://api.example
 
+./bin/atrium-cli role create --name viewer --description "Read projects"
+./bin/atrium-cli role list
+./bin/atrium-cli role scopes <id> --grant "https://api.example|projects:read"
+./bin/atrium-cli user role <user-id> --role <role-id>
+./bin/atrium-cli user role <user-id> --role <role-id> --org-id <org-id>
+./bin/atrium-cli user role <user-id> --role <role-id> --remove
+./bin/atrium-cli user scope <user-id> --resource https://api.example --scope projects:read
+./bin/atrium-cli user scope <user-id> --resource https://api.example --scope projects:read --remove
+
 ./bin/atrium-cli consent list --user-id <id>
 ./bin/atrium-cli consent revoke --user-id <id> --client-id <id>
 ```
+
+`role scopes` replaces that role's scopes with the `--grant` values.
+Each grant is `resource|scope`. Repeat `--grant` for more than one.
+`--org-id` limits `user role` and `user scope` to tokens for that
+organization. Leave it out and the grant is on every token.
 
 ### Webhooks, analytics, and audit
 

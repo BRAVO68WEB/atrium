@@ -67,6 +67,12 @@ func (h *Handler) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 		tokenType = "DPoP"
 	}
 	orgSlug := h.orgSlug(refreshToken.OrgID)
+	scopes, err := h.narrowScopes(refreshToken.UserID, refreshToken.OrgID, refreshToken.Scopes)
+	if err != nil {
+		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to resolve scopes")
+		return
+	}
+	refreshToken.Scopes = scopes
 
 	newAccessToken, err := h.issueAccessTokenFor(r.Context(), refreshToken.ClientID, refreshToken.UserID, strings.Join(refreshToken.Scopes, " "), tokenType, refreshToken.OrgID, orgSlug, refreshToken.Resource, refreshToken.Act)
 	if err != nil {

@@ -405,6 +405,14 @@ func (h *Handler) issueAuthorizationResponse(w http.ResponseWriter, r *http.Requ
 	var accessToken string
 	var idToken string
 	var err error
+	if session != nil {
+		scopes, err = h.narrowScopes(session.UserID, orgID, scopes)
+		if err != nil {
+			writeOAuthError(w, http.StatusInternalServerError, "server_error", "Failed to resolve scopes", state)
+			return
+		}
+		scope = strings.Join(scopes, " ")
+	}
 
 	needsCode := responseHas(responseType, "code")
 	needsToken := responseHas(responseType, "token")

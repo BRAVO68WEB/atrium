@@ -96,6 +96,11 @@ func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 		writeTokenError(w, http.StatusBadRequest, orgCode, orgDesc)
 		return
 	}
+	scopes, err = h.narrowScopes(user.ID, orgID, scopes)
+	if err != nil {
+		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to resolve scopes")
+		return
+	}
 
 	resource := r.Form.Get("resource")
 	accessToken, err := h.issueAccessTokenFor(r.Context(), clientID, user.ID, strings.Join(scopes, " "), tokenType, orgID, orgSlug, resource, "")

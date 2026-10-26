@@ -104,6 +104,18 @@ func (c *Client) Put(rawURL, contentType string, body io.Reader) (*http.Response
 	return c.do(req)
 }
 
+// Delete sends an authorized DELETE request. body may be nil.
+func (c *Client) Delete(rawURL, contentType string, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodDelete, rawURL, body)
+	if err != nil {
+		return nil, err
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	return c.do(req)
+}
+
 // Post sends an authorized POST request.
 func (c *Client) Post(rawURL, contentType string, body io.Reader) (*http.Response, error) {
 	req, err := http.NewRequest(http.MethodPost, rawURL, body)

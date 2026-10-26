@@ -129,6 +129,12 @@ func (h *Handler) handleAuthorizationCodeToken(w http.ResponseWriter, r *http.Re
 
 	tokenType := boundTokenType(client)
 	orgSlug := h.orgSlug(authCode.OrgID)
+	scopes, err := h.narrowScopes(authCode.UserID, authCode.OrgID, authCode.Scopes)
+	if err != nil {
+		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to resolve scopes")
+		return
+	}
+	authCode.Scopes = scopes
 
 	accessToken, err := h.issueAccessTokenFor(r.Context(), authCode.ClientID, authCode.UserID, strings.Join(authCode.Scopes, " "), tokenType, authCode.OrgID, orgSlug, authCode.Resource, authCode.RequestedActor)
 	if err != nil {

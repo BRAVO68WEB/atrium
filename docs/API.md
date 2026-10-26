@@ -276,9 +276,41 @@ PUT    /api/resources/{uri}
 DELETE /api/resources/{uri}
 GET    /api/resources/{uri}/scopes
 
+GET    /api/roles
+POST   /api/roles
+GET    /api/roles/{id}
+PATCH  /api/roles/{id}
+DELETE /api/roles/{id}
+PUT    /api/roles/{id}/scopes
+
+POST   /api/users/{id}/roles
+DELETE /api/users/{id}/roles
+POST   /api/users/{id}/scopes
+DELETE /api/users/{id}/scopes
+GET    /api/users/{id}/access
+
 GET    /api/consents
 DELETE /api/consents
 ```
+
+A role is a name plus scopes that already exist on an API resource.
+Assign that role to a user, or assign one resource scope directly.
+Leave `org_id` empty and the grant is on every token. Set `org_id`
+and the grant is only on tokens for that organization. `PUT` replaces
+the role's scopes. `management` cannot be granted this way.
+
+A user token starts from the scopes the client asked for. An empty
+request means every scope registered on the client. Scopes the client
+is not registered for are rejected. `openid`, `profile`, `email`,
+`address`, `phone`, and `offline_access` stay when the client has
+them. Every other scope stays only when the user holds it for this
+token. Holdings are the global grants plus, when the token has an
+organization, the grants for that organization. A client-credentials
+token is unchanged. A redeemed ID-JAG keeps the scopes named in that
+grant. A new token drops a permission you removed. An
+access token that was already issued keeps its scopes until it
+expires. `GET /api/users/{id}/access` returns the stored grants. It
+does not invent extra permissions.
 
 Organizations, webhooks, audit, analytics, CIBA, and keys:
 

@@ -266,6 +266,13 @@ func (h *Handler) HandleCIBAToken(w http.ResponseWriter, r *http.Request) {
 		userID = queueReq.UserID
 	}
 
+	scopes, err := h.narrowScopes(userID, "", cibaReq.Scopes)
+	if err != nil {
+		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to resolve scopes")
+		return
+	}
+	cibaReq.Scopes = scopes
+
 	accessToken, err := h.issueAccessToken(r.Context(), cibaReq.ClientID, userID, strings.Join(cibaReq.Scopes, " "), tokenType)
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")

@@ -52,6 +52,7 @@ type Handler struct {
 	cimd         cache.Cache
 	introspect   *service.Introspector
 	orgs         *service.OrgService
+	access       *service.AccessService
 	actorMu      sync.Mutex
 	actorGrants  map[string]time.Time
 	deviceLogin  DeviceLogin
