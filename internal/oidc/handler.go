@@ -313,7 +313,7 @@ func (h *Handler) identityClaims(ctx context.Context, clientID, userID, nonce st
 		if role := h.orgRole(ex.OrgID, userID); role != "" {
 			claims["org_role"] = role
 		}
-		for key, value := range applyClaimMappings(mappings, user, scopes) {
+		for key, value := range applyClaimMappings(mappings, sub, user, scopes) {
 			claims[key] = value
 		}
 		return claims, nil
@@ -424,7 +424,7 @@ func (h *Handler) HandleUserInfo(w http.ResponseWriter, r *http.Request) {
 		mappings = h.cfg.OIDC.ClaimMappings
 	}
 	if len(mappings) > 0 {
-		for key, value := range applyClaimMappings(mappings, user, at.Scopes) {
+		for key, value := range applyClaimMappings(mappings, sub, user, at.Scopes) {
 			response[key] = value
 		}
 	} else {

@@ -8,7 +8,7 @@ import (
 	"github.com/bravo68web/atrium/internal/telemetry"
 )
 
-func applyClaimMappings(mappings []config.ClaimMapping, user *models.User, scopes []string) map[string]any {
+func applyClaimMappings(mappings []config.ClaimMapping, subject string, user *models.User, scopes []string) map[string]any {
 	defer telemetry.Step("oidc.applyClaimMappings")()
 	if len(mappings) == 0 {
 		return nil
@@ -18,7 +18,7 @@ func applyClaimMappings(mappings []config.ClaimMapping, user *models.User, scope
 		if mapping.Claim == "" || reservedClaim(mapping.Claim) || !scopesCover(scopes, mapping.Scopes) {
 			continue
 		}
-		value, ok := claimValue(mapping.Source, user)
+		value, ok := claimValue(mapping.Source, subject, user)
 		if !ok {
 			continue
 		}
@@ -54,17 +54,24 @@ func scopesCover(have, need []string) bool {
 	return true
 }
 
-func claimValue(source string, user *models.User) (any, bool) {
+func claimValue(source, subject string, user *models.User) (any, bool) {
 	defer telemetry.Step("oidc.claimValue")()
 	if strings.HasPrefix(source, "const:") {
 		return strings.TrimPrefix(source, "const:"), true
+	}
+	if source == "sub" {
+		if subject != "" {
+			return subject, true
+		}
+		if user != nil && user.ID != "" {
+			return user.ID, true
+		}
+		return nil, false
 	}
 	if user == nil {
 		return nil, false
 	}
 	switch source {
-	case "sub":
-		return user.ID, user.ID != ""
 	case "username":
 		return user.Username, true
 	case "email":

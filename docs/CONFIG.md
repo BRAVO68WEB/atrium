@@ -353,9 +353,11 @@ or `org_role`.
 `source` `attr.<key>` reads one `attributes` value. `user.<key>` reads
 one `user_metadata` value. `const:<text>` writes that text.
 `username`, `email`, `email_verified`, `phone`, `given_name`, and
-`family_name` read those profile fields. The claim is added when the
-token includes every scope named on the mapping. An empty scope list
-adds the claim on every token.
+`family_name` read those profile fields. A source of `sub` copies the
+subject the client receives. For a pairwise client that value is the
+sector identifier, not the local account id. The claim is added when
+the token includes every scope named on the mapping. An empty scope
+list adds the claim on every token.
 
 ## Social login
 
