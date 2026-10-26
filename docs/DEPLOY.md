@@ -241,7 +241,13 @@ The release archive for each OS and architecture contains
 `internal/hashalgo/algo.go`. Linux and macOS archives are `.tar.gz`.
 Windows archives are `.zip`. The names look like
 `atrium_1.2.3_linux_amd64.tar.gz` and
-`atrium_1.2.3_windows_386.zip`.
+`atrium_1.2.3_windows_386.zip`. Each archive and `checksums.txt`
+receives a build provenance attestation.
+
+```bash
+gh attestation verify atrium_1.2.3_linux_amd64.tar.gz \
+  --repo BRAVO68WEB/atrium
+```
 
 | OS | amd64 | 386 | arm64 |
 | --- | --- | --- | --- |
@@ -257,6 +263,9 @@ The same build is pushed to `bravo68web/atrium` and
 `linux/arm64`, and `linux/arm/v7`. A stable tag also publishes `1.2.3`,
 `1.2`, `1`, and `latest` on both registries. A prerelease tag such as
 `v1.2.3-rc.1` publishes `1.2.3-rc.1` and leaves `latest` where it is.
+The image carries max-mode provenance and an SBOM. The workflow also
+attests that digest to GHCR and to Docker Hub. The runtime image has
+no shell. It runs as uid 65534 and includes CA certificates.
 
 ```bash
 docker run --rm -p 8080:8080 bravo68web/atrium:1.2.3

@@ -94,7 +94,7 @@ logs:
 
 # Docker build
 docker-build:
-    docker build -t atrium .
+    docker buildx build --attest type=provenance,mode=max --attest type=sbom --load -t atrium .
 
 # Docker run
 docker-run:
