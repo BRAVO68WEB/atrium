@@ -194,17 +194,18 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isValidRedirectURI(redirectURI, client.RedirectURIs) && !(redirectFromPAR && parMayMintRedirect(client, redirectURI)) {
+	allowed := acceptedRedirects(client, redirectURI, redirectFromPAR)
+	if !isValidRedirectURI(redirectURI, allowed) {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "Invalid redirect_uri", state)
 		return
 	}
 
 	if client.RequirePushedAuthorizationRequests && requestURI == "" {
-		sendOAuthRedirectError(w, r, redirectURI, responseType, responseMode, "invalid_request", "request_uri is required", state)
+		sendOAuthRedirectError(w, r, redirectURI, allowed, responseType, responseMode, "invalid_request", "request_uri is required", state)
 		return
 	}
 	if strings.TrimSpace(client.RequestObjectSigningAlg) != "" && request == "" && requestURI == "" {
-		sendOAuthRedirectError(w, r, redirectURI, responseType, responseMode, "invalid_request", "request object is required", state)
+		sendOAuthRedirectError(w, r, redirectURI, allowed, responseType, responseMode, "invalid_request", "request object is required", state)
 		return
 	}
 
@@ -262,7 +263,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	// Nonce is required when the response type includes id_token.
 	needsIDToken := responseHas(responseType, "id_token")
 	if needsIDToken && nonce == "" {
-		sendOAuthRedirectError(w, r, redirectURI, responseType, responseMode, "invalid_request", "nonce is required for implicit/hybrid flows", state)
+		sendOAuthRedirectError(w, r, redirectURI, allowed, responseType, responseMode, "invalid_request", "nonce is required for implicit/hybrid flows", state)
 		return
 	}
 
@@ -271,11 +272,11 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	// prompt=none: no UI allowed, must already be authenticated and consented
 	if prompt == "none" {
 		if session == nil || !session.Authenticated {
-			sendOAuthRedirectError(w, r, redirectURI, responseType, responseMode, "login_required", "User must be authenticated", state)
+			sendOAuthRedirectError(w, r, redirectURI, allowed, responseType, responseMode, "login_required", "User must be authenticated", state)
 			return
 		}
 		if requestedActor != "" || !h.hasConsented(session.UserID, clientID, scope) {
-			sendOAuthRedirectError(w, r, redirectURI, responseType, responseMode, "consent_required", "User consent required", state)
+			sendOAuthRedirectError(w, r, redirectURI, allowed, responseType, responseMode, "consent_required", "User consent required", state)
 			return
 		}
 		needs, err := h.needsOrgChoice(client, session.UserID, organization)
@@ -284,7 +285,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if needs {
-			sendOAuthRedirectError(w, r, redirectURI, responseType, responseMode, "interaction_required", "Organization selection required", state)
+			sendOAuthRedirectError(w, r, redirectURI, allowed, responseType, responseMode, "interaction_required", "Organization selection required", state)
 			return
 		}
 		telemetry.Interaction("complete")
@@ -542,6 +543,12 @@ func (h *Handler) issueAuthorizationResponse(w http.ResponseWriter, r *http.Requ
 
 	h.consumeRequestURI(requestURI)
 
+	allowed := acceptedRedirects(client, redirectURI, true)
+	if !isValidRedirectURI(redirectURI, allowed) {
+		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "Invalid redirect_uri", state)
+		return
+	}
+
 	if IsOutOfBandRedirect(redirectURI) {
 		h.RenderOutOfBand(w, client.ID, code, state, "", "")
 		return
@@ -603,7 +610,7 @@ func (h *Handler) issueAuthorizationResponse(w http.ResponseWriter, r *http.Requ
 func (h *Handler) failAuthorize(w http.ResponseWriter, r *http.Request, client *models.Client, redirectURI, responseType, responseMode, state, code, description string) {
 	defer telemetry.Step("oauth.Handler.failAuthorize")()
 	if client != nil && redirectURI != "" && !IsOutOfBandRedirect(redirectURI) && isValidRedirectURI(redirectURI, client.RedirectURIs) {
-		sendOAuthRedirectError(w, r, redirectURI, responseType, responseMode, code, description, state)
+		sendOAuthRedirectError(w, r, redirectURI, client.RedirectURIs, responseType, responseMode, code, description, state)
 		return
 	}
 	writeOAuthError(w, http.StatusBadRequest, code, description, state)
@@ -680,11 +687,12 @@ func (h *Handler) rejectDuplicateAuthorize(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	client, code, _ := h.resolveClient(r.Context(), clientID, redirectURI)
-	if code != "" || client == nil || !isValidRedirectURI(redirectURI, client.RedirectURIs) {
+	allowed := acceptedRedirects(client, redirectURI, true)
+	if code != "" || client == nil || !isValidRedirectURI(redirectURI, allowed) {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", desc, state)
 		return
 	}
-	sendOAuthRedirectError(w, r, redirectURI, responseType, responseMode, "invalid_request", desc, state)
+	sendOAuthRedirectError(w, r, redirectURI, allowed, responseType, responseMode, "invalid_request", desc, state)
 }
 
 func identicalFormValue(r *http.Request, key string) (string, bool) {
@@ -700,8 +708,12 @@ func identicalFormValue(r *http.Request, key string) (string, bool) {
 	return values[0], true
 }
 
-func sendOAuthRedirectError(w http.ResponseWriter, r *http.Request, redirectURI, responseType, responseMode, code, description, state string) {
+func sendOAuthRedirectError(w http.ResponseWriter, r *http.Request, redirectURI string, allowed []string, responseType, responseMode, code, description, state string) {
 	defer telemetry.Step("oauth.sendOAuthRedirectError")()
+	if !isValidRedirectURI(redirectURI, allowed) {
+		writeOAuthError(w, http.StatusBadRequest, code, description, state)
+		return
+	}
 	params := url.Values{}
 	params.Set("error", code)
 	params.Set("error_description", description)
@@ -768,9 +780,10 @@ func (h *Handler) redirectUnknownRequestURI(w http.ResponseWriter, r *http.Reque
 func (h *Handler) redirectRequestURIError(w http.ResponseWriter, r *http.Request, clientID, redirectURI, responseType, responseMode, state, description string) {
 	defer telemetry.Step("oauth.Handler.redirectRequestURIError")()
 	client, code, _ := h.resolveClient(r.Context(), clientID, redirectURI)
-	if code != "" || client == nil || redirectURI == "" || IsOutOfBandRedirect(redirectURI) || !isValidRedirectURI(redirectURI, client.RedirectURIs) {
+	allowed := acceptedRedirects(client, redirectURI, true)
+	if code != "" || client == nil || redirectURI == "" || IsOutOfBandRedirect(redirectURI) || !isValidRedirectURI(redirectURI, allowed) {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", description, state)
 		return
 	}
-	sendOAuthRedirectError(w, r, redirectURI, responseType, responseMode, "invalid_request", description, state)
+	sendOAuthRedirectError(w, r, redirectURI, allowed, responseType, responseMode, "invalid_request", description, state)
 }

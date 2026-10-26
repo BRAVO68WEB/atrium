@@ -31,6 +31,20 @@ func parMayMintRedirect(client *models.Client, redirectURI string) bool {
 	return isValidURI(redirectURI)
 }
 
+// acceptedRedirects is the client's saved redirect URIs. A confidential PAR
+// may add the one redirect URI carried in that pushed request.
+func acceptedRedirects(client *models.Client, redirectURI string, fromPAR bool) []string {
+	defer telemetry.Step("oauth.acceptedRedirects")()
+	if client == nil {
+		return nil
+	}
+	allowed := client.RedirectURIs
+	if fromPAR && redirectURI != "" && !isValidRedirectURI(redirectURI, allowed) && parMayMintRedirect(client, redirectURI) {
+		allowed = append(append([]string{}, allowed...), redirectURI)
+	}
+	return allowed
+}
+
 // applyJARParams copies the request object over the authorization fields.
 // A field the object omits is removed, so an outer copy cannot supply it.
 func applyJARParams(form url.Values, claims map[string]string) {
