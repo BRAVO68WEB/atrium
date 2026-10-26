@@ -1,5 +1,7 @@
 # Atrium
 
+![Atrium](docs/brand/banner.png)
+
 [![codecov](https://codecov.io/gh/BRAVO68WEB/atrium/branch/main/graph/badge.svg)](https://codecov.io/gh/BRAVO68WEB/atrium)
 
 Atrium is a self-hosted identity server. It speaks OAuth 2.0 and OpenID
