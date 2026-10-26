@@ -61,6 +61,50 @@ func TestClaimMappingAndReservedSub(t *testing.T) {
 	}
 }
 
+func TestUserMetadataClaim(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.OIDC.ClaimMappings = []config.ClaimMapping{{
+		Claim: "locale", Source: "user.locale", Scopes: []string{"profile"},
+	}}
+	if err := config.ValidatePlatform(cfg); err != nil {
+		t.Fatal(err)
+	}
+	db := testpg.Open(t)
+	if err := repository.NewUserRepository(db).Create(&models.User{
+		ID: "user-1", Username: "ada", PasswordHash: "x",
+		UserMetadata: map[string]string{"locale": "en"},
+		CreatedAt:    time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewHandler(db, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withProfile, err := handler.CreateIDToken(context.Background(), "app", "user-1", "", []string{"openid", "profile"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := handler.ParseSignedToken(withProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims["locale"] != "en" {
+		t.Fatalf("locale = %v", claims["locale"])
+	}
+	without, err := handler.CreateIDToken(context.Background(), "app", "user-1", "", []string{"openid"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bare, err := handler.ParseSignedToken(without)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := bare["locale"]; ok {
+		t.Fatal("locale present without profile")
+	}
+}
+
 func TestSigningKeysSurviveRestartAndRotation(t *testing.T) {
 	db, dsn := testpg.OpenDSN(t)
 	cfg := config.DefaultConfig()

@@ -889,6 +889,7 @@ func ValidatePlatform(cfg *Config) error {
 		case claimSources[src]:
 		case strings.HasPrefix(src, "const:"):
 		case strings.HasPrefix(src, "attr.") && len(src) > len("attr."):
+		case strings.HasPrefix(src, "user.") && len(src) > len("user."):
 		default:
 			return fmt.Errorf("oidc claim %q has unknown source %q", m.Claim, src)
 		}

@@ -565,6 +565,12 @@ func cloneUser(user *models.User) models.User {
 			copied.Attributes[key] = value
 		}
 	}
+	if user.UserMetadata != nil {
+		copied.UserMetadata = make(map[string]string, len(user.UserMetadata))
+		for key, value := range user.UserMetadata {
+			copied.UserMetadata[key] = value
+		}
+	}
 	if user.LastLoginAt != nil {
 		at := *user.LastLoginAt
 		copied.LastLoginAt = &at

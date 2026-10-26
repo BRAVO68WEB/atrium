@@ -120,6 +120,28 @@ func writeProfileError(w http.ResponseWriter, err error) bool {
 	}
 }
 
+func writeMetadataError(w http.ResponseWriter, err error) bool {
+	defer telemetry.Step("controller.writeMetadataError")()
+	if errors.Is(err, service.ErrMetadataLimit) || errors.Is(err, service.ErrMetadataValue) || errors.Is(err, service.ErrMetadataKey) {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return true
+	}
+	return false
+}
+
+func mergedBag(current map[string]string, raw json.RawMessage) (map[string]string, bool, error) {
+	defer telemetry.Step("controller.mergedBag")()
+	patch, set, err := service.ParseMetadataPatch(raw)
+	if err != nil || !set {
+		return nil, false, err
+	}
+	next, err := service.MergeStringMap(current, patch)
+	if err != nil {
+		return nil, true, err
+	}
+	return next, true, nil
+}
+
 func writeError(w http.ResponseWriter, status int, code, description string) {
 	defer telemetry.Step("controller.writeError")()
 	writeJSON(w, status, map[string]string{
@@ -356,6 +378,7 @@ func (c *ManagementController) HandleCreateUser(w http.ResponseWriter, r *http.R
 		EmailVerified *bool             `json:"email_verified"`
 		Disabled      bool              `json:"disabled"`
 		Attributes    map[string]string `json:"attributes"`
+		UserMetadata  map[string]string `json:"user_metadata"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -377,8 +400,12 @@ func (c *ManagementController) HandleCreateUser(w http.ResponseWriter, r *http.R
 		EmailVerified: verified,
 		Disabled:      req.Disabled,
 		Attributes:    req.Attributes,
+		UserMetadata:  req.UserMetadata,
 	})
 	if writePassword(w, err) {
+		return
+	}
+	if writeMetadataError(w, err) {
 		return
 	}
 	if err != nil {
@@ -402,9 +429,26 @@ func (c *ManagementController) HandlePatchUser(w http.ResponseWriter, r *http.Re
 	}
 	var req struct {
 		userPatch
-		Attributes map[string]string `json:"attributes"`
+		Attributes   json.RawMessage `json:"attributes"`
+		UserMetadata json.RawMessage `json:"user_metadata"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
+		return
+	}
+	nextAttrs, attrsSet, err := mergedBag(user.Attributes, req.Attributes)
+	if err != nil {
+		if writeMetadataError(w, err) {
+			return
+		}
+		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
+		return
+	}
+	nextMeta, metaSet, err := mergedBag(user.UserMetadata, req.UserMetadata)
+	if err != nil {
+		if writeMetadataError(w, err) {
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
 		return
 	}
@@ -417,12 +461,25 @@ func (c *ManagementController) HandlePatchUser(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to update user")
 		return
 	}
-	if req.Attributes != nil {
-		if err := c.userSvc.SetAttributes(user.ID, req.Attributes); err != nil {
+	if attrsSet {
+		if err := c.userSvc.SetAttributes(user.ID, nextAttrs); err != nil {
+			if writeMetadataError(w, err) {
+				return
+			}
 			writeError(w, http.StatusInternalServerError, "server_error", "Failed to update attributes")
 			return
 		}
-		user.Attributes = req.Attributes
+		user.Attributes = nextAttrs
+	}
+	if metaSet {
+		if err := c.userSvc.SetUserMetadata(user.ID, nextMeta); err != nil {
+			if writeMetadataError(w, err) {
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "server_error", "Failed to update user metadata")
+			return
+		}
+		user.UserMetadata = nextMeta
 	}
 	if req.Disabled != nil && *req.Disabled && !wasDisabled && c.account != nil {
 		_ = c.account.SetDisabled(user, true)

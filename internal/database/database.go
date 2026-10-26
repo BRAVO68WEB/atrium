@@ -486,6 +486,7 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE authorization_codes ADD COLUMN session_id TEXT`,
 		`ALTER TABLE authorization_codes ADD COLUMN auth_time DATETIME`,
 		`ALTER TABLE users ADD COLUMN attributes TEXT NOT NULL DEFAULT '{}'`,
+		`ALTER TABLE users ADD COLUMN user_metadata TEXT NOT NULL DEFAULT '{}'`,
 		`ALTER TABLE clients ADD COLUMN registration_source TEXT NOT NULL DEFAULT 'management'`,
 		`ALTER TABLE clients ADD COLUMN dcr_enabled INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE clients ADD COLUMN cimd_enabled INTEGER NOT NULL DEFAULT 0`,

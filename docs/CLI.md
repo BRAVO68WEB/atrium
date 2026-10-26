@@ -105,6 +105,11 @@ It exits non-zero when any row has an error. `export` omits password
 hashes and TOTP secrets unless you pass `--include-secrets`. The file
 mode is `0600`. `init` does not call a remote server.
 
+`user export` and `user import` carry `attributes` and
+`user_metadata`. The other user commands do not edit those maps. Use
+`PATCH /api/users/{id}` for both, and `PATCH /api/me` for
+`user_metadata`. See [API](API.md).
+
 ### Backup
 
 ```bash

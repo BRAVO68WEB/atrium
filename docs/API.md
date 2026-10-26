@@ -212,6 +212,13 @@ The current browser has no sign-out button on that list.
 
 `window` is a Go duration. The default is 30 days (`720h`).
 
+`GET /api/me` returns `user_metadata`, a string map you own.
+`PATCH /api/me` merges that map. A string sets one key, and `null`
+deletes one key. Leave `user_metadata` out and the map stays as it is.
+The stored JSON must stay within 16 KiB and 50 keys. This route does
+not return `attributes`. It rejects `attributes`, `disabled`, and
+`email_verified`.
+
 ## Management API
 
 Clients, users, and tokens:
@@ -244,6 +251,15 @@ POST   /api/refresh-tokens/{id}/revoke
 ```
 
 Refresh-token lists use the public id and omit the secret.
+
+`attributes` is a string map you set for the person.
+`user_metadata` is a string map the person can edit from `/api/me`.
+`POST /api/users` stores either map when you send it.
+`PATCH /api/users/{id}` merges a map when you send it. A string sets
+one key, and `null` deletes one key. A map you leave out stays as it
+is. Each stored JSON object must stay within 16 KiB and 50 keys.
+Import and backup carry both maps. `GET /api/users/{id}` returns both.
+`GET /api/me` returns only `user_metadata`.
 
 Scopes, resources, and consents:
 

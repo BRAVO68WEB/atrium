@@ -79,11 +79,19 @@ func claimValue(source string, user *models.User) (any, bool) {
 		return user.FamilyName, true
 	}
 	if name, ok := strings.CutPrefix(source, "attr."); ok && name != "" {
-		if user.Attributes == nil {
-			return nil, false
-		}
-		value, found := user.Attributes[name]
-		return value, found
+		return bagValue(user.Attributes, name)
+	}
+	if name, ok := strings.CutPrefix(source, "user."); ok && name != "" {
+		return bagValue(user.UserMetadata, name)
 	}
 	return nil, false
+}
+
+func bagValue(bag map[string]string, name string) (any, bool) {
+	defer telemetry.Step("oidc.bagValue")()
+	if bag == nil {
+		return nil, false
+	}
+	value, found := bag[name]
+	return value, found
 }

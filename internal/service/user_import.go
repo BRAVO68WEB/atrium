@@ -35,6 +35,7 @@ type ImportUser struct {
 	Disabled      bool              `json:"disabled,omitempty"`
 	TOTPSecret    string            `json:"totp_secret,omitempty"`
 	Attributes    map[string]string `json:"attributes,omitempty"`
+	UserMetadata  map[string]string `json:"user_metadata,omitempty"`
 	Orgs          []string          `json:"orgs,omitempty"`
 }
 
@@ -109,6 +110,12 @@ func (s *UserService) importRow(mode string, row ImportUser, dry bool, orgs orgD
 	if row.TOTPSecret != "" && !validTOTPSecret(row.TOTPSecret) {
 		return "", fmt.Errorf("totp_secret is not base32")
 	}
+	if err := CheckMetadata(row.Attributes); err != nil {
+		return "", err
+	}
+	if err := CheckMetadata(row.UserMetadata); err != nil {
+		return "", err
+	}
 	if err := s.checkOrgs(orgs, row.Orgs); err != nil {
 		return "", err
 	}
@@ -145,6 +152,7 @@ func (s *UserService) importRow(mode string, row ImportUser, dry bool, orgs orgD
 		EmailVerified: row.EmailVerified && row.Email != "",
 		Disabled:      row.Disabled,
 		Attributes:    row.Attributes,
+		UserMetadata:  row.UserMetadata,
 		CreatedAt:     time.Now().UTC(),
 	}
 	if err := s.reserveEmail("", user.Email); err != nil {
@@ -203,6 +211,11 @@ func (s *UserService) applyImport(user *models.User, row ImportUser, hash string
 	}
 	if row.Attributes != nil {
 		if err := s.SetAttributes(user.ID, row.Attributes); err != nil {
+			return err
+		}
+	}
+	if row.UserMetadata != nil {
+		if err := s.SetUserMetadata(user.ID, row.UserMetadata); err != nil {
 			return err
 		}
 	}
@@ -291,6 +304,7 @@ func (s *UserService) ExportUsers(includeSecrets bool, orgs orgDirectory) (Impor
 			PhoneNumber:   user.PhoneNumber,
 			Disabled:      user.Disabled,
 			Attributes:    user.Attributes,
+			UserMetadata:  user.UserMetadata,
 		}
 		if includeSecrets {
 			row.PasswordHash = user.PasswordHash

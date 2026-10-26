@@ -48,6 +48,7 @@ type User struct {
 	EmailVerified bool              `json:"email_verified"`
 	Disabled      bool              `json:"disabled"`
 	Attributes    map[string]string `json:"attributes,omitempty"`
+	UserMetadata  map[string]string `json:"user_metadata,omitempty"`
 	LastLoginAt   *time.Time        `json:"last_login_at,omitempty"`
 	CreatedAt     time.Time         `json:"created_at"`
 }

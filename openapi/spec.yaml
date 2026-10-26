@@ -198,6 +198,9 @@ paths:
     get:
       tags: [CIAM]
       summary: Current user profile
+      description: |
+        Returns the signed-in profile, including `user_metadata`.
+        Does not return `attributes`.
       security: [{ bearerAuth: [] }]
       responses:
         "200":
@@ -205,10 +208,17 @@ paths:
     patch:
       tags: [CIAM]
       summary: Update the current user profile
+      description: |
+        Merges `user_metadata`. A string sets one key and `null` deletes one key.
+        Omitting `user_metadata` leaves it unchanged. Rejects `attributes`,
+        `disabled`, and `email_verified`. The stored object must stay within
+        16 KiB and 50 keys.
       security: [{ bearerAuth: [] }]
       responses:
         "200":
           description: Updated profile
+        "400":
+          description: Invalid metadata, or a field this route cannot change
 
   /api/me/consents:
     get:
@@ -1643,8 +1653,12 @@ paths:
                 $ref: "#/components/schemas/OAuthError"
     patch:
       tags: [Management]
-      summary: Update a user profile or attributes
-      description: Management can set `attributes`. Self-service `PATCH /api/me` cannot.
+      summary: Update a user profile or metadata
+      description: |
+        Merges `attributes` and `user_metadata` when either object is present.
+        A string sets one key and `null` deletes one key. An omitted object
+        stays unchanged. Each stored object must stay within 16 KiB and 50 keys.
+        Self-service `PATCH /api/me` can merge `user_metadata` only.
       security: [{ bearerAuth: [] }]
       parameters:
         - name: userID
@@ -3005,6 +3019,16 @@ components:
           type: string
           description: User phone number (E.164 format recommended)
           example: "+1-555-123-4567"
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+          description: Operator-owned string map stored on the new user.
+        user_metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Person-owned string map stored on the new user.
 
     User:
       type: object
@@ -3037,6 +3061,16 @@ components:
           format: date-time
           description: Account creation timestamp
           example: "2026-06-16T10:00:00Z"
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+          description: Operator-owned string map. Management reads and merges it.
+        user_metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Person-owned string map. The person reads and merges it at /api/me.
 
     # ── Token ──
 
