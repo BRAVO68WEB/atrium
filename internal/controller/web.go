@@ -188,7 +188,9 @@ func (c *WebController) renderPage(w http.ResponseWriter, r *http.Request, page,
 			q.Set(k, v)
 		}
 	}
-	data["OAuthQuery"] = q.Encode()
+	// Already encoded. Mark it safe so href="...?{{.OAuthQuery}}" does not
+	// percent-encode "&" and "=" a second time and drop client_id.
+	data["OAuthQuery"] = template.URL(q.Encode())
 	if c.templates == nil {
 		http.Error(w, "template unavailable", http.StatusInternalServerError)
 		return
