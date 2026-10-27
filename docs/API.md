@@ -43,6 +43,8 @@ The body is `{ "mode": "create", "users": [ ... ] }`. `mode` may be
 `upsert`. A row sets `password` or `password_hash`, not both. A hash
 is stored when the server hasher accepts it: bcrypt, argon2id, or
 `Recognizes` on the hasher from `internal/hashalgo/algo.go`.
+`migration_pending` with neither password stores an empty hash. That
+row cannot also carry a hash. Backup restore uses the same rule.
 `?dry_run=true` writes nothing. Export omits secrets unless
 `include_secrets=true`. Sessions and tokens are not in the file.
 
@@ -77,6 +79,10 @@ AAuth discovery is separate from these routes. It is off unless
 | GET | `/.well-known/oauth-authorization-server` | Authorization server metadata |
 | GET | `/oidc/jwks` | Signing keys |
 | GET | `/oidc/userinfo` | UserInfo |
+| GET, POST | `/login/migrate` | Email code for a migrated user with no password |
+| POST | `/login/migrate/resend` | Send another code |
+| GET, POST | `/login/migrate/password` | Forced password after the code |
+| POST | `/api/users/{userID}/migration-notice` | Mail the sign-in notice, without a code |
 
 `POST /oauth/token` accepts these `grant_type` values when the client
 allows them:

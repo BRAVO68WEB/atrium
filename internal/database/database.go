@@ -543,6 +543,8 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE push_devices ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE push_auth_requests ADD COLUMN delivery_mode TEXT`,
 		`ALTER TABLE pushed_auth_requests ADD COLUMN used INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE users ADD COLUMN migration_pending INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE sessions ADD COLUMN migration_password INTEGER NOT NULL DEFAULT 0`,
 	}
 	for _, alter := range alters {
 		if _, err := db.Exec(alter); err != nil && db.driver == "postgres" && !isDuplicateColumn(err) {

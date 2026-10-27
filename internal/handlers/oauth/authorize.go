@@ -271,7 +271,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	// prompt=none: no UI allowed, must already be authenticated and consented
 	if prompt == "none" {
-		if session == nil || !session.Authenticated {
+		if session == nil || !session.Authenticated || session.PasswordPending {
 			sendOAuthRedirectError(w, r, redirectURI, allowed, responseType, responseMode, "login_required", "User must be authenticated", state)
 			return
 		}
@@ -306,7 +306,7 @@ func (h *Handler) HandleAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Not authenticated: redirect to login
-	if session == nil || !session.Authenticated {
+	if session == nil || !session.Authenticated || session.PasswordPending {
 		telemetry.Interaction("login")
 		loginURL := "/login?" + r.URL.RawQuery
 		if loginHint != "" {

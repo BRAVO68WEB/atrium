@@ -36,6 +36,8 @@ var builtinMail = map[string]string{
 	"password_changed": "Subject: Password changed\nThe password for {{.Username}} was changed.\n\nIf you did not do this, reset it from {{.Issuer}}/forgot\n",
 	"new_sign_in":      "Subject: New sign-in\nNew sign-in for {{.Username}}\n\nTime: {{.Time}}\nIP: {{.IP}}\n",
 	"login_failed":     "Subject: Failed sign-in attempts\n{{.Count}} failed sign-in attempts for {{.Username}} in the last 15 minutes.\n\nLatest IP: {{.IP}}\n",
+	"migrate_otp":      "Subject: Your sign-in code\nYour sign-in code is {{.Code}}\n\nIt expires in {{.TTL}}. Enter it on the sign-in page, then choose a password.\n",
+	"migrate_notice":   "Subject: Set a password to sign in\nSign in at {{.Issuer}}/login\n\nWe will email you a one-time code, then ask you to set a password.\n",
 }
 
 // Load reads templates_dir. An empty directory uses built-in text.

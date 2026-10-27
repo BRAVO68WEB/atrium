@@ -2596,6 +2596,25 @@ paths:
         "200":
           description: Login events
 
+  /api/users/{userID}/migration-notice:
+    post:
+      tags: [Management]
+      summary: Email a migrated user to sign in and set a password
+      description: Sends the notice without a one-time code. The code is sent when the person submits the login form. Returns 409 when the user is not waiting for a password.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          description: Notice accepted by the mailer
+        "409":
+          description: User is not waiting for a password
+        "503":
+          description: SMTP is not configured
+
   /api/users/{userID}/password:
     post:
       tags: [Management]
@@ -3221,6 +3240,12 @@ components:
           additionalProperties:
             type: string
           description: Person-owned string map. The person reads and merges it at /api/me.
+        has_password:
+          type: boolean
+          description: False when password_hash is empty.
+        migration_pending:
+          type: boolean
+          description: True when this account was imported without a password and must set one after an email code.
 
     # ── Token ──
 

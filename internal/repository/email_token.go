@@ -6,7 +6,9 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"time"
 
 	"github.com/bravo68web/atrium/internal/database"
@@ -42,6 +44,69 @@ func (r *EmailTokenRepository) Create(userID, purpose string, ttl time.Duration)
 		return "", err
 	}
 	return token, nil
+}
+
+// CreateCode stores a 6-digit code. The caller mails the digits. The row keeps the SHA-256.
+func (r *EmailTokenRepository) CreateCode(userID, purpose string, ttl time.Duration) (string, error) {
+	defer telemetry.Step("repository.EmailTokenRepository.CreateCode")()
+	code, err := sixDigits()
+	if err != nil {
+		return "", err
+	}
+	if err := r.Invalidate(userID, purpose); err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256([]byte(code))
+	hash := hex.EncodeToString(sum[:])
+	now := time.Now()
+	_, err = r.db.Exec(`INSERT INTO email_tokens (id, user_id, purpose, token_hash, expires_at, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		uuid.NewString(), userID, purpose, hash, now.Add(ttl), now,
+	)
+	if err != nil {
+		return "", err
+	}
+	return code, nil
+}
+
+func (r *EmailTokenRepository) Invalidate(userID, purpose string) error {
+	defer telemetry.Step("repository.EmailTokenRepository.Invalidate")()
+	_, err := r.db.Exec(`UPDATE email_tokens SET used_at = ? WHERE user_id = ? AND purpose = ? AND used_at IS NULL`,
+		time.Now(), userID, purpose)
+	return err
+}
+
+func sixDigits() (string, error) {
+	defer telemetry.Step("repository.sixDigits")()
+	const span = uint32(1000000)
+	limit := (^uint32(0) / span) * span
+	for {
+		var buf [4]byte
+		if _, err := rand.Read(buf[:]); err != nil {
+			return "", err
+		}
+		n := binary.BigEndian.Uint32(buf[:])
+		if n < limit {
+			return fmt.Sprintf("%06d", n%span), nil
+		}
+	}
+}
+
+func (r *EmailTokenRepository) Peek(raw, purpose string) (string, error) {
+	defer telemetry.Step("repository.EmailTokenRepository.Peek")()
+	sum := sha256.Sum256([]byte(raw))
+	hash := hex.EncodeToString(sum[:])
+	var userID, stored string
+	var expires time.Time
+	err := r.db.QueryRow(`SELECT user_id, token_hash, expires_at FROM email_tokens
+		WHERE token_hash = ? AND purpose = ? AND used_at IS NULL`, hash, purpose).Scan(&userID, &stored, &expires)
+	if err != nil {
+		return "", err
+	}
+	if subtle.ConstantTimeCompare([]byte(stored), []byte(hash)) != 1 || time.Now().After(expires) {
+		return "", sql.ErrNoRows
+	}
+	return userID, nil
 }
 
 func (r *EmailTokenRepository) Consume(raw, purpose string) (string, error) {

@@ -453,6 +453,11 @@ func (c *WebController) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if existing, lookupErr := c.userSvc.FindByLogin(username); lookupErr == nil && existing.NeedsMigration() {
+		c.beginMigration(w, r, existing, params)
+		return
+	}
+
 	user, err := c.userSvc.Authenticate(username, password)
 	if err != nil {
 		if existing, lookupErr := c.userSvc.FindByLogin(username); lookupErr == nil && c.account != nil {
@@ -464,6 +469,163 @@ func (c *WebController) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	c.finishLogin(w, r, user, params)
+}
+
+func (c *WebController) beginMigration(w http.ResponseWriter, r *http.Request, user *models.User, params map[string]string) {
+	defer telemetry.Step("controller.WebController.beginMigration")()
+	if c.account == nil {
+		c.renderPage(w, r, "login.html", "Login", "Sign In", params, map[string]any{
+			"Error": "We could not send the sign-in code. Try again.",
+		})
+		return
+	}
+	if err := c.account.SendMigrationOTP(user, c.account.RequestIP(r)); err != nil {
+		msg := "We could not send the sign-in code. Try again."
+		if errors.Is(err, service.ErrRateLimited) {
+			msg = "Too many codes. Try again later."
+		}
+		c.renderPage(w, r, "login.html", "Login", "Sign In", params, map[string]any{
+			"Error":     msg,
+			"LoginHint": user.Username,
+		})
+		return
+	}
+	params["login_hint"] = user.Username
+	http.Redirect(w, r, "/login/migrate?"+paramsQuery(params), http.StatusFound)
+}
+
+func (c *WebController) HandleMigrateOTPPage(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleMigrateOTPPage")()
+	params := extractOAuthParams(r)
+	c.renderPage(w, r, "login_migrate.html", "Sign-in code", "Enter your code", params, map[string]any{
+		"Error":     "",
+		"LoginHint": params["login_hint"],
+	})
+}
+
+func (c *WebController) HandleMigrateOTP(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleMigrateOTP")()
+	_ = r.ParseForm()
+	if !csrfOK(r) {
+		rejectCSRF(w)
+		return
+	}
+	params := extractOAuthParamsFromForm(r)
+	username := r.FormValue("username")
+	if username == "" {
+		username = params["login_hint"]
+	}
+	user, err := c.userSvc.FindByLogin(username)
+	if err != nil || !user.NeedsMigration() {
+		c.renderPage(w, r, "login_migrate.html", "Sign-in code", "Enter your code", params, map[string]any{
+			"Error":     "That code is not valid.",
+			"LoginHint": username,
+		})
+		return
+	}
+	if err := c.account.ConsumeMigrationOTP(user.ID, r.FormValue("otp")); err != nil {
+		msg := "That code is not valid."
+		if errors.Is(err, service.ErrRateLimited) {
+			msg = "Too many attempts. Try again later."
+		}
+		c.renderPage(w, r, "login_migrate.html", "Sign-in code", "Enter your code", params, map[string]any{
+			"Error":     msg,
+			"LoginHint": username,
+		})
+		return
+	}
+	if c.oauthHandler != nil {
+		c.oauthHandler.SetPasswordResetSession(w, r, user.ID, user.Username)
+	}
+	http.Redirect(w, r, "/login/migrate/password?"+paramsQuery(params), http.StatusFound)
+}
+
+func (c *WebController) HandleMigrateResend(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleMigrateResend")()
+	_ = r.ParseForm()
+	if !csrfOK(r) {
+		rejectCSRF(w)
+		return
+	}
+	params := extractOAuthParamsFromForm(r)
+	username := r.FormValue("username")
+	user, err := c.userSvc.FindByLogin(username)
+	if err != nil || user == nil || !user.NeedsMigration() || c.account == nil {
+		c.renderPage(w, r, "login_migrate.html", "Sign-in code", "Enter your code", params, map[string]any{
+			"Error":     "We could not send a new code.",
+			"LoginHint": username,
+		})
+		return
+	}
+	if err := c.account.SendMigrationOTP(user, c.account.RequestIP(r)); err != nil {
+		c.renderPage(w, r, "login_migrate.html", "Sign-in code", "Enter your code", params, map[string]any{
+			"Error":     "We could not send a new code.",
+			"LoginHint": username,
+		})
+		return
+	}
+	c.renderPage(w, r, "login_migrate.html", "Sign-in code", "Enter your code", params, map[string]any{
+		"Error":     "",
+		"Notice":    "We sent a new code.",
+		"LoginHint": username,
+	})
+}
+
+func (c *WebController) HandleMigratePasswordPage(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleMigratePasswordPage")()
+	params := extractOAuthParams(r)
+	session := c.getSession(r)
+	if session == nil || !session.PasswordPending {
+		http.Redirect(w, r, "/login?"+paramsQuery(params), http.StatusFound)
+		return
+	}
+	c.renderPage(w, r, "login_migrate_password.html", "Choose a password", "Choose a password", params, map[string]any{
+		"Error": "",
+	})
+}
+
+func (c *WebController) HandleMigratePassword(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleMigratePassword")()
+	_ = r.ParseForm()
+	if !csrfOK(r) {
+		rejectCSRF(w)
+		return
+	}
+	params := extractOAuthParamsFromForm(r)
+	session := c.getSession(r)
+	if session == nil || !session.PasswordPending {
+		http.Redirect(w, r, "/login?"+paramsQuery(params), http.StatusFound)
+		return
+	}
+	password := r.FormValue("password")
+	if password != r.FormValue("password_confirm") {
+		c.renderPage(w, r, "login_migrate_password.html", "Choose a password", "Choose a password", params, map[string]any{
+			"Error": "Those passwords do not match.",
+		})
+		return
+	}
+	if err := c.userSvc.SetPassword(session.UserID, password); err != nil {
+		msg := "Choose a different password."
+		var pe *service.PasswordError
+		if errors.As(err, &pe) {
+			msg = pe.Error()
+		}
+		c.renderPage(w, r, "login_migrate_password.html", "Choose a password", "Choose a password", params, map[string]any{
+			"Error": msg,
+		})
+		return
+	}
+	user, err := c.userSvc.GetUser(session.UserID)
+	if err != nil {
+		c.renderPage(w, r, "login_migrate_password.html", "Choose a password", "Choose a password", params, map[string]any{
+			"Error": "Choose a different password.",
+		})
+		return
+	}
+	if c.oauthHandler != nil {
+		c.oauthHandler.RevokeRequestSession(r)
+	}
 	c.finishLogin(w, r, user, params)
 }
 

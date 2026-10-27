@@ -43,20 +43,21 @@ type BackupDocument struct {
 
 // BackupUser keeps the account id so a restore does not mint a new one.
 type BackupUser struct {
-	ID            string            `json:"id"`
-	Username      string            `json:"username"`
-	Email         string            `json:"email,omitempty"`
-	EmailVerified bool              `json:"email_verified,omitempty"`
-	PasswordHash  string            `json:"password_hash"`
-	GivenName     string            `json:"given_name,omitempty"`
-	FamilyName    string            `json:"family_name,omitempty"`
-	PhoneNumber   string            `json:"phone_number,omitempty"`
-	Disabled      bool              `json:"disabled,omitempty"`
-	TOTPSecret    string            `json:"totp_secret,omitempty"`
-	Attributes    map[string]string `json:"attributes,omitempty"`
-	UserMetadata  map[string]string `json:"user_metadata,omitempty"`
-	Orgs          []string          `json:"orgs,omitempty"`
-	CreatedAt     time.Time         `json:"created_at,omitempty"`
+	ID               string            `json:"id"`
+	Username         string            `json:"username"`
+	Email            string            `json:"email,omitempty"`
+	EmailVerified    bool              `json:"email_verified,omitempty"`
+	PasswordHash     string            `json:"password_hash"`
+	GivenName        string            `json:"given_name,omitempty"`
+	FamilyName       string            `json:"family_name,omitempty"`
+	PhoneNumber      string            `json:"phone_number,omitempty"`
+	Disabled         bool              `json:"disabled,omitempty"`
+	MigrationPending bool              `json:"migration_pending,omitempty"`
+	TOTPSecret       string            `json:"totp_secret,omitempty"`
+	Attributes       map[string]string `json:"attributes,omitempty"`
+	UserMetadata     map[string]string `json:"user_metadata,omitempty"`
+	Orgs             []string          `json:"orgs,omitempty"`
+	CreatedAt        time.Time         `json:"created_at,omitempty"`
 }
 
 type BackupOrg struct {
@@ -361,7 +362,8 @@ func (b *Backup) exportUsers() ([]BackupUser, error) {
 			EmailVerified: user.EmailVerified, PasswordHash: user.PasswordHash,
 			GivenName: user.GivenName, FamilyName: user.FamilyName,
 			PhoneNumber: user.PhoneNumber, Disabled: user.Disabled,
-			Attributes: user.Attributes, UserMetadata: user.UserMetadata,
+			MigrationPending: user.MigrationPending,
+			Attributes:       user.Attributes, UserMetadata: user.UserMetadata,
 			CreatedAt: user.CreatedAt,
 		}
 		if enabled {
@@ -552,8 +554,11 @@ func validateBackup(doc BackupDocument) error {
 		if strings.TrimSpace(row.ID) == "" || strings.TrimSpace(row.Username) == "" {
 			return fmt.Errorf("users[%d] needs an id and a username", i)
 		}
-		if strings.TrimSpace(row.PasswordHash) == "" {
+		if strings.TrimSpace(row.PasswordHash) == "" && !row.MigrationPending {
 			return fmt.Errorf("users[%d] needs a password_hash", i)
+		}
+		if strings.TrimSpace(row.PasswordHash) != "" && row.MigrationPending {
+			return fmt.Errorf("users[%d] migration_pending cannot include a password_hash", i)
 		}
 		if users[row.ID] {
 			return fmt.Errorf("users[%d] repeats id %s", i, row.ID)
@@ -677,16 +682,18 @@ func upsertUser(q database.SQL, user BackupUser) error {
 		created = time.Now().UTC()
 	}
 	_, err = q.Exec(`INSERT INTO users (id, username, password_hash, email, phone_number, created_at,
-		email_verified, disabled, given_name, family_name, attributes, user_metadata, mfa_enabled, mfa_secret)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		email_verified, disabled, given_name, family_name, attributes, user_metadata, mfa_enabled, mfa_secret,
+		migration_pending)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (id) DO UPDATE SET username = excluded.username, password_hash = excluded.password_hash,
 		email = excluded.email, phone_number = excluded.phone_number, email_verified = excluded.email_verified,
 		disabled = excluded.disabled, given_name = excluded.given_name, family_name = excluded.family_name,
 		attributes = excluded.attributes, user_metadata = excluded.user_metadata,
-		mfa_enabled = excluded.mfa_enabled, mfa_secret = excluded.mfa_secret`,
+		mfa_enabled = excluded.mfa_enabled, mfa_secret = excluded.mfa_secret,
+		migration_pending = excluded.migration_pending`,
 		user.ID, user.Username, user.PasswordHash, user.Email, user.PhoneNumber, created,
 		bit(user.EmailVerified), bit(user.Disabled), user.GivenName, user.FamilyName, string(raw), string(rawMeta),
-		bit(user.TOTPSecret != ""), user.TOTPSecret)
+		bit(user.TOTPSecret != ""), user.TOTPSecret, bit(user.MigrationPending))
 	return err
 }
 

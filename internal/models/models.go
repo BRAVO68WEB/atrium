@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 )
 
@@ -38,19 +39,21 @@ type Client struct {
 }
 
 type User struct {
-	ID            string            `json:"id"`
-	Username      string            `json:"username"`
-	PasswordHash  string            `json:"-"`
-	Email         string            `json:"email,omitempty"`
-	PhoneNumber   string            `json:"phone_number,omitempty"`
-	GivenName     string            `json:"given_name,omitempty"`
-	FamilyName    string            `json:"family_name,omitempty"`
-	EmailVerified bool              `json:"email_verified"`
-	Disabled      bool              `json:"disabled"`
-	Attributes    map[string]string `json:"attributes,omitempty"`
-	UserMetadata  map[string]string `json:"user_metadata,omitempty"`
-	LastLoginAt   *time.Time        `json:"last_login_at,omitempty"`
-	CreatedAt     time.Time         `json:"created_at"`
+	ID               string            `json:"id"`
+	Username         string            `json:"username"`
+	PasswordHash     string            `json:"-"`
+	Email            string            `json:"email,omitempty"`
+	PhoneNumber      string            `json:"phone_number,omitempty"`
+	GivenName        string            `json:"given_name,omitempty"`
+	FamilyName       string            `json:"family_name,omitempty"`
+	EmailVerified    bool              `json:"email_verified"`
+	Disabled         bool              `json:"disabled"`
+	HasPassword      bool              `json:"has_password"`
+	MigrationPending bool              `json:"migration_pending"`
+	Attributes       map[string]string `json:"attributes,omitempty"`
+	UserMetadata     map[string]string `json:"user_metadata,omitempty"`
+	LastLoginAt      *time.Time        `json:"last_login_at,omitempty"`
+	CreatedAt        time.Time         `json:"created_at"`
 }
 
 type AuthorizationCode struct {
@@ -136,16 +139,26 @@ type DeviceCode struct {
 }
 
 type BrowserSession struct {
-	ID          string    `json:"id"`
-	UserID      string    `json:"user_id"`
-	Username    string    `json:"username"`
-	AuthTime    time.Time `json:"auth_time"`
-	MFAVerified bool      `json:"mfa_verified"`
-	UserAgent   string    `json:"user_agent,omitempty"`
-	IP          string    `json:"ip,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	Revoked     bool      `json:"revoked"`
+	ID              string    `json:"id"`
+	UserID          string    `json:"user_id"`
+	Username        string    `json:"username"`
+	AuthTime        time.Time `json:"auth_time"`
+	MFAVerified     bool      `json:"mfa_verified"`
+	PasswordPending bool      `json:"password_pending,omitempty"`
+	UserAgent       string    `json:"user_agent,omitempty"`
+	IP              string    `json:"ip,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	Revoked         bool      `json:"revoked"`
+}
+
+// NeedsMigration is an imported account with no password yet.
+// A passwordless account that is not pending, such as SAML, does not match.
+func (u *User) NeedsMigration() bool {
+	if u == nil || !u.MigrationPending {
+		return false
+	}
+	return strings.TrimSpace(u.PasswordHash) == ""
 }
 
 type LoginEvent struct {

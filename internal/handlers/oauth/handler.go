@@ -77,12 +77,13 @@ type LoginRecorder interface {
 }
 
 type Session struct {
-	ID            string
-	UserID        string
-	Username      string
-	Authenticated bool
-	MFAVerified   bool
-	AuthTime      time.Time
+	ID              string
+	UserID          string
+	Username        string
+	Authenticated   bool
+	MFAVerified     bool
+	PasswordPending bool
+	AuthTime        time.Time
 }
 
 func NewHandler(
@@ -212,12 +213,13 @@ func (h *Handler) getSession(r *http.Request) *Session {
 		return nil
 	}
 	return &Session{
-		ID:            stored.ID,
-		UserID:        stored.UserID,
-		Username:      stored.Username,
-		Authenticated: true,
-		MFAVerified:   stored.MFAVerified,
-		AuthTime:      stored.AuthTime,
+		ID:              stored.ID,
+		UserID:          stored.UserID,
+		Username:        stored.Username,
+		Authenticated:   !stored.PasswordPending,
+		MFAVerified:     stored.MFAVerified,
+		PasswordPending: stored.PasswordPending,
+		AuthTime:        stored.AuthTime,
 	}
 }
 
@@ -255,6 +257,40 @@ func (h *Handler) SetSessionRequest(w http.ResponseWriter, r *http.Request, user
 		return
 	}
 	h.writeSessionCookie(w, sess.ID)
+}
+
+// SetPasswordResetSession starts a session that cannot authorize or approve a device.
+func (h *Handler) SetPasswordResetSession(w http.ResponseWriter, r *http.Request, userID, username string) {
+	defer telemetry.Step("oauth.Handler.SetPasswordResetSession")()
+	if h.sessions == nil {
+		return
+	}
+	ua, ip := "", ""
+	if r != nil {
+		ua = r.UserAgent()
+		trusted := []string(nil)
+		if h.cfg != nil {
+			trusted = h.cfg.Security.TrustedProxies
+		}
+		ip = service.ClientIP(r, trusted)
+	}
+	sess, err := h.sessions.StartPasswordReset(userID, username, ua, ip)
+	if err != nil {
+		return
+	}
+	h.writeSessionCookie(w, sess.ID)
+}
+
+func (h *Handler) RevokeRequestSession(r *http.Request) {
+	defer telemetry.Step("oauth.Handler.RevokeRequestSession")()
+	if h == nil || h.sessions == nil || r == nil {
+		return
+	}
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		return
+	}
+	_ = h.sessions.Revoke(cookie.Value)
 }
 
 func (h *Handler) MarkSessionMFA(w http.ResponseWriter, r *http.Request) {

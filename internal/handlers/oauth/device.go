@@ -328,7 +328,7 @@ func (h *Handler) HandleDeviceVerification(w http.ResponseWriter, r *http.Reques
 		userCode = r.URL.Query().Get("user_code")
 	}
 	session := h.getSession(r)
-	if session == nil || !session.Authenticated || (h.cfg.Security.MFA.Required && !session.MFAVerified) {
+	if session == nil || !session.Authenticated || session.PasswordPending || (h.cfg.Security.MFA.Required && !session.MFAVerified) {
 		next := "/device"
 		if userCode != "" {
 			next = "/device?user_code=" + url.QueryEscape(userCode)
