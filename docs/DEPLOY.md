@@ -230,8 +230,10 @@ point at `dev`. A stable tag also publishes `X.Y.Z`, `X.Y`, `X`, and
 `VERSION` to the next line before the next preview.
 
 The automatic tagger uses `GITHUB_TOKEN`. That push does not start the
-release workflow on its own, so the tagger calls it. A `v*` tag you
-push yourself still publishes through the same workflow.
+release workflow on its own, so the tagger calls it and passes the tag
+name. A `v*` tag you push yourself still publishes through the same
+workflow. To publish a tag that already exists, run the Release
+workflow and pass that tag.
 
 Push a stable tag like this:
 
