@@ -139,6 +139,9 @@ type SecurityConfig struct {
 	ResetTokenLifetime        time.Duration       `yaml:"reset_token_lifetime"`
 	TrustedProxies            []string            `yaml:"trusted_proxies"`
 	LoginIdentifier           string              `yaml:"login_identifier"`
+	IdentifierFirst           bool                `yaml:"identifier_first"`
+	DisablePasswords          bool                `yaml:"disable_passwords"`
+	PasswordlessMode          string              `yaml:"passwordless_mode"`
 	DisableRegistration       bool                `yaml:"disable_registration"`
 	DisableSocialRegistration bool                `yaml:"disable_social_registration"`
 	AllowInsecureFetch        bool                `yaml:"allow_insecure_fetch"`
@@ -520,6 +523,10 @@ func (c *Config) Normalize() {
 	if c.Security.LoginIdentifier == "" {
 		c.Security.LoginIdentifier = "username"
 	}
+	c.Security.PasswordlessMode = strings.ToLower(strings.TrimSpace(c.Security.PasswordlessMode))
+	if c.Security.DisablePasswords && c.Security.PasswordlessMode == "" {
+		c.Security.PasswordlessMode = "otp"
+	}
 	c.Notify.Type = strings.ToLower(strings.TrimSpace(c.Notify.Type))
 	if c.Notify.Type == "" {
 		c.Notify.Type = "memory"
@@ -822,6 +829,16 @@ func ValidatePlatform(cfg *Config) error {
 	case "", "username", "email":
 	default:
 		return fmt.Errorf("security.login_identifier must be username or email")
+	}
+	switch cfg.Security.PasswordlessMode {
+	case "", "otp", "link":
+	default:
+		return fmt.Errorf("security.passwordless_mode must be otp or link")
+	}
+	if cfg.Security.DisablePasswords {
+		if !cfg.SMTP.Enabled || strings.TrimSpace(cfg.SMTP.Host) == "" || strings.TrimSpace(cfg.SMTP.From) == "" {
+			return fmt.Errorf("smtp.enabled, smtp.host, and smtp.from are required when security.disable_passwords is true")
+		}
 	}
 	bot := cfg.Security.BotProtection.Provider
 	switch bot {

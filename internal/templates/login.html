@@ -1,14 +1,37 @@
 {{/* A replacement login.html must POST to /login and keep these field names:
 username, password, csrf_token, client_id, redirect_uri, response_type, scope, state, nonce,
 code_challenge, code_challenge_method, request_uri, prompt, login_hint, resource, requested_actor, next.
+When security.identifier_first is on, the email step posts login_step=identifier and the
+password step posts login_step=password. AskPassword is false until the account has a password.
 When bot protection is on, the form also posts bot_token.
 Ship login.html alone to change this page. Shipping a file that also defines "head"
 replaces the shared frame on every auth page. */}}
 {{template "head" .}}
     {{if .Brand.ClientName}}<h1>Continue to {{.Brand.ClientName}}</h1>{{else}}<h1>{{.Brand.Heading}}</h1>{{end}}
     {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+    {{if or .Passwordless (and .IdentifierFirst (not .AskPassword))}}
     <form method="POST" action="/login">
         {{template "oauth_fields" .}}
+        <input type="hidden" name="login_step" value="identifier">
+        <div class="form-group">
+            <label for="username">{{.Brand.UsernameLabel}}</label>
+            <input type="text" id="username" name="username" value="{{.LoginHint}}" required autofocus autocomplete="{{.Brand.Autocomplete}}">
+        </div>
+        {{template "bot_widget" .}}
+        <button type="submit">{{.Brand.SubmitLabel}}</button>
+    </form>
+    {{if .Status}}<p class="hint">{{.Status}}</p>{{end}}
+    {{if .Providers}}
+    <div class="or">or</div>
+    <div class="social">
+        {{range .Providers}}<a href="/login/social/{{.ID}}?{{$.OAuthQuery}}">Continue with {{.Name}}</a>{{end}}
+    </div>
+    {{end}}
+    {{if .Brand.ShowRegister}}<p class="below">Don't have an account? <a href="/register?client_id={{.ClientID}}&redirect_uri={{.RedirectURI}}&response_type={{.ResponseType}}&scope={{.Scope}}&state={{.State}}&nonce={{.Nonce}}&code_challenge={{.CodeChallenge}}&code_challenge_method={{.CodeChallengeMethod}}&next={{.Next}}">Sign up</a></p>{{end}}
+    {{else}}
+    <form method="POST" action="/login">
+        {{template "oauth_fields" .}}
+        {{if .IdentifierFirst}}<input type="hidden" name="login_step" value="password">{{end}}
         <div class="form-group">
             <label for="username">{{.Brand.UsernameLabel}}</label>
             <input type="text" id="username" name="username" value="{{.LoginHint}}" required autofocus autocomplete="{{.Brand.Autocomplete}}">
@@ -28,5 +51,6 @@ replaces the shared frame on every auth page. */}}
     </div>
     {{end}}
     {{if .Brand.ShowRegister}}<p class="below">Don't have an account? <a href="/register?client_id={{.ClientID}}&redirect_uri={{.RedirectURI}}&response_type={{.ResponseType}}&scope={{.Scope}}&state={{.State}}&nonce={{.Nonce}}&code_challenge={{.CodeChallenge}}&code_challenge_method={{.CodeChallengeMethod}}&next={{.Next}}">Sign up</a></p>{{end}}
+    {{end}}
 {{template "card_close" .}}
 {{template "brand_footer" .}}

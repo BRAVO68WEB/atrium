@@ -69,7 +69,18 @@ func dispatchMail(mail mailer.Mailer, job notify.Job) error {
 	if strings.TrimSpace(job.To) == "" || strings.TrimSpace(job.Subject) == "" {
 		return fmt.Errorf("%w: incomplete mail", notify.ErrPermanent)
 	}
-	err := mail.Send(job.To, job.Subject, job.Text)
+	var err error
+	if strings.TrimSpace(job.HTML) != "" {
+		if sender, ok := mail.(interface {
+			SendHTML(to, subject, text, htmlBody string) error
+		}); ok {
+			err = sender.SendHTML(job.To, job.Subject, job.Text, job.HTML)
+		} else {
+			err = mail.Send(job.To, job.Subject, job.Text)
+		}
+	} else {
+		err = mail.Send(job.To, job.Subject, job.Text)
+	}
 	if err == nil {
 		return nil
 	}

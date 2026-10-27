@@ -60,6 +60,11 @@ func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 	}
 	tokenType := boundTokenType(client)
 
+	if h.cfg != nil && h.cfg.Security.DisablePasswords {
+		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "Passwords are disabled")
+		return
+	}
+
 	username := r.Form.Get("username")
 	password := r.Form.Get("password")
 

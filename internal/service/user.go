@@ -219,7 +219,7 @@ func (s *UserService) Authenticate(username, password string) (*models.User, err
 	if err != nil {
 		return nil, fmt.Errorf("invalid credentials")
 	}
-	if user.Disabled || user.NeedsMigration() || strings.TrimSpace(user.PasswordHash) == "" {
+	if user.Disabled || user.NeedsMigration() || strings.TrimSpace(user.PasswordHash) == "" || (s.cfg != nil && s.cfg.DisablePasswords) {
 		return nil, fmt.Errorf("invalid credentials")
 	}
 

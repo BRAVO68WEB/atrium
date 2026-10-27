@@ -54,6 +54,18 @@ func (m *captureMail) count() int {
 	return len(m.texts)
 }
 
+func (m *captureMail) containing(part string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for _, text := range m.texts {
+		if strings.Contains(text, part) {
+			n++
+		}
+	}
+	return n
+}
+
 func TestMigratedUserSetsPasswordAfterEmailCode(t *testing.T) {
 	db, err := database.New(filepath.Join(t.TempDir(), "migrate.db"))
 	if err != nil {
@@ -194,6 +206,69 @@ func TestMigratedUserSetsPasswordAfterEmailCode(t *testing.T) {
 	}
 	if mail.count() != before {
 		t.Fatal("password grant sent mail")
+	}
+}
+
+func TestIdentifierFirstSkipsPasswordWhenUnset(t *testing.T) {
+	db, err := database.New(filepath.Join(t.TempDir(), "identifier.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.DefaultConfig()
+	cfg.Security.IdentifierFirst = true
+	userRepo := repository.NewUserRepository(db)
+	totpSvc := service.NewTOTPService(userRepo, &cfg.Security.MFA)
+	users := service.NewUserService(userRepo, totpSvc, &cfg.Security, passhash.Bcrypt(0))
+	sessions := service.NewSessionService(repository.NewSessionRepository(db), cfg.Security.SessionLifetime)
+	tokens := repository.NewTokenRepository(db)
+	clients := repository.NewClientRepository(db)
+	mail := &captureMail{}
+	account := service.NewAccountService(users, userRepo, repository.NewEmailTokenRepository(db), repository.NewLoginEventRepository(db), sessions, tokens, mail, nil, cfg)
+	oauthH := oauth.NewHandler(clients, userRepo, tokens, nil, nil, nil, nil, nil, nil, nil, nil, cfg, nil, nil, users, sessions, nil, account)
+	web, err := NewWebController(users, totpSvc, account, cfg, root.TemplateFS, oauthH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := users.InsertUser(service.NewUser{Username: "ada", Email: "ada@example.com", MigrationPending: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := users.InsertUser(service.NewUser{Username: "bea", Email: "bea@example.com", Password: "Correct-horse-1"}); err != nil {
+		t.Fatal(err)
+	}
+	mux := chi.NewRouter()
+	mux.Get("/login", web.HandleLoginPage)
+	mux.Post("/login", web.HandleLogin)
+	ts := httptest.NewServer(mux)
+	t.Cleanup(ts.Close)
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+
+	page := migrateGET(t, client, ts.URL+"/login")
+	if strings.Contains(page.body, `name="password"`) {
+		t.Fatalf("first screen offered a password: %s", page.body)
+	}
+	pending := migratePOST(t, client, ts.URL+"/login", csrfToken(t, page.body), url.Values{
+		"login_step": {"identifier"},
+		"username":   {"ada"},
+	})
+	if pending.StatusCode != http.StatusFound || !strings.Contains(pending.location, "/login/migrate") {
+		t.Fatalf("pending login %d %s", pending.StatusCode, pending.location)
+	}
+	if mail.count() != 1 {
+		t.Fatalf("mail count %d", mail.count())
+	}
+
+	again := migrateGET(t, client, ts.URL+"/login")
+	known := migratePOST(t, client, ts.URL+"/login", csrfToken(t, again.body), url.Values{
+		"login_step": {"identifier"},
+		"username":   {"bea"},
+	})
+	if known.StatusCode != http.StatusOK || !strings.Contains(known.body, `name="password"`) || strings.Contains(known.body, `value="identifier"`) {
+		t.Fatalf("password step %d %s", known.StatusCode, known.body)
 	}
 }
 
