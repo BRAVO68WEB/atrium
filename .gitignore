@@ -15,6 +15,7 @@ dist/
 coverage.html
 coverage.txt
 junit.xml
+junit-e2e.xml
 
 # Database files
 *.db

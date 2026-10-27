@@ -57,6 +57,7 @@ jobs:
           files: junit.xml
           disable_search: true
           report_type: test_results
+          flags: go
 
       - name: Upload coverage reports to Codecov
         if: ${{ !cancelled() && hashFiles('coverage.out') != '' }}
@@ -65,6 +66,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.out
           disable_search: true
+          flags: go
 
   lint:
     name: Lint
@@ -203,6 +205,16 @@ jobs:
       - name: Run the end-to-end suite
         working-directory: e2e
         run: npm test
+
+      - name: Upload end-to-end results to Codecov
+        if: ${{ !cancelled() && hashFiles('e2e/junit-e2e.xml') != '' }}
+        uses: codecov/codecov-action@v5.5.5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: e2e/junit-e2e.xml
+          disable_search: true
+          report_type: test_results
+          flags: e2e
 
   main-from-dev:
     name: Main accepts dev
