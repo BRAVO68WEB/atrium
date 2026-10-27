@@ -9,7 +9,7 @@ replaces the shared frame on every auth page. */}}
 {{template "head" .}}
     {{if .Brand.ClientName}}<h1>Continue to {{.Brand.ClientName}}</h1>{{else}}<h1>{{.Brand.Heading}}</h1>{{end}}
     {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
-    {{if not .AskPassword}}
+    {{if or .Passwordless (and .IdentifierFirst (not .AskPassword))}}
     <form method="POST" action="/login">
         {{template "oauth_fields" .}}
         <input type="hidden" name="login_step" value="identifier">

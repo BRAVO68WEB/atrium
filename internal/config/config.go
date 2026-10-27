@@ -835,6 +835,11 @@ func ValidatePlatform(cfg *Config) error {
 	default:
 		return fmt.Errorf("security.passwordless_mode must be otp or link")
 	}
+	if cfg.Security.DisablePasswords {
+		if !cfg.SMTP.Enabled || strings.TrimSpace(cfg.SMTP.Host) == "" || strings.TrimSpace(cfg.SMTP.From) == "" {
+			return fmt.Errorf("smtp.enabled, smtp.host, and smtp.from are required when security.disable_passwords is true")
+		}
+	}
 	bot := cfg.Security.BotProtection.Provider
 	switch bot {
 	case "", "recaptcha", "turnstile":

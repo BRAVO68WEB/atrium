@@ -35,6 +35,12 @@ func TestPasswordlessMode(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Security.DisablePasswords = true
 	cfg.Normalize()
+	if err := ValidatePlatform(cfg); err == nil {
+		t.Fatal("expected smtp to be required")
+	}
+	cfg.SMTP.Enabled = true
+	cfg.SMTP.Host = "mailpit"
+	cfg.SMTP.From = "atrium@example.com"
 	if err := ValidatePlatform(cfg); err != nil || cfg.Security.PasswordlessMode != "otp" {
 		t.Fatalf("mode = %q err %v", cfg.Security.PasswordlessMode, err)
 	}

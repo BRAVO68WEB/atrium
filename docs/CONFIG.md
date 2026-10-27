@@ -270,7 +270,8 @@ is `otp` (the default) or `link`. `otp` emails a 6-digit code (`login_otp`,
 a one-time URL (`login_link`, 10 minutes) and signs the browser in when it
 is opened. An unknown identifier gets the same screen and no mail. Forgot
 and reset are refused. Migration password setup is not used while passwords
-are disabled.
+are disabled. `smtp.enabled`, `smtp.host`, and `smtp.from` are required,
+and startup fails without them.
 
 `security.password` is checked when a password is set. `block_username`
 rejects a password that contains the username.
