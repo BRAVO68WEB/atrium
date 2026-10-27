@@ -74,7 +74,7 @@ file still runs the whole suite unless you pass Mocha `--no-config` and
 
 ## GitHub checks
 
-A pull request to `main` runs:
+A pull request runs:
 
 | Check | What it runs |
 | --- | --- |
@@ -87,16 +87,29 @@ A pull request to `main` runs:
 | Test Postgres | tests that need Postgres |
 | E2E | `cd e2e && npm test` |
 
-The Test check runs through `gotestsum` and writes `junit.xml` plus
-`coverage.out`. Both files are uploaded with `codecov-action`. The
-JUnit upload sets `report_type` to `test_results` and still runs when
-tests fail. The README badge reads the `main` coverage report.
-`disable_search` limits each upload to the named file.
-`codecov.yml` leaves `e2e`, docs, migrations, hasher examples, and
-test files out of that percentage. The project status compares the
-branch with its base and allows a one point drop. The test run
-instruments `internal` and `pkg` in every package, so an integration
-test counts toward the handler, controller, and repository it calls.
+The Test check runs the suite twice through `gotestsum`. Packages
+other than `tests/integration` upload as flag `unit`.
+`tests/integration` uploads as flag `integration`. Each pass writes
+its own JUnit file and coverage profile, and both still upload when
+tests fail. The E2E check writes `e2e/junit-e2e.xml` when `CI` is
+set, using Mocha's xunit reporter beside the spec reporter, and
+uploads it with flag `e2e`. A local `npm test` stays on the spec
+reporter.
+
+The README badge reads the `main` coverage report. `disable_search`
+limits each upload to the named file. `codecov.yml` leaves `e2e`,
+docs, migrations, hasher examples, and test files out of that
+percentage. The project status compares the branch with its base and
+allows a one point drop. The patch status stays at 45%. Flag and
+component statuses are informational.
+
+Components slice the merged Go report by path: Protocol, Account,
+Data, Clients, and Platform. The pull request comment waits for the
+unit and integration coverage uploads, then lists those components
+and the three flags. Each pass instruments `internal` and `pkg`, so
+the integration flag shows the handlers, controllers, and
+repositories that suite calls. The project total is the union of the
+two profiles.
 
 ## Related
 
