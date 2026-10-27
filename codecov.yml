@@ -6,7 +6,7 @@ coverage:
         threshold: 1%
     patch:
       default:
-        target: auto
+        target: 45%
         threshold: 1%
 
 # These paths are tests, examples, or docs. They are not the server.
