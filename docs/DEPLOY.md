@@ -217,19 +217,23 @@ time spent in each.
 
 ## Release
 
-Pushing a `v*` tag is the only publish step. Pushes to `dev` or `main`
-do not publish a release by themselves. A tag pushes the same image to
-GHCR and Docker Hub.
+A green push to `dev` publishes a prerelease. The tagger reads
+`VERSION` and pushes `v` plus that value plus `-rc.N`, using the next
+free N. `VERSION` is `0.2.0` on this line, so the tags look like
+`v0.2.0-rc.4`. That GitHub Release is a prerelease, and the image is
+also tagged `preview` on both registries. It does not move `latest`.
 
-Tag `vX.Y.Z-rc.N` on `dev`. That GitHub Release is a prerelease, and
-the image is also tagged `preview` on both registries. It does not
-move `latest`.
+You still push a stable tag by hand from `main`, after `dev` has been
+merged there. A stable tag must point at `main`. A preview tag must
+point at `dev`. A stable tag also publishes `X.Y.Z`, `X.Y`, `X`, and
+`latest`. When the stable tag named in `VERSION` already exists, bump
+`VERSION` to the next line before the next preview.
 
-Tag `vX.Y.Z` on `main`, after `dev` has been merged there. That release
-is stable. A stable tag also publishes `X.Y.Z`, `X.Y`, `X`, and
-`latest` on both registries. A stable tag that does not point at
-`main`, or a preview tag that points at `main`, fails the release
-workflow.
+The automatic tagger uses `GITHUB_TOKEN`. That push does not start the
+release workflow on its own, so the tagger calls it. A `v*` tag you
+push yourself still publishes through the same workflow.
+
+Push a stable tag like this:
 
 ```bash
 git tag v1.2.3
