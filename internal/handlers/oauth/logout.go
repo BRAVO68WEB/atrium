@@ -72,14 +72,8 @@ func (h *Handler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	if validHint && hintSID != "" {
 		endSession(hintSID)
 	}
-	// A hint for another client names a different session. Leave this browser signed in.
-	endCookie := !validHint && confirmed
-	if validHint && hintSID != "" && cookieSID == hintSID {
-		endCookie = true
-	}
-	if validHint && hintSID == "" && confirmed {
-		endCookie = true
-	}
+	// confirm=yes always ends this browser. A matching hint does too.
+	endCookie := confirmed || (validHint && hintSID != "" && cookieSID == hintSID)
 	if endCookie && cookieSID != "" && cookieSID != hintSID {
 		endSession(cookieSID)
 	}
