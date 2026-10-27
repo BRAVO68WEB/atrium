@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/bravo68web/atrium/internal/mailer"
 	"github.com/bravo68web/atrium/internal/models"
 	"github.com/bravo68web/atrium/internal/oidc"
 	"github.com/bravo68web/atrium/internal/push"
@@ -370,16 +371,17 @@ func (c *ManagementController) HandleListUsers(w http.ResponseWriter, r *http.Re
 func (c *ManagementController) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.ManagementController.HandleCreateUser")()
 	var req struct {
-		Username      string            `json:"username"`
-		Password      string            `json:"password"`
-		Email         string            `json:"email"`
-		Phone         string            `json:"phone_number"`
-		GivenName     string            `json:"given_name"`
-		FamilyName    string            `json:"family_name"`
-		EmailVerified *bool             `json:"email_verified"`
-		Disabled      bool              `json:"disabled"`
-		Attributes    map[string]string `json:"attributes"`
-		UserMetadata  map[string]string `json:"user_metadata"`
+		Username         string            `json:"username"`
+		Password         string            `json:"password"`
+		Email            string            `json:"email"`
+		Phone            string            `json:"phone_number"`
+		GivenName        string            `json:"given_name"`
+		FamilyName       string            `json:"family_name"`
+		EmailVerified    *bool             `json:"email_verified"`
+		Disabled         bool              `json:"disabled"`
+		MigrationPending bool              `json:"migration_pending"`
+		Attributes       map[string]string `json:"attributes"`
+		UserMetadata     map[string]string `json:"user_metadata"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -392,16 +394,17 @@ func (c *ManagementController) HandleCreateUser(w http.ResponseWriter, r *http.R
 		verified = *req.EmailVerified
 	}
 	user, err := c.userSvc.InsertUser(service.NewUser{
-		Username:      req.Username,
-		Password:      req.Password,
-		Email:         req.Email,
-		Phone:         req.Phone,
-		GivenName:     req.GivenName,
-		FamilyName:    req.FamilyName,
-		EmailVerified: verified,
-		Disabled:      req.Disabled,
-		Attributes:    req.Attributes,
-		UserMetadata:  req.UserMetadata,
+		Username:         req.Username,
+		Password:         req.Password,
+		Email:            req.Email,
+		Phone:            req.Phone,
+		GivenName:        req.GivenName,
+		FamilyName:       req.FamilyName,
+		EmailVerified:    verified,
+		Disabled:         req.Disabled,
+		MigrationPending: req.MigrationPending,
+		Attributes:       req.Attributes,
+		UserMetadata:     req.UserMetadata,
 	})
 	if writePassword(w, err) {
 		return
@@ -419,6 +422,33 @@ func (c *ManagementController) HandleCreateUser(w http.ResponseWriter, r *http.R
 	}
 
 	writeJSON(w, http.StatusCreated, user)
+}
+
+func (c *ManagementController) HandleMigrationNotice(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleMigrationNotice")()
+	user, err := c.userSvc.GetUser(chi.URLParam(r, "userID"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "User not found")
+		return
+	}
+	if c.account == nil {
+		writeError(w, http.StatusServiceUnavailable, "mailer_disabled", "SMTP is not configured")
+		return
+	}
+	err = c.account.SendMigrationNotice(user)
+	if errors.Is(err, service.ErrNotMigrating) {
+		writeError(w, http.StatusConflict, "not_migrating", "User is not waiting for a password")
+		return
+	}
+	if errors.Is(err, mailer.ErrDisabled) {
+		writeError(w, http.StatusServiceUnavailable, "mailer_disabled", "SMTP is not configured")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "mail_failed", "Failed to send email")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "sent"})
 }
 
 func (c *ManagementController) HandlePatchUser(w http.ResponseWriter, r *http.Request) {

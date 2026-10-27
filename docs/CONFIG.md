@@ -259,6 +259,16 @@ including when the identifier is `username`.
 `security.password` is checked when a password is set. `block_username`
 rejects a password that contains the username.
 
+A migrated account has an empty password and `migration_pending`. The
+next browser sign-in emails a 6-digit code (`migrate_otp`, 10 minutes),
+then requires a new password before any OAuth code is issued. The
+password grant returns `migration_required` and does not send mail.
+`POST /api/users/{id}/migration-notice` sends `migrate_notice` with no
+code. An empty password with `migration_pending` false, such as a SAML
+account, does not receive the code, and forgot-password does not attach
+one. Restore and import accept that empty hash only together with the
+flag.
+
 `security.access_token_format` is `opaque` or `jwt`. Opaque is the
 default. Access tokens are never encrypted. ID tokens and UserInfo are
 nested JWEs only when the client sets the encryption algorithms and

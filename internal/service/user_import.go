@@ -24,19 +24,20 @@ type ImportDocument struct {
 
 // ImportUser is one account in an import or export document.
 type ImportUser struct {
-	Username      string            `json:"username"`
-	Email         string            `json:"email,omitempty"`
-	EmailVerified bool              `json:"email_verified,omitempty"`
-	Password      string            `json:"password,omitempty"`
-	PasswordHash  string            `json:"password_hash,omitempty"`
-	GivenName     string            `json:"given_name,omitempty"`
-	FamilyName    string            `json:"family_name,omitempty"`
-	PhoneNumber   string            `json:"phone_number,omitempty"`
-	Disabled      bool              `json:"disabled,omitempty"`
-	TOTPSecret    string            `json:"totp_secret,omitempty"`
-	Attributes    map[string]string `json:"attributes,omitempty"`
-	UserMetadata  map[string]string `json:"user_metadata,omitempty"`
-	Orgs          []string          `json:"orgs,omitempty"`
+	Username         string            `json:"username"`
+	Email            string            `json:"email,omitempty"`
+	EmailVerified    bool              `json:"email_verified,omitempty"`
+	Password         string            `json:"password,omitempty"`
+	PasswordHash     string            `json:"password_hash,omitempty"`
+	GivenName        string            `json:"given_name,omitempty"`
+	FamilyName       string            `json:"family_name,omitempty"`
+	PhoneNumber      string            `json:"phone_number,omitempty"`
+	Disabled         bool              `json:"disabled,omitempty"`
+	MigrationPending bool              `json:"migration_pending,omitempty"`
+	TOTPSecret       string            `json:"totp_secret,omitempty"`
+	Attributes       map[string]string `json:"attributes,omitempty"`
+	UserMetadata     map[string]string `json:"user_metadata,omitempty"`
+	Orgs             []string          `json:"orgs,omitempty"`
 }
 
 // ImportError is one row the import did not write.
@@ -135,25 +136,30 @@ func (s *UserService) importRow(mode string, row ImportUser, dry bool, orgs orgD
 		}
 		return "updated", nil
 	}
-	if hash == "" {
+	if hash == "" && !row.MigrationPending {
 		return "", fmt.Errorf("password or password_hash is required")
+	}
+	if hash != "" && row.MigrationPending {
+		return "", fmt.Errorf("migration_pending cannot include a password")
 	}
 	if dry {
 		return "created", nil
 	}
 	user := &models.User{
-		ID:            uuid.New().String(),
-		Username:      row.Username,
-		PasswordHash:  hash,
-		Email:         row.Email,
-		PhoneNumber:   row.PhoneNumber,
-		GivenName:     row.GivenName,
-		FamilyName:    row.FamilyName,
-		EmailVerified: row.EmailVerified && row.Email != "",
-		Disabled:      row.Disabled,
-		Attributes:    row.Attributes,
-		UserMetadata:  row.UserMetadata,
-		CreatedAt:     time.Now().UTC(),
+		ID:               uuid.New().String(),
+		Username:         row.Username,
+		PasswordHash:     hash,
+		Email:            row.Email,
+		PhoneNumber:      row.PhoneNumber,
+		GivenName:        row.GivenName,
+		FamilyName:       row.FamilyName,
+		EmailVerified:    row.EmailVerified && row.Email != "",
+		Disabled:         row.Disabled,
+		HasPassword:      hash != "",
+		MigrationPending: row.MigrationPending,
+		Attributes:       row.Attributes,
+		UserMetadata:     row.UserMetadata,
+		CreatedAt:        time.Now().UTC(),
 	}
 	if err := s.reserveEmail("", user.Email); err != nil {
 		return "", err
@@ -219,7 +225,14 @@ func (s *UserService) applyImport(user *models.User, row ImportUser, hash string
 			return err
 		}
 	}
-	if hash != "" {
+	if row.MigrationPending {
+		if hash != "" {
+			return fmt.Errorf("migration_pending cannot include a password")
+		}
+		if err := s.userRepo.SetPasswordState(user.ID, "", true); err != nil {
+			return err
+		}
+	} else if hash != "" {
 		if err := s.userRepo.UpdatePasswordHash(user.ID, hash); err != nil {
 			return err
 		}
@@ -296,15 +309,16 @@ func (s *UserService) ExportUsers(includeSecrets bool, orgs orgDirectory) (Impor
 	doc := ImportDocument{Mode: "upsert", Users: []ImportUser{}}
 	for _, user := range users {
 		row := ImportUser{
-			Username:      user.Username,
-			Email:         user.Email,
-			EmailVerified: user.EmailVerified,
-			GivenName:     user.GivenName,
-			FamilyName:    user.FamilyName,
-			PhoneNumber:   user.PhoneNumber,
-			Disabled:      user.Disabled,
-			Attributes:    user.Attributes,
-			UserMetadata:  user.UserMetadata,
+			Username:         user.Username,
+			Email:            user.Email,
+			EmailVerified:    user.EmailVerified,
+			GivenName:        user.GivenName,
+			FamilyName:       user.FamilyName,
+			PhoneNumber:      user.PhoneNumber,
+			Disabled:         user.Disabled,
+			MigrationPending: user.MigrationPending,
+			Attributes:       user.Attributes,
+			UserMetadata:     user.UserMetadata,
 		}
 		if includeSecrets {
 			row.PasswordHash = user.PasswordHash

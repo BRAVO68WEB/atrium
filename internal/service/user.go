@@ -43,16 +43,17 @@ func NewUserService(userRepo *repository.UserRepository, totpSvc *TOTPService, c
 }
 
 type NewUser struct {
-	Username      string
-	Password      string
-	Email         string
-	Phone         string
-	GivenName     string
-	FamilyName    string
-	EmailVerified bool
-	Disabled      bool
-	Attributes    map[string]string
-	UserMetadata  map[string]string
+	Username         string
+	Password         string
+	Email            string
+	Phone            string
+	GivenName        string
+	FamilyName       string
+	EmailVerified    bool
+	Disabled         bool
+	MigrationPending bool
+	Attributes       map[string]string
+	UserMetadata     map[string]string
 }
 
 func (s *UserService) CreateUser(username, password, email, phone string) (*models.User, error) {
@@ -68,10 +69,16 @@ func (s *UserService) CreateUser(username, password, email, phone string) (*mode
 func (s *UserService) InsertUser(in NewUser) (*models.User, error) {
 	defer telemetry.Step("service.UserService.InsertUser")()
 	in.Email = normalizeEmail(in.Email)
-	if in.Username == "" || in.Password == "" {
+	if in.Username == "" {
+		return nil, fmt.Errorf("username is required")
+	}
+	if in.MigrationPending && in.Password != "" {
+		return nil, fmt.Errorf("a migrated user has no password yet")
+	}
+	if !in.MigrationPending && in.Password == "" {
 		return nil, fmt.Errorf("username and password are required")
 	}
-	if s.cfg != nil {
+	if in.Password != "" && s.cfg != nil {
 		if err := CheckPassword(s.cfg.Password, in.Username, in.Password); err != nil {
 			return nil, err
 		}
@@ -91,24 +98,30 @@ func (s *UserService) InsertUser(in NewUser) (*models.User, error) {
 		return nil, err
 	}
 
-	hashedPassword, err := s.hasher.Hash(in.Password)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
+	hashedPassword := ""
+	if in.Password != "" {
+		hashed, err := s.hasher.Hash(in.Password)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hash password: %w", err)
+		}
+		hashedPassword = hashed
 	}
 
 	user := &models.User{
-		ID:            uuid.New().String(),
-		Username:      in.Username,
-		PasswordHash:  hashedPassword,
-		Email:         in.Email,
-		PhoneNumber:   in.Phone,
-		GivenName:     in.GivenName,
-		FamilyName:    in.FamilyName,
-		EmailVerified: in.EmailVerified && in.Email != "",
-		Disabled:      in.Disabled,
-		Attributes:    in.Attributes,
-		UserMetadata:  in.UserMetadata,
-		CreatedAt:     time.Now(),
+		ID:               uuid.New().String(),
+		Username:         in.Username,
+		PasswordHash:     hashedPassword,
+		Email:            in.Email,
+		PhoneNumber:      in.Phone,
+		GivenName:        in.GivenName,
+		FamilyName:       in.FamilyName,
+		EmailVerified:    in.EmailVerified && in.Email != "",
+		Disabled:         in.Disabled,
+		HasPassword:      hashedPassword != "",
+		MigrationPending: in.MigrationPending,
+		Attributes:       in.Attributes,
+		UserMetadata:     in.UserMetadata,
+		CreatedAt:        time.Now(),
 	}
 
 	if err := s.userRepo.Create(user); err != nil {
@@ -201,7 +214,7 @@ func (s *UserService) Authenticate(username, password string) (*models.User, err
 	if err != nil {
 		return nil, fmt.Errorf("invalid credentials")
 	}
-	if user.Disabled {
+	if user.Disabled || user.NeedsMigration() || strings.TrimSpace(user.PasswordHash) == "" {
 		return nil, fmt.Errorf("invalid credentials")
 	}
 

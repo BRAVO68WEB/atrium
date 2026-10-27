@@ -25,6 +25,10 @@ var (
 	ErrRateLimited          = fmt.Errorf("too many requests")
 	ErrBadToken             = fmt.Errorf("invalid or expired token")
 	ErrRegistrationDisabled = fmt.Errorf("registration is disabled")
+	ErrNotMigrating         = fmt.Errorf("user is not waiting for a password")
+
+	migrationOTPPurpose = "migrate_otp"
+	migrationOTPTTL     = 10 * time.Minute
 )
 
 type AccountService struct {
@@ -182,6 +186,14 @@ func (a *AccountService) Forgot(identifier, ip string) error {
 		a.emit(EventForgotPassword, data)
 		return nil
 	}
+	if user.NeedsMigration() {
+		a.emit(EventForgotPassword, data)
+		return a.SendMigrationOTP(user, ip)
+	}
+	if strings.TrimSpace(user.PasswordHash) == "" {
+		a.emit(EventForgotPassword, data)
+		return nil
+	}
 	if !a.lim.allow("forgot:"+user.Email, 5, time.Hour) {
 		return ErrRateLimited
 	}
@@ -201,8 +213,15 @@ func (a *AccountService) Reset(token, password, ip string) error {
 	if !a.lim.allow("reset-ip:"+ip, 10, time.Hour) {
 		return ErrRateLimited
 	}
-	userID, err := a.emails.Consume(token, "reset")
+	userID, err := a.emails.Peek(token, "reset")
 	if err != nil {
+		return ErrBadToken
+	}
+	user, err := a.userRepo.GetByID(userID)
+	if err != nil || user.NeedsMigration() || strings.TrimSpace(user.PasswordHash) == "" {
+		return ErrBadToken
+	}
+	if _, err := a.emails.Consume(token, "reset"); err != nil {
 		return ErrBadToken
 	}
 	if err := a.users.SetPassword(userID, password); err != nil {
@@ -235,6 +254,67 @@ func (a *AccountService) Verify(token string) error {
 		"user_id": user.ID, "username": user.Username, "email": user.Email,
 	})
 	return nil
+}
+
+// SendMigrationOTP mails a 6-digit code. It does not start a session.
+func (a *AccountService) SendMigrationOTP(user *models.User, ip string) error {
+	defer telemetry.Step("service.AccountService.SendMigrationOTP")()
+	if a == nil || user == nil || !user.NeedsMigration() {
+		return ErrNotMigrating
+	}
+	if !a.lim.allow("migrate-ip:"+ip, 20, time.Hour) {
+		return ErrRateLimited
+	}
+	if !a.mail.Enabled() {
+		return mailer.ErrDisabled
+	}
+	if strings.TrimSpace(user.Email) == "" {
+		return fmt.Errorf("user has no email")
+	}
+	if !a.lim.allow("migrate:"+user.Email, 5, time.Hour) {
+		return ErrRateLimited
+	}
+	code, err := a.emails.CreateCode(user.ID, migrationOTPPurpose, migrationOTPTTL)
+	if err != nil {
+		return err
+	}
+	return a.sendMail(user, "migrate_otp", mailer.Data{
+		Code: code,
+		TTL:  migrationOTPTTL.String(),
+	})
+}
+
+// ConsumeMigrationOTP accepts the code for this user and no one else.
+func (a *AccountService) ConsumeMigrationOTP(userID, code string) error {
+	defer telemetry.Step("service.AccountService.ConsumeMigrationOTP")()
+	code = strings.TrimSpace(code)
+	if userID == "" || code == "" {
+		return ErrBadToken
+	}
+	if !a.lim.allow("migrate-try:"+userID, 10, time.Hour) {
+		return ErrRateLimited
+	}
+	got, err := a.emails.Peek(code, migrationOTPPurpose)
+	if err != nil || got != userID {
+		return ErrBadToken
+	}
+	consumed, err := a.emails.Consume(code, migrationOTPPurpose)
+	if err != nil || consumed != userID {
+		return ErrBadToken
+	}
+	return nil
+}
+
+// SendMigrationNotice tells the person to sign in. It does not include a code.
+func (a *AccountService) SendMigrationNotice(user *models.User) error {
+	defer telemetry.Step("service.AccountService.SendMigrationNotice")()
+	if a == nil || user == nil || !user.NeedsMigration() {
+		return ErrNotMigrating
+	}
+	if !a.mail.Enabled() {
+		return mailer.ErrDisabled
+	}
+	return a.sendMail(user, "migrate_notice", mailer.Data{})
 }
 
 func (a *AccountService) SendVerification(user *models.User) error {
@@ -521,6 +601,7 @@ func (a *AccountService) sendMail(user *models.User, name string, data mailer.Da
 	data.IP = mailer.OneLine(data.IP)
 	data.Agent = ""
 	data.Count = mailer.OneLine(data.Count)
+	data.Code = mailer.OneLine(data.Code)
 
 	subject, body, err := mailer.Render(a.templates, name, data)
 	if err != nil {

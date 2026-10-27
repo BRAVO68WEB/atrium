@@ -3,6 +3,7 @@ package service
 import (
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,24 @@ import (
 	"github.com/bravo68web/atrium/internal/oidc"
 	"github.com/bravo68web/atrium/internal/repository"
 )
+
+func TestBackupAllowsEmptyHashOnlyWhenMigrationIsPending(t *testing.T) {
+	pending := emptyBackup()
+	pending.Users = []BackupUser{{ID: "u1", Username: "ada", MigrationPending: true}}
+	if err := validateBackup(pending); err != nil {
+		t.Fatal(err)
+	}
+	plain := emptyBackup()
+	plain.Users = []BackupUser{{ID: "u1", Username: "ada"}}
+	if err := validateBackup(plain); err == nil || !strings.Contains(err.Error(), "password_hash") {
+		t.Fatalf("empty hash: %v", err)
+	}
+	both := emptyBackup()
+	both.Users = []BackupUser{{ID: "u1", Username: "ada", PasswordHash: "$2a$10$x", MigrationPending: true}}
+	if err := validateBackup(both); err == nil || !strings.Contains(err.Error(), "migration_pending") {
+		t.Fatalf("hash plus flag: %v", err)
+	}
+}
 
 func TestBackupRestoresUsersClientsConsentsAndKeys(t *testing.T) {
 	src := newBackupDB(t)

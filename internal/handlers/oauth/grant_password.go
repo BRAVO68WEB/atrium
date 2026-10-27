@@ -73,6 +73,11 @@ func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if existing, lookupErr := h.userSvc.FindByLogin(username); lookupErr == nil && existing.NeedsMigration() {
+		writeTokenError(w, http.StatusBadRequest, "migration_required", "Set a password in the browser before using this grant")
+		return
+	}
+
 	user, err := h.userSvc.Authenticate(username, password)
 	if err != nil {
 		if existing, lookupErr := h.userSvc.FindByLogin(username); lookupErr == nil && h.logins != nil {
