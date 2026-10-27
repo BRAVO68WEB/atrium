@@ -278,6 +278,7 @@ func mountManagement(mgmt chi.Router, r *Router) {
 		r3.Get("/{userID}/mfa/status", r.managementCtrl.HandleMFAStatus)
 		r3.Post("/{userID}/mfa/disable", r.managementCtrl.HandleMFADisable)
 		r3.Get("/{userID}", r.managementCtrl.HandleGetUser)
+		r3.Delete("/{userID}", r.managementCtrl.HandleDeleteUser)
 	})
 
 	mgmt.Route("/tokens", func(r3 chi.Router) {

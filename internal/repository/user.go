@@ -206,6 +206,57 @@ func (r *UserRepository) SetPasswordState(id, hash string, migrationPending bool
 	return nil
 }
 
+var userChildDeletes = []string{
+	`DELETE FROM authorization_codes WHERE user_id = ?`,
+	`DELETE FROM consents WHERE user_id = ?`,
+	`DELETE FROM ciba_requests WHERE user_id = ?`,
+	`DELETE FROM access_tokens WHERE user_id = ?`,
+	`DELETE FROM refresh_tokens WHERE user_id = ?`,
+	`DELETE FROM device_codes WHERE user_id = ?`,
+	`DELETE FROM session_clients WHERE sid IN (SELECT id FROM sessions WHERE user_id = ?)`,
+	`DELETE FROM sessions WHERE user_id = ?`,
+	`DELETE FROM email_tokens WHERE user_id = ?`,
+	`DELETE FROM login_events WHERE user_id = ?`,
+	`DELETE FROM social_identities WHERE user_id = ?`,
+	`DELETE FROM org_memberships WHERE user_id = ?`,
+	`DELETE FROM pairwise_subjects WHERE user_id = ?`,
+	`DELETE FROM user_roles WHERE user_id = ?`,
+	`DELETE FROM user_scopes WHERE user_id = ?`,
+	`DELETE FROM push_registration_tokens WHERE user_id = ?`,
+	`DELETE FROM push_auth_requests WHERE user_id = ?`,
+	`DELETE FROM push_devices WHERE user_id = ?`,
+}
+
+func (r *UserRepository) Delete(id string) error {
+	defer telemetry.Step("repository.UserRepository.Delete")()
+	if _, err := r.GetByID(id); err != nil {
+		return fmt.Errorf("user not found")
+	}
+	run := func(q database.SQL) error {
+		for _, stmt := range userChildDeletes {
+			if _, err := q.Exec(stmt, id); err != nil {
+				return err
+			}
+		}
+		res, err := q.Exec(`DELETE FROM users WHERE id = ?`, id)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("user not found")
+		}
+		return nil
+	}
+	if tx, ok := r.db.(*database.DB); ok {
+		return tx.WithTx(run)
+	}
+	return run(r.db)
+}
+
 func (r *UserRepository) UpdateMFA(id string, mfaEnabled bool, mfaSecret string) error {
 	defer telemetry.Step("repository.UserRepository.UpdateMFA")()
 	query := `UPDATE users SET mfa_enabled = ?, mfa_secret = ?, mfa_pending_secret = NULL WHERE id = ?`

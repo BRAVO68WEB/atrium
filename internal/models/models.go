@@ -27,6 +27,7 @@ type Client struct {
 	RegistrationSource                         string    `json:"registration_source,omitempty"`
 	DCREnabled                                 bool      `json:"dcr_enabled"`
 	CIMDEnabled                                bool      `json:"cimd_enabled"`
+	SkipConsent                                bool      `json:"skip_consent"`
 	SubjectType                                string    `json:"subject_type,omitempty"`
 	SectorIdentifierURI                        string    `json:"sector_identifier_uri,omitempty"`
 	IDTokenEncryptedResponseAlg                string    `json:"id_token_encrypted_response_alg,omitempty"`

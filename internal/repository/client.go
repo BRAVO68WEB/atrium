@@ -45,8 +45,8 @@ func (r *ClientRepository) Create(client *models.Client) error {
 		subject_type, sector_identifier_uri,
 		id_token_encrypted_response_alg, id_token_encrypted_response_enc,
 		userinfo_encrypted_response_alg, userinfo_encrypted_response_enc,
-		created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		created_at, updated_at, skip_consent)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err := r.db.Exec(query,
 		client.ID, client.Secret, client.Name,
@@ -60,7 +60,7 @@ func (r *ClientRepository) Create(client *models.Client) error {
 		client.SubjectType, client.SectorIdentifierURI,
 		client.IDTokenEncryptedResponseAlg, client.IDTokenEncryptedResponseEnc,
 		client.UserinfoEncryptedResponseAlg, client.UserinfoEncryptedResponseEnc,
-		client.CreatedAt, client.UpdatedAt,
+		client.CreatedAt, client.UpdatedAt, boolInt(client.SkipConsent),
 	)
 	return err
 }
@@ -107,7 +107,7 @@ func (r *ClientRepository) Update(client *models.Client) error {
 		subject_type=?, sector_identifier_uri=?,
 		id_token_encrypted_response_alg=?, id_token_encrypted_response_enc=?,
 		userinfo_encrypted_response_alg=?, userinfo_encrypted_response_enc=?,
-		updated_at=?
+		skip_consent=?, updated_at=?
 		WHERE id=?`
 
 	source := client.RegistrationSource
@@ -125,7 +125,7 @@ func (r *ClientRepository) Update(client *models.Client) error {
 		subjectTypeOrPublic(client.SubjectType), client.SectorIdentifierURI,
 		client.IDTokenEncryptedResponseAlg, client.IDTokenEncryptedResponseEnc,
 		client.UserinfoEncryptedResponseAlg, client.UserinfoEncryptedResponseEnc,
-		time.Now(), client.ID,
+		boolInt(client.SkipConsent), time.Now(), client.ID,
 	)
 	return err
 }
@@ -161,7 +161,7 @@ const clientSelect = `SELECT id, secret, name, redirect_uris, grant_types, scope
 	COALESCE(subject_type, 'public'), COALESCE(sector_identifier_uri, ''),
 	COALESCE(id_token_encrypted_response_alg, ''), COALESCE(id_token_encrypted_response_enc, ''),
 	COALESCE(userinfo_encrypted_response_alg, ''), COALESCE(userinfo_encrypted_response_enc, ''),
-	created_at, updated_at, COALESCE(org_id, '')
+	created_at, updated_at, COALESCE(org_id, ''), COALESCE(skip_consent, 0)
 	FROM clients`
 
 func scanClient(scan func(dest ...any) error) (*models.Client, error) {
@@ -169,7 +169,7 @@ func scanClient(scan func(dest ...any) error) (*models.Client, error) {
 	client := &models.Client{}
 	var redirectURIs, grantTypes, scopes, postLogout, source string
 	var jwks, jwksUri, reqObjAlg sql.NullString
-	var sessionRequired, dcrEnabled, cimdEnabled int
+	var sessionRequired, dcrEnabled, cimdEnabled, skipConsent int
 	var dpopBound, requirePAR bit
 	if err := scan(
 		&client.ID, &client.Secret, &client.Name,
@@ -183,7 +183,7 @@ func scanClient(scan func(dest ...any) error) (*models.Client, error) {
 		&client.SubjectType, &client.SectorIdentifierURI,
 		&client.IDTokenEncryptedResponseAlg, &client.IDTokenEncryptedResponseEnc,
 		&client.UserinfoEncryptedResponseAlg, &client.UserinfoEncryptedResponseEnc,
-		&client.CreatedAt, &client.UpdatedAt, &client.OrgID,
+		&client.CreatedAt, &client.UpdatedAt, &client.OrgID, &skipConsent,
 	); err != nil {
 		return nil, err
 	}
@@ -205,6 +205,7 @@ func scanClient(scan func(dest ...any) error) (*models.Client, error) {
 	}
 	client.DCREnabled = dcrEnabled != 0
 	client.CIMDEnabled = cimdEnabled != 0
+	client.SkipConsent = skipConsent != 0
 	if err := decodeStringList(redirectURIs, &client.RedirectURIs); err != nil {
 		return nil, err
 	}

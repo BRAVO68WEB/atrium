@@ -322,6 +322,15 @@ func (h *Handler) writeSessionCookie(w http.ResponseWriter, sessionID string) {
 
 func (h *Handler) hasConsented(userID, clientID, scope string) bool {
 	defer telemetry.Step("oauth.Handler.hasConsented")()
+	if h.clientRepo != nil {
+		client, err := h.clientRepo.GetByID(clientID)
+		if err == nil && client != nil && client.SkipConsent {
+			return true
+		}
+	}
+	if h.consentRepo == nil {
+		return false
+	}
 	consent, err := h.consentRepo.Get(userID, clientID)
 	if err != nil {
 		return false
