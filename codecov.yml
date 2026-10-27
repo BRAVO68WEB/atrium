@@ -1,6 +1,6 @@
 codecov:
   notify:
-    after_n_builds: 1
+    after_n_builds: 2
 
 coverage:
   status:
@@ -20,7 +20,18 @@ flag_management:
   default_rules:
     carryforward: false
   individual_flags:
-    - name: go
+    - name: unit
+      paths:
+        - internal/**
+        - pkg/**
+        - cmd/**
+      carryforward: false
+      statuses:
+        - type: project
+          target: auto
+          threshold: 1%
+          informational: true
+    - name: integration
       paths:
         - internal/**
         - pkg/**

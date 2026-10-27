@@ -47,26 +47,54 @@ jobs:
           go-version: "1.26"
 
       - name: Run tests
-        run: go run gotest.tools/gotestsum@v1.13.0 --format standard-verbose --junitfile junit.xml -- -race -count=1 -covermode=atomic -coverpkg=./internal/...,./pkg/... -coverprofile=coverage.out ./...
+        run: |
+          set -euo pipefail
+          unit_pkgs=$(go list ./... | grep -v '/tests/integration$')
+          test -n "$unit_pkgs"
+          set +e
+          status=0
+          # shellcheck disable=SC2086
+          go run gotest.tools/gotestsum@v1.13.0 --format standard-verbose --junitfile junit-unit.xml -- -race -count=1 -covermode=atomic -coverpkg=./internal/...,./pkg/... -coverprofile=coverage-unit.out $unit_pkgs || status=$?
+          go run gotest.tools/gotestsum@v1.13.0 --format standard-verbose --junitfile junit-integration.xml -- -race -count=1 -covermode=atomic -coverpkg=./internal/...,./pkg/... -coverprofile=coverage-integration.out ./tests/integration/... || status=$?
+          exit "$status"
 
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() && hashFiles('junit.xml') != '' }}
+      - name: Upload unit test results to Codecov
+        if: ${{ !cancelled() && hashFiles('junit-unit.xml') != '' }}
         uses: codecov/codecov-action@v5.5.5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: junit.xml
+          files: junit-unit.xml
           disable_search: true
           report_type: test_results
-          flags: go
+          flags: unit
 
-      - name: Upload coverage reports to Codecov
-        if: ${{ !cancelled() && hashFiles('coverage.out') != '' }}
+      - name: Upload unit coverage to Codecov
+        if: ${{ !cancelled() && hashFiles('coverage-unit.out') != '' }}
         uses: codecov/codecov-action@v5.5.5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.out
+          files: coverage-unit.out
           disable_search: true
-          flags: go
+          flags: unit
+
+      - name: Upload integration test results to Codecov
+        if: ${{ !cancelled() && hashFiles('junit-integration.xml') != '' }}
+        uses: codecov/codecov-action@v5.5.5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: junit-integration.xml
+          disable_search: true
+          report_type: test_results
+          flags: integration
+
+      - name: Upload integration coverage to Codecov
+        if: ${{ !cancelled() && hashFiles('coverage-integration.out') != '' }}
+        uses: codecov/codecov-action@v5.5.5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage-integration.out
+          disable_search: true
+          flags: integration
 
   lint:
     name: Lint

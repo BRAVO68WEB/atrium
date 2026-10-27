@@ -87,11 +87,12 @@ A pull request runs:
 | Test Postgres | tests that need Postgres |
 | E2E | `cd e2e && npm test` |
 
-The Test check runs through `gotestsum` and writes `junit.xml` plus
-`coverage.out`. Both uploads use `codecov-action` with flag `go`.
-The JUnit upload sets `report_type` to `test_results` and still runs
-when tests fail. The E2E check writes `e2e/junit-e2e.xml` when `CI`
-is set, using Mocha's xunit reporter beside the spec reporter, and
+The Test check runs the suite twice through `gotestsum`. Packages
+other than `tests/integration` upload as flag `unit`.
+`tests/integration` uploads as flag `integration`. Each pass writes
+its own JUnit file and coverage profile, and both still upload when
+tests fail. The E2E check writes `e2e/junit-e2e.xml` when `CI` is
+set, using Mocha's xunit reporter beside the spec reporter, and
 uploads it with flag `e2e`. A local `npm test` stays on the spec
 reporter.
 
@@ -102,11 +103,13 @@ percentage. The project status compares the branch with its base and
 allows a one point drop. The patch status stays at 45%. Flag and
 component statuses are informational.
 
-Components slice that one Go report by path: Protocol, Account, Data,
-Clients, and Platform. The pull request comment lists those
-components and the `go` flag. The test run instruments `internal` and
-`pkg` in every package, so an integration test counts toward the
-handler, controller, and repository it calls.
+Components slice the merged Go report by path: Protocol, Account,
+Data, Clients, and Platform. The pull request comment waits for the
+unit and integration coverage uploads, then lists those components
+and the three flags. Each pass instruments `internal` and `pkg`, so
+the integration flag shows the handlers, controllers, and
+repositories that suite calls. The project total is the union of the
+two profiles.
 
 ## Related
 
