@@ -264,11 +264,18 @@ func TestIdentifierFirstSkipsPasswordWhenUnset(t *testing.T) {
 
 	again := migrateGET(t, client, ts.URL+"/login")
 	known := migratePOST(t, client, ts.URL+"/login", csrfToken(t, again.body), url.Values{
-		"login_step": {"identifier"},
-		"username":   {"bea"},
+		"login_step":    {"identifier"},
+		"username":      {"bea"},
+		"client_id":     {"envsync-web"},
+		"redirect_uri":  {"http://api.lvh.me:4000/api/access/web/callback"},
+		"response_type": {"code"},
+		"state":         {"abc123"},
 	})
 	if known.StatusCode != http.StatusOK || !strings.Contains(known.body, `name="password"`) || strings.Contains(known.body, `value="identifier"`) {
 		t.Fatalf("password step %d %s", known.StatusCode, known.body)
+	}
+	if strings.Contains(known.body, "client_id%3d") || strings.Contains(known.body, "ZgotmplZ") || !strings.Contains(known.body, "client_id=envsync-web&") && !strings.Contains(known.body, "client_id=envsync-web&amp;") {
+		t.Fatalf("change link dropped client_id: %s", known.body)
 	}
 }
 

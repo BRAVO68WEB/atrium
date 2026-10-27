@@ -32,6 +32,7 @@ replaces the shared frame on every auth page. */}}
     <form method="POST" action="/login">
         {{template "oauth_fields" .}}
         {{if .IdentifierFirst}}<input type="hidden" name="login_step" value="password">{{end}}
+        {{if .IdentifierFirst}}<p class="hint"><a href="/login?{{.OAuthQuery}}">Change</a></p>{{end}}
         <div class="form-group">
             <label for="username">{{.Brand.UsernameLabel}}</label>
             <input type="text" id="username" name="username" value="{{.LoginHint}}" required autofocus autocomplete="{{.Brand.Autocomplete}}">
