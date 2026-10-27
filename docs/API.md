@@ -38,6 +38,8 @@ signing keys replaces the key set and the live JWKS. Pairwise subjects
 match only when `oidc.pairwise_salt` is the same value that produced
 them. The salt is not in the file.
 
+`GET /api/users?username=` is an exact username match. `DELETE /api/users/{id}` removes the account and the rows that reference it. `POST /api/users/{id}/password/reset-email` mails a reset link and returns 409 when the account has no password. A client with `skip_consent` does not stop on `/consent` unless the request sends `prompt=consent`.
+
 `POST /api/users/import` and `GET /api/users/export` move accounts.
 The body is `{ "mode": "create", "users": [ ... ] }`. `mode` may be
 `upsert`. A row sets `password` or `password_hash`, not both. A hash

@@ -26,6 +26,7 @@ var (
 	ErrBadToken             = fmt.Errorf("invalid or expired token")
 	ErrRegistrationDisabled = fmt.Errorf("registration is disabled")
 	ErrNotMigrating         = fmt.Errorf("user is not waiting for a password")
+	ErrNoPassword           = fmt.Errorf("user has no password")
 
 	migrationOTPPurpose = "migrate_otp"
 	migrationOTPTTL     = 10 * time.Minute
@@ -303,6 +304,35 @@ func (a *AccountService) ConsumeMigrationOTP(userID, code string) error {
 		return ErrBadToken
 	}
 	return nil
+}
+
+// SendPasswordReset mails a reset link. An empty hash is refused and no password_changed mail is sent.
+func (a *AccountService) SendPasswordReset(userID string) error {
+	defer telemetry.Step("service.AccountService.SendPasswordReset")()
+	if a == nil || a.userRepo == nil {
+		return fmt.Errorf("account service is not configured")
+	}
+	user, err := a.userRepo.GetByID(userID)
+	if err != nil {
+		return err
+	}
+	if !a.mail.Enabled() {
+		return mailer.ErrDisabled
+	}
+	if user.NeedsMigration() || strings.TrimSpace(user.PasswordHash) == "" {
+		return ErrNoPassword
+	}
+	if strings.TrimSpace(user.Email) == "" {
+		return fmt.Errorf("user has no email")
+	}
+	token, err := a.emails.Create(user.ID, "reset", a.resetTTL)
+	if err != nil {
+		return err
+	}
+	return a.sendMail(user, "reset", mailer.Data{
+		Link: a.issuer + "/reset?token=" + token,
+		TTL:  a.resetTTL.String(),
+	})
 }
 
 // SendMigrationNotice tells the person to sign in. It does not include a code.

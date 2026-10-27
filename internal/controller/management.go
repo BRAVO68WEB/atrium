@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -183,6 +184,7 @@ func (c *ManagementController) HandleCreateClient(w http.ResponseWriter, r *http
 		PostLogoutRedirectURIs                     []string `json:"post_logout_redirect_uris"`
 		DCREnabled                                 bool     `json:"dcr_enabled"`
 		CIMDEnabled                                bool     `json:"cimd_enabled"`
+		SkipConsent                                bool     `json:"skip_consent"`
 		SubjectType                                string   `json:"subject_type"`
 		SectorIdentifierURI                        string   `json:"sector_identifier_uri"`
 		JWKS                                       string   `json:"jwks"`
@@ -214,6 +216,7 @@ func (c *ManagementController) HandleCreateClient(w http.ResponseWriter, r *http
 		PostLogoutRedirectURIs:                     req.PostLogoutRedirectURIs,
 		DCREnabled:                                 req.DCREnabled,
 		CIMDEnabled:                                req.CIMDEnabled,
+		SkipConsent:                                req.SkipConsent,
 		SubjectType:                                req.SubjectType,
 		SectorIdentifierURI:                        req.SectorIdentifierURI,
 		JWKS:                                       req.JWKS,
@@ -267,6 +270,7 @@ func (c *ManagementController) HandleUpdateClient(w http.ResponseWriter, r *http
 		PostLogoutRedirectURIs                     []string `json:"post_logout_redirect_uris"`
 		DCREnabled                                 *bool    `json:"dcr_enabled"`
 		CIMDEnabled                                *bool    `json:"cimd_enabled"`
+		SkipConsent                                *bool    `json:"skip_consent"`
 		SubjectType                                string   `json:"subject_type"`
 		SectorIdentifierURI                        *string  `json:"sector_identifier_uri"`
 		JWKS                                       *string  `json:"jwks"`
@@ -314,6 +318,9 @@ func (c *ManagementController) HandleUpdateClient(w http.ResponseWriter, r *http
 	if req.CIMDEnabled != nil {
 		existing.CIMDEnabled = *req.CIMDEnabled
 	}
+	if req.SkipConsent != nil {
+		existing.SkipConsent = *req.SkipConsent
+	}
 	if req.SubjectType != "" {
 		existing.SubjectType = req.SubjectType
 	}
@@ -360,6 +367,19 @@ func (c *ManagementController) HandleDeleteClient(w http.ResponseWriter, r *http
 
 func (c *ManagementController) HandleListUsers(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.ManagementController.HandleListUsers")()
+	if username := strings.TrimSpace(r.URL.Query().Get("username")); username != "" {
+		user, err := c.userSvc.GetUserByUsername(username)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				writeJSON(w, http.StatusOK, []*models.User{})
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "server_error", "Failed to list users")
+			return
+		}
+		writeJSON(w, http.StatusOK, []*models.User{user})
+		return
+	}
 	users, err := c.userSvc.ListUsers()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to list users")
@@ -422,6 +442,44 @@ func (c *ManagementController) HandleCreateUser(w http.ResponseWriter, r *http.R
 	}
 
 	writeJSON(w, http.StatusCreated, user)
+}
+
+func (c *ManagementController) HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleDeleteUser")()
+	userID := chi.URLParam(r, "userID")
+	if err := c.userSvc.DeleteUser(userID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "User not found")
+		return
+	}
+	c.writeAudit(r, "user.delete", "user", userID, map[string]any{})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (c *ManagementController) HandleResetEmail(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleResetEmail")()
+	userID := chi.URLParam(r, "userID")
+	if _, err := c.userSvc.GetUser(userID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "User not found")
+		return
+	}
+	if c.account == nil {
+		writeError(w, http.StatusServiceUnavailable, "mailer_disabled", "SMTP is not configured")
+		return
+	}
+	err := c.account.SendPasswordReset(userID)
+	if errors.Is(err, mailer.ErrDisabled) {
+		writeError(w, http.StatusServiceUnavailable, "mailer_disabled", "SMTP is not configured")
+		return
+	}
+	if errors.Is(err, service.ErrNoPassword) {
+		writeError(w, http.StatusConflict, "no_password", "User has no password")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "mail_failed", "Failed to send email")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "sent"})
 }
 
 func (c *ManagementController) HandleMigrationNotice(w http.ResponseWriter, r *http.Request) {

@@ -1531,8 +1531,13 @@ paths:
       tags: [Management]
       security: [{ bearerAuth: [] }]
       summary: List all users
-      description: Returns all registered users.
+      description: Returns all registered users. `username` is an exact match and returns one user or an empty list.
       operationId: listUsers
+      parameters:
+        - name: username
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         "200":
           description: List of users
@@ -1651,6 +1656,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OAuthError"
+    delete:
+      tags: [Management]
+      security: [{ bearerAuth: [] }]
+      summary: Delete a user and the rows that reference them
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: User deleted
+        "404":
+          description: User not found
     patch:
       tags: [Management]
       summary: Update a user profile or metadata
@@ -2615,6 +2634,25 @@ paths:
         "503":
           description: SMTP is not configured
 
+  /api/users/{userID}/password/reset-email:
+    post:
+      tags: [Management]
+      summary: Email a password reset link
+      description: Refuses an empty password hash with 409. Does not send the password-changed notice.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          description: Reset mail accepted
+        "409":
+          description: User has no password
+        "503":
+          description: SMTP is not configured
+
   /api/users/{userID}/password:
     post:
       tags: [Management]
@@ -3126,6 +3164,9 @@ components:
             type: string
           description: Allowed scopes
           example: ["openid", "profile"]
+        skip_consent:
+          type: boolean
+          description: When true, authorize treats the user as already consented. prompt=consent still shows the page.
         token_endpoint_auth_method:
           type: string
           description: Client authentication method at token endpoint

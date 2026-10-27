@@ -40,6 +40,7 @@ type CreateClientInput struct {
 	PostLogoutRedirectURIs                     []string
 	DCREnabled                                 bool
 	CIMDEnabled                                bool
+	SkipConsent                                bool
 	SubjectType                                string
 	SectorIdentifierURI                        string
 	JWKS                                       string
@@ -103,6 +104,7 @@ func (s *ClientService) CreateClient(input CreateClientInput) (*models.Client, e
 		RegistrationSource:                         "management",
 		DCREnabled:                                 input.DCREnabled,
 		CIMDEnabled:                                input.CIMDEnabled,
+		SkipConsent:                                input.SkipConsent,
 		SubjectType:                                input.SubjectType,
 		SectorIdentifierURI:                        input.SectorIdentifierURI,
 		JWKS:                                       input.JWKS,

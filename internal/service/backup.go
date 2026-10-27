@@ -767,8 +767,8 @@ func upsertClient(q database.SQL, client models.Client) error {
 		subject_type, sector_identifier_uri,
 		id_token_encrypted_response_alg, id_token_encrypted_response_enc,
 		userinfo_encrypted_response_alg, userinfo_encrypted_response_enc,
-		created_at, updated_at, org_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		created_at, updated_at, org_id, skip_consent)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (id) DO UPDATE SET secret = excluded.secret, name = excluded.name,
 		redirect_uris = excluded.redirect_uris, grant_types = excluded.grant_types, scopes = excluded.scopes,
 		token_endpoint_auth_method = excluded.token_endpoint_auth_method,
@@ -789,7 +789,7 @@ func upsertClient(q database.SQL, client models.Client) error {
 		id_token_encrypted_response_enc = excluded.id_token_encrypted_response_enc,
 		userinfo_encrypted_response_alg = excluded.userinfo_encrypted_response_alg,
 		userinfo_encrypted_response_enc = excluded.userinfo_encrypted_response_enc,
-		org_id = excluded.org_id`,
+		org_id = excluded.org_id, skip_consent = excluded.skip_consent`,
 		client.ID, client.Secret, client.Name, jsonList(client.RedirectURIs), jsonList(client.GrantTypes), jsonList(client.Scopes),
 		client.TokenEndpointAuthMethod, bit(client.DPoPBoundAccessTokens),
 		bit(client.RequirePushedAuthorizationRequests), client.BackchannelTokenDeliveryMode,
@@ -800,7 +800,7 @@ func upsertClient(q database.SQL, client models.Client) error {
 		subject, client.SectorIdentifierURI,
 		client.IDTokenEncryptedResponseAlg, client.IDTokenEncryptedResponseEnc,
 		client.UserinfoEncryptedResponseAlg, client.UserinfoEncryptedResponseEnc,
-		created, updated, client.OrgID)
+		created, updated, client.OrgID, bit(client.SkipConsent))
 	return err
 }
 

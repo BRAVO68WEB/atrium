@@ -134,6 +134,11 @@ func (s *UserService) InsertUser(in NewUser) (*models.User, error) {
 	return user, nil
 }
 
+func (s *UserService) DeleteUser(id string) error {
+	defer telemetry.Step("service.UserService.DeleteUser")()
+	return s.userRepo.Delete(id)
+}
+
 func (s *UserService) GetUser(id string) (*models.User, error) {
 	defer telemetry.Step("service.UserService.GetUser")()
 	return s.userRepo.GetByID(id)
