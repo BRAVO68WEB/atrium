@@ -201,6 +201,12 @@ func (r *Router) setupRoutes() {
 		r2.Get("/", r.webCtrl.HandleLoginPage)
 		r2.Post("/", r.webCtrl.HandleLogin)
 	})
+	r.mux.Get("/login/link", r.webCtrl.HandleLoginLink)
+	r.mux.Route("/login/otp", func(r2 chi.Router) {
+		r2.Get("/", r.webCtrl.HandleLoginOTPPage)
+		r2.Post("/", r.webCtrl.HandleLoginOTP)
+		r2.Post("/resend", r.webCtrl.HandleLoginOTPResend)
+	})
 	r.mux.Route("/login/migrate", func(r2 chi.Router) {
 		r2.Get("/", r.webCtrl.HandleMigrateOTPPage)
 		r2.Post("/", r.webCtrl.HandleMigrateOTP)

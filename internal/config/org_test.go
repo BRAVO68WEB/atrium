@@ -31,6 +31,25 @@ func TestLoginIdentifier(t *testing.T) {
 	}
 }
 
+func TestPasswordlessMode(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Security.DisablePasswords = true
+	cfg.Normalize()
+	if err := ValidatePlatform(cfg); err != nil || cfg.Security.PasswordlessMode != "otp" {
+		t.Fatalf("mode = %q err %v", cfg.Security.PasswordlessMode, err)
+	}
+	cfg.Security.PasswordlessMode = "LINK"
+	cfg.Normalize()
+	if err := ValidatePlatform(cfg); err != nil || cfg.Security.PasswordlessMode != "link" {
+		t.Fatalf("mode = %q err %v", cfg.Security.PasswordlessMode, err)
+	}
+	cfg.Security.PasswordlessMode = "sms"
+	cfg.Normalize()
+	if err := ValidatePlatform(cfg); err == nil {
+		t.Fatal("expected validation error")
+	}
+}
+
 func TestDomainAutolookupRequiresOrgs(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Org.EnabledDomainBasedAutolookup = true

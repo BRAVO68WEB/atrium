@@ -16,6 +16,7 @@ import (
 	"github.com/bravo68web/atrium/internal/branding"
 	"github.com/bravo68web/atrium/internal/config"
 	"github.com/bravo68web/atrium/internal/handlers/oauth"
+	"github.com/bravo68web/atrium/internal/mailer"
 	"github.com/bravo68web/atrium/internal/models"
 	"github.com/bravo68web/atrium/internal/push"
 	"github.com/bravo68web/atrium/internal/service"
@@ -156,6 +157,21 @@ func (c *WebController) renderPage(w http.ResponseWriter, r *http.Request, page,
 	}
 	if page == "login.html" {
 		heading = c.theme.LoginTitle()
+		first := c != nil && c.cfg != nil && c.cfg.Security.IdentifierFirst
+		if _, ok := extra["IdentifierFirst"]; !ok {
+			extra["IdentifierFirst"] = first
+		}
+		if _, ok := extra["AskPassword"]; !ok {
+			extra["AskPassword"] = !first
+		}
+		if c.cfg != nil && c.cfg.Security.DisablePasswords {
+			extra["AskPassword"] = false
+			extra["Passwordless"] = true
+			extra["PasswordlessMode"] = c.cfg.Security.PasswordlessMode
+			if extra["PasswordlessMode"] == "" {
+				extra["PasswordlessMode"] = "otp"
+			}
+		}
 	}
 	data := oauthTemplateData(params, extra)
 	clientName := ""
@@ -446,10 +462,21 @@ func (c *WebController) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		rejectCSRF(w)
 		return
 	}
-	username := r.FormValue("username")
+	username := strings.TrimSpace(r.FormValue("username"))
 	password := r.FormValue("password")
 	params := extractOAuthParamsFromForm(r)
 	if !c.botOK(w, r, username) {
+		return
+	}
+
+	if c.cfg != nil && c.cfg.Security.DisablePasswords {
+		c.startPasswordless(w, r, username, params)
+		return
+	}
+
+	identifierFirst := c.cfg != nil && c.cfg.Security.IdentifierFirst
+	if identifierFirst && r.FormValue("login_step") != "password" {
+		c.continueFromIdentifier(w, r, username, params)
 		return
 	}
 
@@ -463,12 +490,192 @@ func (c *WebController) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		if existing, lookupErr := c.userSvc.FindByLogin(username); lookupErr == nil && c.account != nil {
 			c.account.Record(existing, r, false, false)
 		}
+		params["login_hint"] = username
 		c.renderPage(w, r, "login.html", "Login", "Sign In", params, map[string]any{
-			"Error": "Invalid credentials",
+			"Error":       "Invalid credentials",
+			"LoginHint":   username,
+			"AskPassword": true,
 		})
 		return
 	}
 
+	c.finishLogin(w, r, user, params)
+}
+
+// continueFromIdentifier runs after the email step. A pending account with
+// no password goes straight to the email code. Everyone else is asked for
+// a password, including an unknown identifier, so the first screen does
+// not reveal which accounts exist.
+func (c *WebController) continueFromIdentifier(w http.ResponseWriter, r *http.Request, username string, params map[string]string) {
+	defer telemetry.Step("controller.WebController.continueFromIdentifier")()
+	if username == "" {
+		c.renderPage(w, r, "login.html", "Login", "Sign In", params, map[string]any{
+			"Error":       "Enter your email.",
+			"AskPassword": false,
+		})
+		return
+	}
+	params["login_hint"] = username
+	if existing, err := c.userSvc.FindByLogin(username); err == nil && existing.NeedsMigration() {
+		c.beginMigration(w, r, existing, params)
+		return
+	}
+	c.renderPage(w, r, "login.html", "Login", "Sign In", params, map[string]any{
+		"Error":       "",
+		"LoginHint":   username,
+		"AskPassword": true,
+	})
+}
+
+func (c *WebController) startPasswordless(w http.ResponseWriter, r *http.Request, username string, params map[string]string) {
+	defer telemetry.Step("controller.WebController.startPasswordless")()
+	mode := "otp"
+	if c.cfg != nil && c.cfg.Security.PasswordlessMode != "" {
+		mode = c.cfg.Security.PasswordlessMode
+	}
+	if username == "" {
+		c.renderPage(w, r, "login.html", "Login", "Sign In", params, map[string]any{
+			"Error": "Enter your email.",
+		})
+		return
+	}
+	params["login_hint"] = username
+	user, err := c.userSvc.FindByLogin(username)
+	canSend := err == nil && user != nil && !user.Disabled && strings.TrimSpace(user.Email) != "" && c.account != nil
+	if canSend {
+		var sendErr error
+		if mode == "link" {
+			sendErr = c.account.SendLoginLink(user, c.account.RequestIP(r), paramsQuery(params))
+		} else {
+			sendErr = c.account.SendLoginOTP(user, c.account.RequestIP(r))
+		}
+		if sendErr != nil {
+			msg := "We could not send the sign-in email. Try again."
+			if errors.Is(sendErr, service.ErrRateLimited) {
+				msg = "Too many codes. Try again later."
+			}
+			if errors.Is(sendErr, mailer.ErrDisabled) {
+				msg = "Sign-in email is not configured on this server."
+			}
+			c.renderPage(w, r, "login.html", "Login", "Sign In", params, map[string]any{
+				"Error":     msg,
+				"LoginHint": username,
+			})
+			return
+		}
+	}
+	if mode == "link" {
+		c.renderPage(w, r, "login.html", "Login", "Sign In", params, map[string]any{
+			"Error":     "",
+			"Status":    "If an account matches, a sign-in link is on its way.",
+			"LoginHint": username,
+		})
+		return
+	}
+	http.Redirect(w, r, "/login/otp?"+paramsQuery(params), http.StatusFound)
+}
+
+func (c *WebController) HandleLoginOTPPage(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleLoginOTPPage")()
+	params := extractOAuthParams(r)
+	c.renderPage(w, r, "login_otp.html", "Sign-in code", "Enter your code", params, map[string]any{
+		"Error":     "",
+		"LoginHint": params["login_hint"],
+	})
+}
+
+func (c *WebController) HandleLoginOTP(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleLoginOTP")()
+	_ = r.ParseForm()
+	if !csrfOK(r) {
+		rejectCSRF(w)
+		return
+	}
+	params := extractOAuthParamsFromForm(r)
+	username := strings.TrimSpace(r.FormValue("username"))
+	if username == "" {
+		username = params["login_hint"]
+	}
+	user, err := c.userSvc.FindByLogin(username)
+	if err != nil || user == nil || user.Disabled || c.account == nil {
+		c.renderPage(w, r, "login_otp.html", "Sign-in code", "Enter your code", params, map[string]any{
+			"Error":     "That code is not valid.",
+			"LoginHint": username,
+		})
+		return
+	}
+	if err := c.account.ConsumeLoginOTP(user.ID, r.FormValue("otp")); err != nil {
+		msg := "That code is not valid."
+		if errors.Is(err, service.ErrRateLimited) {
+			msg = "Too many attempts. Try again later."
+		}
+		c.renderPage(w, r, "login_otp.html", "Sign-in code", "Enter your code", params, map[string]any{
+			"Error":     msg,
+			"LoginHint": username,
+		})
+		return
+	}
+	c.finishLogin(w, r, user, params)
+}
+
+func (c *WebController) HandleLoginOTPResend(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleLoginOTPResend")()
+	_ = r.ParseForm()
+	if !csrfOK(r) {
+		rejectCSRF(w)
+		return
+	}
+	params := extractOAuthParamsFromForm(r)
+	username := strings.TrimSpace(r.FormValue("username"))
+	user, err := c.userSvc.FindByLogin(username)
+	if err != nil || user == nil || user.Disabled || c.account == nil {
+		c.renderPage(w, r, "login_otp.html", "Sign-in code", "Enter your code", params, map[string]any{
+			"Error":     "We could not send a new code.",
+			"LoginHint": username,
+		})
+		return
+	}
+	if err := c.account.SendLoginOTP(user, c.account.RequestIP(r)); err != nil {
+		msg := "We could not send a new code."
+		if errors.Is(err, service.ErrRateLimited) {
+			msg = "Too many codes. Try again later."
+		}
+		c.renderPage(w, r, "login_otp.html", "Sign-in code", "Enter your code", params, map[string]any{
+			"Error":     msg,
+			"LoginHint": username,
+		})
+		return
+	}
+	c.renderPage(w, r, "login_otp.html", "Sign-in code", "Enter your code", params, map[string]any{
+		"Error":     "",
+		"Notice":    "We sent a new code.",
+		"LoginHint": username,
+	})
+}
+
+func (c *WebController) HandleLoginLink(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.WebController.HandleLoginLink")()
+	params := extractOAuthParams(r)
+	if c.account == nil {
+		c.renderPage(w, r, "login.html", "Login", "Sign In", params, map[string]any{
+			"Error": "That sign-in link is not valid.",
+		})
+		return
+	}
+	userID, err := c.account.ConsumeLoginLink(r.URL.Query().Get("token"))
+	if err != nil {
+		c.renderPage(w, r, "login.html", "Login", "Sign In", params, map[string]any{
+			"Error": "That sign-in link is not valid.",
+		})
+		return
+	}
+	user, err := c.userSvc.GetUser(userID)
+	if err != nil || user == nil || user.Disabled {
+		c.renderPage(w, r, "login.html", "Login", "Sign In", params, map[string]any{
+			"Error": "That sign-in link is not valid.",
+		})
+		return
+	}
 	c.finishLogin(w, r, user, params)
 }
 

@@ -108,6 +108,10 @@ func (c *AccountController) HandleRegister(w http.ResponseWriter, r *http.Reques
 
 func (c *AccountController) HandleForgot(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.AccountController.HandleForgot")()
+	if c.cfg != nil && c.cfg.Security.DisablePasswords {
+		writeError(w, http.StatusForbidden, "password_disabled", "Passwords are disabled")
+		return
+	}
 	var req struct {
 		Username string `json:"username"`
 		Email    string `json:"email"`
@@ -385,6 +389,10 @@ func (c *AccountController) HandleActivity(w http.ResponseWriter, r *http.Reques
 
 func (c *AccountController) HandleForgotPage(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.AccountController.HandleForgotPage")()
+	if c.cfg != nil && c.cfg.Security.DisablePasswords {
+		c.render(w, r, "forgot.html", map[string]any{"Error": "", "Status": "This server signs in with an email code or link. Passwords are not used."})
+		return
+	}
 	c.render(w, r, "forgot.html", map[string]any{"Error": "", "Status": ""})
 }
 
@@ -397,6 +405,10 @@ func (c *AccountController) HandleForgotSubmit(w http.ResponseWriter, r *http.Re
 	}
 	username := r.FormValue("username")
 	if !c.botOK(w, r, username) {
+		return
+	}
+	if c.cfg != nil && c.cfg.Security.DisablePasswords {
+		c.render(w, r, "forgot.html", map[string]any{"Error": "", "Status": "This server signs in with an email code or link. Passwords are not used."})
 		return
 	}
 	err := c.account.Forgot(username, c.account.RequestIP(r))
@@ -764,6 +776,10 @@ func (c *AccountController) caller(w http.ResponseWriter, r *http.Request) (*mod
 
 func (c *AccountController) writeForgot(w http.ResponseWriter, r *http.Request, id string) {
 	defer telemetry.Step("controller.AccountController.writeForgot")()
+	if c.cfg != nil && c.cfg.Security.DisablePasswords {
+		writeError(w, http.StatusForbidden, "password_disabled", "Passwords are disabled")
+		return
+	}
 	err := c.account.Forgot(id, c.account.RequestIP(r))
 	if errors.Is(err, mailer.ErrDisabled) {
 		writeError(w, http.StatusServiceUnavailable, "mailer_disabled", "SMTP is not configured")

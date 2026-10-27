@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -28,8 +29,11 @@ var (
 	ErrNotMigrating         = fmt.Errorf("user is not waiting for a password")
 	ErrNoPassword           = fmt.Errorf("user has no password")
 
-	migrationOTPPurpose = "migrate_otp"
-	migrationOTPTTL     = 10 * time.Minute
+	migrationOTPPurpose  = "migrate_otp"
+	migrationOTPTTL      = 10 * time.Minute
+	loginOTPPurpose      = "login_otp"
+	loginLinkPurpose     = "login_link"
+	loginPasswordlessTTL = 10 * time.Minute
 )
 
 type AccountService struct {
@@ -302,6 +306,96 @@ func (a *AccountService) ConsumeMigrationOTP(userID, code string) error {
 	consumed, err := a.emails.Consume(code, migrationOTPPurpose)
 	if err != nil || consumed != userID {
 		return ErrBadToken
+	}
+	return nil
+}
+
+// SendLoginOTP mails a 6-digit sign-in code. It does not set a password.
+func (a *AccountService) SendLoginOTP(user *models.User, ip string) error {
+	defer telemetry.Step("service.AccountService.SendLoginOTP")()
+	if err := a.allowPasswordless(user, ip, "otp"); err != nil {
+		return err
+	}
+	code, err := a.emails.CreateCode(user.ID, loginOTPPurpose, loginPasswordlessTTL)
+	if err != nil {
+		return err
+	}
+	return a.sendMail(user, "login_otp", mailer.Data{
+		Code: code,
+		TTL:  loginPasswordlessTTL.String(),
+	})
+}
+
+// ConsumeLoginOTP accepts the code for this user and no one else.
+func (a *AccountService) ConsumeLoginOTP(userID, code string) error {
+	defer telemetry.Step("service.AccountService.ConsumeLoginOTP")()
+	code = strings.TrimSpace(code)
+	if userID == "" || code == "" {
+		return ErrBadToken
+	}
+	if !a.lim.allow("login-otp-try:"+userID, 10, time.Hour) {
+		return ErrRateLimited
+	}
+	got, err := a.emails.Peek(code, loginOTPPurpose)
+	if err != nil || got != userID {
+		return ErrBadToken
+	}
+	consumed, err := a.emails.Consume(code, loginOTPPurpose)
+	if err != nil || consumed != userID {
+		return ErrBadToken
+	}
+	return nil
+}
+
+// SendLoginLink mails a one-time sign-in URL. oauthQuery is appended as-is.
+func (a *AccountService) SendLoginLink(user *models.User, ip, oauthQuery string) error {
+	defer telemetry.Step("service.AccountService.SendLoginLink")()
+	if err := a.allowPasswordless(user, ip, "link"); err != nil {
+		return err
+	}
+	token, err := a.emails.Create(user.ID, loginLinkPurpose, loginPasswordlessTTL)
+	if err != nil {
+		return err
+	}
+	link := strings.TrimRight(a.issuer, "/") + "/login/link?token=" + url.QueryEscape(token)
+	if oauthQuery != "" {
+		link += "&" + oauthQuery
+	}
+	return a.sendMail(user, "login_link", mailer.Data{
+		Link: link,
+		TTL:  loginPasswordlessTTL.String(),
+	})
+}
+
+// ConsumeLoginLink returns the user id for a one-time sign-in link.
+func (a *AccountService) ConsumeLoginLink(token string) (string, error) {
+	defer telemetry.Step("service.AccountService.ConsumeLoginLink")()
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return "", ErrBadToken
+	}
+	userID, err := a.emails.Consume(token, loginLinkPurpose)
+	if err != nil || userID == "" {
+		return "", ErrBadToken
+	}
+	return userID, nil
+}
+
+func (a *AccountService) allowPasswordless(user *models.User, ip, kind string) error {
+	if a == nil || user == nil {
+		return fmt.Errorf("user has no email")
+	}
+	if !a.lim.allow("login-"+kind+"-ip:"+ip, 20, time.Hour) {
+		return ErrRateLimited
+	}
+	if !a.mail.Enabled() {
+		return mailer.ErrDisabled
+	}
+	if strings.TrimSpace(user.Email) == "" {
+		return fmt.Errorf("user has no email")
+	}
+	if !a.lim.allow("login-"+kind+":"+user.Email, 5, time.Hour) {
+		return ErrRateLimited
 	}
 	return nil
 }
@@ -637,12 +731,17 @@ func (a *AccountService) sendMail(user *models.User, name string, data mailer.Da
 	if err != nil {
 		return err
 	}
+	htmlBody, err := mailer.RenderHTML(a.templates, name, data)
+	if err != nil {
+		return err
+	}
 	if a.outbox != nil {
 		return a.outbox.Publish(context.Background(), notify.Job{
 			Kind:    notify.KindMail,
 			To:      stored.Email,
 			Subject: subject,
 			Text:    body,
+			HTML:    htmlBody,
 		}, 0)
 	}
 	to := stored.Email
@@ -650,8 +749,20 @@ func (a *AccountService) sendMail(user *models.User, name string, data mailer.Da
 	mail := a.mail
 	background.Go(func() {
 		defer telemetry.Step("service.AccountService.sendMailAsync")()
-		if err := mail.Send(to, subject, body); err != nil {
-			log.Printf("mail %s for %s: %v", name, userID, err)
+		var sendErr error
+		if strings.TrimSpace(htmlBody) != "" {
+			if sender, ok := mail.(interface {
+				SendHTML(to, subject, text, htmlBody string) error
+			}); ok {
+				sendErr = sender.SendHTML(to, subject, body, htmlBody)
+			} else {
+				sendErr = mail.Send(to, subject, body)
+			}
+		} else {
+			sendErr = mail.Send(to, subject, body)
+		}
+		if sendErr != nil {
+			log.Printf("mail %s for %s: %v", name, userID, sendErr)
 		}
 	})
 	return nil

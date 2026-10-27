@@ -256,6 +256,22 @@ mode, sign-in, forgot-password, and that grant look up the mailbox. A
 mailbox is stored in lowercase, and a second account cannot reuse it,
 including when the identifier is `username`.
 
+`security.identifier_first` is false unless set. When it is true, the
+sign-in page asks for the identifier first. The next submit looks the
+account up. An account with no password and `migration_pending` is sent
+the email code and never sees a password field. Any other account is
+shown the password field, with social buttons under it when providers
+are configured. The password grant is unchanged.
+
+`security.disable_passwords` is false unless set. When it is true, browser
+sign-in and the password grant do not accept a password. `security.passwordless_mode`
+is `otp` (the default) or `link`. `otp` emails a 6-digit code (`login_otp`,
+10 minutes) and signs the browser in when the code matches. `link` emails
+a one-time URL (`login_link`, 10 minutes) and signs the browser in when it
+is opened. An unknown identifier gets the same screen and no mail. Forgot
+and reset are refused. Migration password setup is not used while passwords
+are disabled.
+
 `security.password` is checked when a password is set. `block_username`
 rejects a password that contains the username.
 
