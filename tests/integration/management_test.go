@@ -112,14 +112,15 @@ func TestManagementAPI(t *testing.T) {
 	}
 
 	accessRows := apiList(t, http.MethodGet, base+"/api/tokens?user_id="+url.QueryEscape(userID), token, nil)
-	if !listHas(accessRows, "token", accessToken) {
+	accessID := firstString(accessRows, "id")
+	if accessID == "" || listHas(accessRows, "token", accessToken) {
 		t.Fatalf("tokens %v", accessRows)
 	}
-	revokedAccess := apiObject(t, http.MethodPost, base+"/api/tokens/"+url.PathEscape(accessToken)+"/revoke", token, nil)
+	revokedAccess := apiObject(t, http.MethodPost, base+"/api/tokens/"+url.PathEscape(accessID)+"/revoke", token, nil)
 	if revokedAccess["status"] != "revoked" {
 		t.Fatalf("revoke access %v", revokedAccess)
 	}
-	if !listHasField(apiList(t, http.MethodGet, base+"/api/tokens?user_id="+url.QueryEscape(userID), token, nil), "token", accessToken, "revoked", true) {
+	if !listHasField(apiList(t, http.MethodGet, base+"/api/tokens?user_id="+url.QueryEscape(userID), token, nil), "id", accessID, "revoked", true) {
 		t.Fatal("access token still active")
 	}
 

@@ -677,10 +677,7 @@ func (c *ManagementController) HandleRevokeRefreshToken(w http.ResponseWriter, r
 		writeError(w, http.StatusNotFound, "not_found", "Refresh token not found")
 		return
 	}
-	_ = c.tokenRepo.RevokeRefreshToken(rt.Token)
-	if rt.AccessToken != "" {
-		_ = c.tokenRepo.RevokeAccessToken(rt.AccessToken)
-	}
+	_ = c.tokenRepo.RevokeRefreshByID(rt.ID)
 	c.writeAudit(r, "token.revoke", "refresh_token", rt.ID, map[string]any{"client_id": rt.ClientID})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
 }
@@ -713,7 +710,7 @@ func (c *ManagementController) HandleListTokens(w http.ResponseWriter, r *http.R
 
 func (c *ManagementController) HandleRevokeToken(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.ManagementController.HandleRevokeToken")()
-	token := chi.URLParam(r, "token")
+	token := chi.URLParam(r, "id")
 	if err := c.tokenSvc.RevokeToken(token); err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to revoke token")
 		return

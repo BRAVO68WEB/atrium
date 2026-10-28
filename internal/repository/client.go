@@ -3,16 +3,85 @@ package repository
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bravo68web/atrium/internal/database"
 
 	"github.com/bravo68web/atrium/internal/models"
 	"github.com/bravo68web/atrium/internal/telemetry"
+	"github.com/bravo68web/atrium/pkg/crypto"
 )
 
 type ClientRepository struct {
-	db database.SQL
+	db  database.SQL
+	key []byte
+}
+
+// SetKey encrypts client secrets at rest. An empty key leaves the column unchanged.
+func (r *ClientRepository) SetKey(key []byte) {
+	if r == nil {
+		return
+	}
+	r.key = append([]byte(nil), key...)
+}
+
+// Seal returns the value to store for a client secret.
+func (r *ClientRepository) Seal(plain string) (string, error) {
+	if r == nil || len(r.key) == 0 {
+		return plain, nil
+	}
+	return crypto.EncryptSecret(r.key, plain)
+}
+
+func (r *ClientRepository) open(client *models.Client) (*models.Client, error) {
+	if client == nil {
+		return nil, nil
+	}
+	plain, err := crypto.DecryptSecret(r.key, client.Secret)
+	if err != nil {
+		return nil, err
+	}
+	client.Secret = plain
+	return client, nil
+}
+
+// SealPlaintextSecrets rewrites client secrets that are still plaintext.
+func SealPlaintextSecrets(db database.SQL, key []byte) error {
+	if db == nil || len(key) == 0 {
+		return nil
+	}
+	rows, err := db.Query(`SELECT id, COALESCE(secret, '') FROM clients`)
+	if err != nil {
+		return fmt.Errorf("client secrets: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	type row struct{ id, secret string }
+	var pending []row
+	for rows.Next() {
+		var item row
+		if err := rows.Scan(&item.id, &item.secret); err != nil {
+			return fmt.Errorf("client secrets: %w", err)
+		}
+		if item.secret == "" || strings.HasPrefix(item.secret, "enc:v1:") {
+			continue
+		}
+		pending = append(pending, item)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("client secrets: %w", err)
+	}
+	for _, item := range pending {
+		sealed, err := crypto.EncryptSecret(key, item.secret)
+		if err != nil {
+			return fmt.Errorf("client secrets: %w", err)
+		}
+		if _, err := db.Exec(`UPDATE clients SET secret = ? WHERE id = ?`, sealed, item.id); err != nil {
+			return fmt.Errorf("client secrets: %w", err)
+		}
+	}
+	return nil
 }
 
 func NewClientRepository(db database.SQL) *ClientRepository {
@@ -35,6 +104,10 @@ func (r *ClientRepository) Create(client *models.Client) error {
 	if client.SubjectType == "" {
 		client.SubjectType = "public"
 	}
+	secret, err := r.Seal(client.Secret)
+	if err != nil {
+		return err
+	}
 	query := `INSERT INTO clients (id, secret, name, redirect_uris, grant_types, scopes,
 		token_endpoint_auth_method, dpop_bound_access_tokens,
 		require_pushed_authorization_requests, backchannel_token_delivery_mode,
@@ -48,8 +121,8 @@ func (r *ClientRepository) Create(client *models.Client) error {
 		created_at, updated_at, skip_consent)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := r.db.Exec(query,
-		client.ID, client.Secret, client.Name,
+	_, err = r.db.Exec(query,
+		client.ID, secret, client.Name,
 		string(redirectURIs), string(grantTypes), string(scopes),
 		client.TokenEndpointAuthMethod, boolInt(client.DPoPBoundAccessTokens),
 		boolInt(client.RequirePushedAuthorizationRequests), client.BackchannelTokenDeliveryMode,
@@ -68,7 +141,11 @@ func (r *ClientRepository) Create(client *models.Client) error {
 func (r *ClientRepository) GetByID(id string) (*models.Client, error) {
 	defer telemetry.Step("repository.ClientRepository.GetByID")()
 	row := r.db.QueryRow(clientSelect+` WHERE id = ?`, id)
-	return scanClient(row.Scan)
+	client, err := scanClient(row.Scan)
+	if err != nil {
+		return nil, err
+	}
+	return r.open(client)
 }
 
 func (r *ClientRepository) List() ([]*models.Client, error) {
@@ -82,6 +159,10 @@ func (r *ClientRepository) List() ([]*models.Client, error) {
 	clients := make([]*models.Client, 0)
 	for rows.Next() {
 		client, err := scanClient(rows.Scan)
+		if err != nil {
+			return nil, err
+		}
+		client, err = r.open(client)
 		if err != nil {
 			return nil, err
 		}

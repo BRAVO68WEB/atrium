@@ -246,8 +246,34 @@ func (h *Handler) CreateAccessTokenJWT(ctx context.Context, clientID, userID, sc
 // AccessTokenSubject verifies an access token this server signed and returns sub.
 func (h *Handler) AccessTokenSubject(raw string) (string, error) {
 	defer telemetry.Step("oidc.Handler.AccessTokenSubject")()
+	claims, err := h.parseAccessToken(raw)
+	if err != nil {
+		return "", err
+	}
+	sub, _ := claims["sub"].(string)
+	if sub == "" {
+		return "", fmt.Errorf("invalid access token")
+	}
+	return sub, nil
+}
+
+// AccessTokenJTI verifies an access token this server signed and returns jti.
+func (h *Handler) AccessTokenJTI(raw string) (string, error) {
+	defer telemetry.Step("oidc.Handler.AccessTokenJTI")()
+	claims, err := h.parseAccessToken(raw)
+	if err != nil {
+		return "", err
+	}
+	jti, _ := claims["jti"].(string)
+	if jti == "" {
+		return "", fmt.Errorf("invalid access token")
+	}
+	return jti, nil
+}
+
+func (h *Handler) parseAccessToken(raw string) (jwt.MapClaims, error) {
 	if h == nil || h.keySet == nil {
-		return "", fmt.Errorf("signing keys are not loaded")
+		return nil, fmt.Errorf("signing keys are not loaded")
 	}
 	claims := jwt.MapClaims{}
 	token, err := jwt.ParseWithClaims(raw, claims, func(t *jwt.Token) (any, error) {
@@ -261,17 +287,27 @@ func (h *Handler) AccessTokenSubject(raw string) (string, error) {
 		return nil, fmt.Errorf("unknown signing key")
 	})
 	if err != nil || token == nil || !token.Valid {
-		return "", fmt.Errorf("invalid access token")
+		return nil, fmt.Errorf("invalid access token")
 	}
 	iss, _ := claims["iss"].(string)
 	if iss != h.issuer() {
-		return "", fmt.Errorf("invalid access token")
+		return nil, fmt.Errorf("invalid access token")
 	}
-	sub, _ := claims["sub"].(string)
-	if sub == "" {
-		return "", fmt.Errorf("invalid access token")
+	return claims, nil
+}
+
+// SetDataKey decrypts client secrets read by this handler.
+func (h *Handler) SetDataKey(key []byte) {
+	if h != nil && h.clients != nil {
+		h.clients.SetKey(key)
 	}
-	return sub, nil
+}
+
+// UseTokenVerifier makes JWT access-token lookups on this handler verify the signature.
+func (h *Handler) UseTokenVerifier() {
+	if h != nil && h.tokens != nil {
+		h.tokens.SetAccessVerifier(h.AccessTokenJTI)
+	}
 }
 
 func signIDToken(method jwt.SigningMethod, kid string, key any, claims jwt.Claims) (string, error) {

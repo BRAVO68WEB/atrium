@@ -92,7 +92,15 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue, shared *redis.Cli
 	log.Info("password hasher", "id", hasher.ID(), "file", hashalgo.CanonicalRel)
 
 	conn := db
+	dataKey, err := config.DecodeDataKey(cfg.Security.DataKey)
+	if err != nil {
+		return nil, err
+	}
 	clientRepo := repository.NewClientRepository(conn)
+	clientRepo.SetKey(dataKey)
+	if err := repository.SealPlaintextSecrets(conn, dataKey); err != nil {
+		return nil, err
+	}
 	userRepo := repository.NewUserRepository(conn)
 	tokenRepo := repository.NewTokenRepository(conn)
 	authCodeRepo := repository.NewAuthCodeRepository(conn)
@@ -120,6 +128,9 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue, shared *redis.Cli
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OIDC handler: %w", err)
 	}
+	oidcHandler.SetDataKey(dataKey)
+	oidcHandler.UseTokenVerifier()
+	tokenRepo.SetAccessVerifier(oidcHandler.AccessTokenJTI)
 
 	store, redisClient, err := openCache(cfg, shared)
 	if err != nil {

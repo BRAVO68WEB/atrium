@@ -271,7 +271,7 @@ func (b *Backup) Restore(doc BackupDocument, dry, force bool) (RestoreResult, er
 			}
 		}
 		for _, client := range doc.Clients {
-			if err := upsertClient(q, client); err != nil {
+			if err := b.upsertClient(q, client); err != nil {
 				return err
 			}
 		}
@@ -740,7 +740,7 @@ func replaceOrgMembers(q database.SQL, org BackupOrg) error {
 	return nil
 }
 
-func upsertClient(q database.SQL, client models.Client) error {
+func (b *Backup) upsertClient(q database.SQL, client models.Client) error {
 	source := client.RegistrationSource
 	if source == "" {
 		source = "management"
@@ -756,6 +756,14 @@ func upsertClient(q database.SQL, client models.Client) error {
 	}
 	if updated.IsZero() {
 		updated = created
+	}
+	secret := client.Secret
+	if b != nil && b.clients != nil {
+		sealed, err := b.clients.Seal(client.Secret)
+		if err != nil {
+			return err
+		}
+		secret = sealed
 	}
 	_, err := q.Exec(`INSERT INTO clients (id, secret, name, redirect_uris, grant_types, scopes,
 		token_endpoint_auth_method, dpop_bound_access_tokens,
@@ -790,7 +798,7 @@ func upsertClient(q database.SQL, client models.Client) error {
 		userinfo_encrypted_response_alg = excluded.userinfo_encrypted_response_alg,
 		userinfo_encrypted_response_enc = excluded.userinfo_encrypted_response_enc,
 		org_id = excluded.org_id, skip_consent = excluded.skip_consent`,
-		client.ID, client.Secret, client.Name, jsonList(client.RedirectURIs), jsonList(client.GrantTypes), jsonList(client.Scopes),
+		client.ID, secret, client.Name, jsonList(client.RedirectURIs), jsonList(client.GrantTypes), jsonList(client.Scopes),
 		client.TokenEndpointAuthMethod, bit(client.DPoPBoundAccessTokens),
 		bit(client.RequirePushedAuthorizationRequests), client.BackchannelTokenDeliveryMode,
 		client.BackchannelClientNotificationEndpoint, client.BackchannelAuthenticationRequestSigningAlg,

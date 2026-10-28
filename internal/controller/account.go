@@ -343,10 +343,7 @@ func (c *AccountController) HandleRevokeRefresh(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusNotFound, "not_found", "Refresh token not found")
 		return
 	}
-	_ = c.tokens.RevokeRefreshToken(rt.Token)
-	if rt.AccessToken != "" {
-		_ = c.tokens.RevokeAccessToken(rt.AccessToken)
-	}
+	_ = c.tokens.RevokeRefreshByID(rt.ID)
 	if c.audit != nil {
 		c.audit.Write("user", user.ID, "token.revoke", "refresh_token", rt.ID, r, map[string]any{})
 	}

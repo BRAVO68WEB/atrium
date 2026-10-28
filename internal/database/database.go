@@ -546,6 +546,7 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE users ADD COLUMN migration_pending INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE clients ADD COLUMN skip_consent INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE sessions ADD COLUMN migration_password INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE access_tokens ADD COLUMN id TEXT`,
 	}
 	for _, alter := range alters {
 		if _, err := db.Exec(alter); err != nil && db.driver == "postgres" && !isDuplicateColumn(err) {
@@ -557,6 +558,12 @@ func (db *DB) Migrate() error {
 		_, _ = db.Exec(`UPDATE users SET email_verified = 1 WHERE email IS NOT NULL AND email != ''`)
 	}
 	if err := db.backfillRefreshIDs(); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_access_tokens_id ON access_tokens(id)`); err != nil {
+		return fmt.Errorf("access token ids: %w", err)
+	}
+	if err := db.hashStoredCredentials(); err != nil {
 		return err
 	}
 	return db.ensureUniqueEmails()

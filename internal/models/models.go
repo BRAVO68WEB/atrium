@@ -93,7 +93,8 @@ type OrgMembership struct {
 }
 
 type AccessToken struct {
-	Token          string    `json:"token"`
+	ID             string    `json:"id,omitempty"`
+	Token          string    `json:"-"`
 	ClientID       string    `json:"client_id"`
 	UserID         string    `json:"user_id,omitempty"`
 	Scopes         []string  `json:"scopes"`
