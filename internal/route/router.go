@@ -289,7 +289,7 @@ func mountManagement(mgmt chi.Router, r *Router) {
 
 	mgmt.Route("/tokens", func(r3 chi.Router) {
 		r3.Get("/", r.managementCtrl.HandleListTokens)
-		r3.Post("/{token}/revoke", r.managementCtrl.HandleRevokeToken)
+		r3.Post("/{id}/revoke", r.managementCtrl.HandleRevokeToken)
 	})
 
 	mgmt.Route("/ciba", func(r3 chi.Router) {

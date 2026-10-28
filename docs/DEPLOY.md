@@ -32,7 +32,12 @@ missing file passed to `--config` exits. An empty `--config` still loads
 
 Run the server from the project root. Startup reads
 `internal/hashalgo/algo.go` and refuses to serve when that file differs
-from the binary.
+from the binary. Startup also refuses to serve when `security.data_key`
+is missing. Generate 32 bytes, base64-encode them, and put the result
+in that field before you restart an existing server. Example configs
+include a sample key so they start. Replace it before a real client
+secret is stored. The first start encrypts client secrets and hashes
+token rows that still hold a bearer.
 
 `GET /health` returns `{"status":"ok"}`.
 

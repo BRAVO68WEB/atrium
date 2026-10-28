@@ -105,6 +105,7 @@ security:
   allow_plain_pkce: true
   oob_helper: false
   hash_algo: internal/hashalgo/algo.go
+  data_key: replace-me
   trusted_proxies: []
   disable_registration: false
   disable_social_registration: false
@@ -310,6 +311,14 @@ the string. `MD5`, `SHA256`, `SHA512`, `SHA3512`, `SHA2_128`, and
 `PBKDF2` are PBKDF2-HMAC constructions. `SHA2_128` uses a 16-byte
 SHA-256 key because SHA-2 has no 128-bit hash. New passwords should
 stay on bcrypt or argon2id.
+
+`security.data_key` is required. It is 32 bytes of standard base64.
+`atrium-cli init` writes one. Startup refuses to serve when it is
+missing or the wrong length. Client secrets are encrypted with this
+key. Opaque access tokens and refresh tokens are stored as SHA-256.
+A JWT access token is not stored; the row keeps its `jti`. The key
+stays in the config file, not in the database. Changing it does not
+decrypt old secrets. Set each client secret again if you replace it.
 
 ## Mail templates
 

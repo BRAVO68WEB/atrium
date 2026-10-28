@@ -253,12 +253,14 @@ GET    /api/users/{id}/activity
 GET    /api/users/{id}/login-analytics
 
 GET    /api/tokens
-POST   /api/tokens/{token}/revoke
+POST   /api/tokens/{id}/revoke
 GET    /api/refresh-tokens
 POST   /api/refresh-tokens/{id}/revoke
 ```
 
-Refresh-token lists use the public id and omit the secret.
+Access-token and refresh-token lists use a public id and omit the
+secret. `POST /oauth/revoke` still takes the bearer the client holds.
+`POST /api/tokens/{id}/revoke` takes the id from the list.
 
 `attributes` is a string map you set for the person.
 `user_metadata` is a string map the person can edit from `/api/me`.

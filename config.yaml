@@ -45,6 +45,7 @@ security:
   allow_plain_pkce: false
   issuer: "https://localhost:8443"
   hash_algo: "internal/hashalgo/algo.go"
+  data_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   access_token_format: "jwt"
   oob_helper: true
   session_lifetime: 8h

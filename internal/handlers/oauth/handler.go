@@ -478,7 +478,7 @@ func (h *Handler) HandleRevoke(w http.ResponseWriter, r *http.Request) {
 		if rt, err := h.tokenRepo.GetRefreshToken(token); err == nil && rt != nil {
 			_ = h.tokenRepo.RevokeRefreshToken(token)
 			if rt.AccessToken != "" {
-				_ = h.tokenRepo.RevokeAccessToken(rt.AccessToken)
+				_ = h.tokenRepo.RevokeStoredAccessToken(rt.AccessToken)
 			}
 		}
 	default:

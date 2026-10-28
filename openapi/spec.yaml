@@ -1870,7 +1870,7 @@ paths:
                 items:
                   $ref: "#/components/schemas/AccessToken"
               example:
-                - token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+                - id: "c1d2e3f4-a5b6-7890-abcd-ef1234567890"
                   client_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
                   user_id: "b5c6d7e8-f9a0-1234-5678-9abcdef01234"
                   scopes: ["openid", "profile"]
@@ -1878,20 +1878,20 @@ paths:
                   expires_at: "2026-06-16T11:00:00Z"
                   revoked: false
 
-  /api/tokens/{token}/revoke:
+  /api/tokens/{id}/revoke:
     post:
       tags: [Management]
       security: [{ bearerAuth: [] }]
       summary: Revoke a token (admin)
-      description: Immediately revokes an access token by its value.
+      description: Immediately revokes an access token by its public id.
       operationId: revokeTokenAdmin
       parameters:
-        - name: token
+        - name: id
           in: path
           required: true
           schema:
             type: string
-          description: The access token to revoke
+          description: Public id of the access token
       responses:
         "200":
           description: Token revoked
@@ -3330,7 +3330,7 @@ components:
       type: object
       description: Access token representation (for listing/introspection)
       example:
-        token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+        id: "c1d2e3f4-a5b6-7890-abcd-ef1234567890"
         client_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
         user_id: "b5c6d7e8-f9a0-1234-5678-9abcdef01234"
         scopes: ["openid", "profile"]
@@ -3339,10 +3339,10 @@ components:
         expires_at: "2026-06-16T11:00:00Z"
         revoked: false
       properties:
-        token:
+        id:
           type: string
-          description: The access token value
-          example: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+          description: Public id. The bearer is not stored or returned.
+          example: "c1d2e3f4-a5b6-7890-abcd-ef1234567890"
         client_id:
           type: string
           description: Client that requested the token

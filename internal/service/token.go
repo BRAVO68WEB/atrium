@@ -19,7 +19,7 @@ func NewTokenService(tokenRepo *repository.TokenRepository) *TokenService {
 
 func (s *TokenService) RevokeToken(token string) error {
 	defer telemetry.Step("service.TokenService.RevokeToken")()
-	return s.tokenRepo.RevokeAccessToken(token)
+	return s.tokenRepo.RevokeAccessByID(token)
 }
 
 func (s *TokenService) ListTokens(clientID, userID string) ([]*models.AccessToken, error) {

@@ -1,16 +1,34 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"testing"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
+
+// TestDataKey is a fixed 32-byte key used when tests omit security.data_key.
+const TestDataKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+
+// DecodeDataKey reads security.data_key. It is 32 bytes of standard base64.
+func DecodeDataKey(encoded string) ([]byte, error) {
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(encoded))
+	if err != nil || len(raw) != 32 {
+		return nil, fmt.Errorf("security.data_key must be 32 bytes, standard base64")
+	}
+	return raw, nil
+}
+
+func testingDataKey(cfg *Config) bool {
+	return cfg != nil && strings.TrimSpace(cfg.Security.DataKey) == "" && testing.Testing()
+}
 
 type Config struct {
 	Server       ServerConfig       `yaml:"server"`
@@ -133,6 +151,7 @@ type SecurityConfig struct {
 	RequirePKCE               bool                `yaml:"require_pkce"`
 	AllowPlainPKCE            bool                `yaml:"allow_plain_pkce"`
 	AccessTokenFormat         string              `yaml:"access_token_format"`
+	DataKey                   string              `yaml:"data_key"`
 	Issuer                    string              `yaml:"issuer"`
 	HashAlgo                  string              `yaml:"hash_algo"`
 	SessionLifetime           time.Duration       `yaml:"session_lifetime"`
@@ -824,6 +843,12 @@ func ValidatePlatform(cfg *Config) error {
 	case "", "opaque", "jwt":
 	default:
 		return fmt.Errorf("security.access_token_format must be opaque or jwt")
+	}
+	if testingDataKey(cfg) {
+		cfg.Security.DataKey = TestDataKey
+	}
+	if _, err := DecodeDataKey(cfg.Security.DataKey); err != nil {
+		return err
 	}
 	switch cfg.Security.LoginIdentifier {
 	case "", "username", "email":

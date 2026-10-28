@@ -36,12 +36,12 @@ func (h *Handler) revokeDPoP(w http.ResponseWriter, r *http.Request, client *mod
 	var boundJKT string
 	if at, err := h.tokenRepo.GetAccessToken(token); err == nil && (at.TokenType == "DPoP" || at.DPoPJKT != "") {
 		needs = true
-		proofToken = at.Token
+		proofToken = token
 		boundJKT = at.DPoPJKT
 	} else if rt, err := h.tokenRepo.GetRefreshToken(token); err == nil && rt.AccessToken != "" {
-		if at, err := h.tokenRepo.GetAccessToken(rt.AccessToken); err == nil && (at.TokenType == "DPoP" || at.DPoPJKT != "") {
+		if at, err := h.tokenRepo.GetAccessTokenByKey(rt.AccessToken); err == nil && (at.TokenType == "DPoP" || at.DPoPJKT != "") {
 			needs = true
-			proofToken = at.Token
+			proofToken = token
 			boundJKT = at.DPoPJKT
 		}
 	}
