@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Layout, Menu, Button, message } from 'antd'
 import {
   AppstoreOutlined, ApiOutlined, UserOutlined, BankOutlined, SafetyCertificateOutlined,
@@ -32,7 +32,7 @@ const titles: Record<string, string> = {
   '/scopes': 'Scopes',
   '/users': 'Users',
   '/organizations': 'Organizations',
-  '/roles': 'Access',
+  '/roles': 'Roles',
   '/sign-in': 'Sign-in',
   '/events': 'Events',
   '/settings': 'Settings',
@@ -93,17 +93,27 @@ export function Shell({ onLogout }: { onLogout: () => void }) {
   const { pathname } = useLocation()
   const key = '/' + (pathname.split('/')[1] || '')
   const selected = key === '/' ? '/' : key
+  const item = (key: string, icon: ReactNode, label: string) => ({ key, icon, label })
   const items = [
-    { key: '/', icon: <DashboardOutlined />, label: 'Overview' },
-    { key: '/applications', icon: <AppstoreOutlined />, label: 'Applications' },
-    { key: '/resources', icon: <ApiOutlined />, label: 'APIs' },
-    { key: '/users', icon: <UserOutlined />, label: 'Users' },
-    ...(meta.org_enabled ? [{ key: '/organizations', icon: <BankOutlined />, label: 'Organizations' }] : []),
-    { key: '/roles', icon: <SafetyCertificateOutlined />, label: 'Access' },
-    { key: '/sign-in', icon: <LoginOutlined />, label: 'Sign-in' },
-    { key: '/events', icon: <ProfileOutlined />, label: 'Events' },
-    { key: '/themes', icon: <SkinOutlined />, label: 'Themes' },
-    { key: '/settings', icon: <SettingOutlined />, label: 'Settings' },
+    { type: 'group' as const, label: 'Overview', children: [item('/', <DashboardOutlined />, 'Overview')] },
+    { type: 'group' as const, label: 'Authentication', children: [
+      item('/applications', <AppstoreOutlined />, 'Applications'),
+      item('/sign-in', <LoginOutlined />, 'Sign-in'),
+      item('/themes', <SkinOutlined />, 'Themes'),
+    ] },
+    { type: 'group' as const, label: 'Authorization', children: [
+      item('/resources', <ApiOutlined />, 'API resources'),
+      item('/scopes', <ApiOutlined />, 'Scopes'),
+      item('/roles', <SafetyCertificateOutlined />, 'Roles'),
+    ] },
+    { type: 'group' as const, label: 'People', children: [
+      item('/users', <UserOutlined />, 'Users'),
+      ...(meta.org_enabled ? [item('/organizations', <BankOutlined />, 'Organizations')] : []),
+    ] },
+    { type: 'group' as const, label: 'Operations', children: [
+      item('/events', <ProfileOutlined />, 'Events'),
+      item('/settings', <SettingOutlined />, 'Settings'),
+    ] },
   ]
   const title = titles[selected] || meta.product_name
   useEffect(() => {
@@ -138,14 +148,15 @@ export function Shell({ onLogout }: { onLogout: () => void }) {
   }
   return (
     <Layout style={{ minHeight: '100vh', background: 'var(--page)' }}>
-      <Sider className="dash-sider" collapsed collapsedWidth={64} trigger={null} theme="light">
+      <Sider className="dash-sider" width={232} trigger={null} theme="light">
         <div className="dash-mark" title={brand.product_name}>
-          <img src={logo} alt={brand.product_name} />
+          <img src={logo} alt="" />
+          <span>{brand.product_name}</span>
         </div>
         <Menu
           theme="light"
           mode="inline"
-          selectedKeys={[selected === '/scopes' ? '/resources' : selected]}
+          selectedKeys={[selected]}
           items={items}
           onClick={({ key }) => navigate(key)}
         />

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button, Descriptions, Drawer, Form, Input, Modal, Segmented, Select, Table, Tabs, Typography, message } from 'antd'
 import { api } from '../api'
 import { useMeta } from '../App'
-import { Flag, Stage, WindowSelect, confirmName, errText, showSecret } from '../widgets'
+import { Flag, PageHead, WindowSelect, confirmName, errText, showSecret } from '../widgets'
 
 type Audit = {
   id?: string
@@ -57,12 +57,8 @@ export function Events() {
 
   const options = ['Audit', 'Addresses', 'Days', 'Webhooks', 'CIBA']
   return (
-    <div>
-      <Stage kicker="Activity" title="What just happened" text="Audit records, sign-in addresses, webhooks, and pending sign-in requests." />
-      <div className="dash-toolbar">
-        <Segmented options={options} value={view} onChange={(value) => setView(String(value))} />
-        {(view === 'Audit' || view === 'Addresses' || view === 'Days') && <WindowSelect value={range} onChange={setRange} />}
-      </div>
+    <div className="console">
+      <PageHead title="Events" text="Audit records, sign-in addresses, webhooks, and pending sign-in requests." extra={<span style={{ display: 'flex', gap: 8 }}><Segmented options={options} value={view} onChange={(value) => setView(String(value))} />{(view === 'Audit' || view === 'Addresses' || view === 'Days') && <WindowSelect value={range} onChange={setRange} />}</span>} />
       {view === 'Audit' && (
         <div className="explorer">
           <aside className="filter-col">

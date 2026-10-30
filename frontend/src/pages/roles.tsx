@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Button, Form, Input, Modal, Select, Table, Typography, message } from 'antd'
+import { Button, Form, Input, Modal, Select, Typography, message } from 'antd'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
-import { Stage, confirmName, errText } from '../widgets'
+import { PageHead, confirmName, errText } from '../widgets'
 
 type Role = { id: string; name: string; description?: string; scopes?: { resource: string; scope: string }[] }
 type Resource = { uri: string; name: string; scopes?: string[] }
@@ -13,20 +13,21 @@ export function Roles() {
   const load = () => api<Role[]>('/dashboard/api/roles').then(setRows).catch((err) => message.error(errText(err)))
   useEffect(() => { load() }, [])
   return (
-    <div className="sheet">
-      <Stage
-        kicker="Access"
-        title={`${rows.length} roles`}
-        text="A role is a bundle of scopes. Assign one from a person's account."
-        extra={<Button type="primary" onClick={() => setOpen(true)}>Create</Button>}
-      />
-      <Table size="small" rowKey="id" dataSource={rows} pagination={{ pageSize: 20, showTotal: (n) => `${n} roles` }}
-        columns={[
-          { title: 'Name', dataIndex: 'name', width: 220, render: (name: string, row) => <Link to={`/roles/${row.id}`}>{name}</Link> },
-          { title: 'Description', dataIndex: 'description' },
-          { title: 'Scopes', width: 120, render: (_, row) => (row.scopes || []).length },
-        ]}
-      />
+    <div className="console">
+      <PageHead title="Roles" text="A role is a bundle of scopes. Assign one from a person's account." extra={<Button type="primary" onClick={() => setOpen(true)}>Create role</Button>} />
+      <div className="roster">
+        {rows.length === 0 ? <p className="hint" style={{ padding: 16 }}>No roles yet.</p> : rows.map((row) => (
+          <Link key={row.id} className="roster-row" to={`/roles/${row.id}`}>
+            <span className="face">{(row.name || '?').slice(0, 1).toUpperCase()}</span>
+            <span>
+              <strong>{row.name}</strong>
+              <span className="sub">{row.description || 'No description'}</span>
+            </span>
+            <span className="mono">{row.id}</span>
+            <span>{(row.scopes || []).length} scopes</span>
+          </Link>
+        ))}
+      </div>
       <Modal title="Create role" open={open} onCancel={() => setOpen(false)} footer={null} destroyOnClose>
         <Form layout="vertical" onFinish={async (values: { name: string; description?: string }) => {
           try {
@@ -62,6 +63,7 @@ export function RoleDetail() {
   })))
   return (
     <div className="page-pad org-page">
+      <Link className="back-link" to="/roles">Roles</Link>
       <div className="org-head">
         <div className="org-mark"><span>{(role.name || '?').slice(0, 1).toUpperCase()}</span></div>
         <div>

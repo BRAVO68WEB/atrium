@@ -3,7 +3,7 @@ import { Button, Form, Input, Modal, Select, Tag, Typography, message } from 'an
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { useMeta } from '../App'
-import { Stage, errText } from '../widgets'
+import { PageHead, errText } from '../widgets'
 
 function faceColor(name: string) {
   let n = 0
@@ -25,20 +25,17 @@ export function Organizations() {
   const load = () => api<Org[]>('/dashboard/api/orgs').then(setRows).catch((err) => message.error(errText(err)))
   useEffect(() => { load() }, [])
   return (
-    <div>
-      <div className="dash-toolbar">
-        <div className="spacer" />
-        <Button type="primary" onClick={() => setOpen(true)}>Create</Button>
-      </div>
-      <Stage kicker="Organizations" title={`${rows.length} organizations`} text="Members, email domains, and the applications that belong with them." />
-      <div className="directory">
-        {rows.length === 0 ? <p className="hint">No organizations yet.</p> : rows.map((row) => (
-          <Link key={row.id} className="person" to={`/organizations/${row.id}`}>
+    <div className="console">
+      <PageHead title="Organizations" text="Members, email domains, and the applications that belong with them." extra={<Button type="primary" onClick={() => setOpen(true)}>Create organization</Button>} />
+      <div className="roster">
+        {rows.length === 0 ? <p className="hint" style={{ padding: 16 }}>No organizations yet.</p> : rows.map((row) => (
+          <Link key={row.id} className="roster-row" to={`/organizations/${row.id}`}>
             {row.logo_url ? <img className="face" src={row.logo_url} alt="" /> : <span className="face" style={{ background: faceColor(row.name) }}>{row.name.slice(0, 1).toUpperCase()}</span>}
-            <span className="who">
+            <span>
               <strong>{row.name}</strong>
-              <span className="mono">{row.slug}</span>
+              <span className="sub">{row.slug}</span>
             </span>
+            <span className="mono">{row.id}</span>
             <span className="chips">{(row.domains || []).slice(0, 2).map((domain) => <Tag key={domain}>{domain}</Tag>)}</span>
           </Link>
         ))}
@@ -89,6 +86,7 @@ export function OrganizationDetail() {
   const domains = org.domains || []
   return (
     <div className="page-pad org-page">
+      <Link className="back-link" to="/organizations">Organizations</Link>
       <div className="org-head">
         <div className="org-mark">
           {org.logo_url ? <img src={org.logo_url} alt="" /> : <span>{(org.name || '?').slice(0, 1).toUpperCase()}</span>}

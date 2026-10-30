@@ -3,7 +3,7 @@ import { Button, Form, Input, Modal, Select, Table, Tabs, Tag, Typography, messa
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { useMeta } from '../App'
-import { Flag, Stage, confirmName, errText, joinLines, lines, showSecret } from '../widgets'
+import { Flag, PageHead, confirmName, errText, joinLines, lines, showSecret } from '../widgets'
 
 function faceColor(name: string) {
   let n = 0
@@ -174,23 +174,22 @@ export function Applications() {
   useEffect(() => { load() }, [])
   const shown = useMemo(() => rows.filter((row) => `${row.name} ${row.id}`.toLowerCase().includes(q.trim().toLowerCase())), [rows, q])
   return (
-    <div>
-      <div className="dash-toolbar">
-        <Input.Search allowClear placeholder="Search name or id" style={{ width: 280 }} onChange={(e) => setQ(e.target.value)} />
-        <div className="spacer" />
-        <Button type="primary" onClick={() => setOpen(true)}>Create</Button>
-      </div>
-      {error && <Typography.Paragraph type="danger" style={{ padding: 16 }}>{error}</Typography.Paragraph>}
-      <Stage kicker="Applications" title={`${shown.length} clients`} text="OAuth and OIDC applications registered with this issuer." />
-      <div className="directory">
-        {shown.length === 0 ? <p className="hint">No applications match.</p> : shown.map((row) => (
-          <Link key={row.id} className="person app-card" to={`/applications/${row.id}`}>
+    <div className="console">
+      <PageHead title="Applications" text="OAuth and OIDC applications registered with this issuer." extra={<Button type="primary" onClick={() => setOpen(true)}>Create application</Button>} />
+      {error && <Typography.Paragraph type="danger">{error}</Typography.Paragraph>}
+      <div className="roster">
+        <div className="roster-tools">
+          <Input.Search allowClear placeholder="Search name or id" onChange={(e) => setQ(e.target.value)} />
+        </div>
+        {shown.length === 0 ? <p className="hint" style={{ padding: 16 }}>No applications match.</p> : shown.map((row) => (
+          <Link key={row.id} className="roster-row" to={`/applications/${row.id}`}>
             <span className="face" style={{ background: faceColor(row.name) }}>{(row.name || '?').slice(0, 1).toUpperCase()}</span>
-            <span className="who">
+            <span>
               <strong>{row.name}</strong>
-              <span className="mono">{row.id === meta.management_client_id ? 'Management client' : row.token_endpoint_auth_method || 'client'}</span>
+              <span className="sub">{row.id === meta.management_client_id ? 'Management client' : row.token_endpoint_auth_method || 'client'}</span>
             </span>
-            <span className="chips">{(row.grant_types || []).slice(0, 2).map((grant) => <Tag key={grant} title={grant}>{grantInfo(grant).title}</Tag>)}</span>
+            <span className="mono">{row.id}</span>
+            <span className="chips">{(row.grant_types || []).slice(0, 1).map((grant) => <Tag key={grant}>{grantInfo(grant).title}</Tag>)}</span>
           </Link>
         ))}
       </div>
@@ -557,6 +556,7 @@ export function ApplicationDetail() {
   }
   return (
     <div className="page-pad org-page">
+      <Link className="back-link" to="/applications">Applications</Link>
       <div className="org-head">
         <div className="org-mark"><span>{(client.name || '?').slice(0, 1).toUpperCase()}</span></div>
         <div>

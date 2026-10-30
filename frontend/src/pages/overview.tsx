@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Typography } from 'antd'
-import { Link } from 'react-router-dom'
 import { api } from '../api'
-import { Stage, WindowSelect, errText } from '../widgets'
-import { useBrand, useMeta } from '../App'
+import { PageHead, WindowSelect, errText } from '../widgets'
+import { useMeta } from '../App'
 
 type Day = { date: string; successes: number; failures: number }
 type Address = { ip: string; attempts: number; successes: number; failures: number }
@@ -20,7 +19,6 @@ type Analytics = {
 
 export function Overview() {
   const meta = useMeta()
-  const brand = useBrand()
   const [window, setWindow] = useState('168h')
   const [stats, setStats] = useState<Analytics | null>(null)
   const [counts, setCounts] = useState({ users: 0, apps: 0, orgs: '—' })
@@ -47,15 +45,9 @@ export function Overview() {
   const rate = stats ? Math.round(stats.failure_rate * 1000) / 10 : 0
 
   return (
-    <div>
-      <div className="dash-toolbar">
-        <WindowSelect value={window} onChange={setWindow} />
-        <div className="spacer" />
-        <Link to="/events">Events</Link>
-        <Link to="/applications">Create an application</Link>
-      </div>
-      {error && <Typography.Paragraph type="danger" style={{ padding: '8px 16px' }}>{error}</Typography.Paragraph>}
-      <Stage kicker={brand.product_name} title="Sign-in health" text="Attempts, failures, and the addresses reaching this issuer." />
+    <div className="console">
+      <PageHead title="Overview" text="Attempts, failures, and the addresses reaching this issuer." extra={<WindowSelect value={window} onChange={setWindow} />} />
+      {error && <Typography.Paragraph type="danger">{error}</Typography.Paragraph>}
       <div className="bento">
         <article className="tile tile-chart">
           <header>

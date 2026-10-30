@@ -17,18 +17,74 @@ body { color: var(--ink); }
 .dash-content a { color: var(--brand-primary); }
 .dash-content a:hover { color: var(--ink); }
 .dash-content .member-row,
-.dash-content .member-row:hover { color: inherit; }
+.dash-content .member-row:hover,
+.dash-content .roster-row,
+.dash-content .roster-row:hover { color: inherit; }
+.roster-row .face { width: 36px; height: 36px; border-radius: 10px; font-size: 14px; }
 .dash-sider { border-right: 1px solid var(--line) !important; background: var(--card) !important; }
 .dash-sider .ant-layout-sider-children { display: flex; flex-direction: column; height: 100%; }
 .dash-mark {
-  height: 64px; display: grid; place-items: center;
+  display: flex; align-items: center; gap: 10px;
+  height: 64px; padding: 0 16px;
 }
 .dash-mark img {
   display: block;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   object-fit: cover;
+}
+.dash-mark span { font-weight: 650; font-size: 15px; color: var(--ink); }
+.dash-sider .ant-menu { flex: 1; overflow: auto; background: transparent; border-inline-end: 0 !important; }
+.dash-sider .ant-menu-item-group-title {
+  padding: 14px 16px 4px !important;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dash-sider .ant-menu-item {
+  width: calc(100% - 16px);
+  margin: 2px 8px !important;
+  border-radius: 8px;
+}
+.dash-sider .ant-menu-item-selected {
+  background: color-mix(in srgb, var(--brand-primary) 18%, var(--card)) !important;
+  color: var(--brand-primary) !important;
+}
+.console { padding: 20px 24px 40px; }
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin: 0 0 16px; }
+.page-head h2 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
+.page-head p { margin: 6px 0 0; max-width: 680px; color: var(--muted); }
+.page-head-extra { flex: 0 0 auto; }
+.roster {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  overflow: hidden;
+}
+.roster-tools { display: flex; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.roster-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1.1fr) minmax(160px, 0.8fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+.roster-row:first-child, .roster-tools + .roster-row { border-top: 0; }
+.roster-row:hover { background: color-mix(in srgb, var(--brand-primary) 8%, var(--card)); }
+.roster-row strong { display: block; }
+.roster-row .sub { display: block; color: var(--muted); font-size: 13px; }
+.roster-row .mono { color: var(--muted); font-size: 13px; }
+.back-link { display: inline-flex; margin: 0 0 10px; font-weight: 600; }
+.org-head {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
 }
 .lockup::after {
   content: "";
@@ -205,11 +261,31 @@ body { color: var(--ink); }
 .ant-table-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .page-pad form.ant-form:not(.ant-form-inline),
 .page-pad .ant-collapse-content-box {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  column-gap: 28px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
+.page-pad .config-section {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 12px 28px;
+  align-items: start;
+  margin: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.page-pad .config-section > h3 {
+  margin: 4px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.page-pad .config-section > :not(h3) { grid-column: 2; min-width: 0; }
+.page-pad .config-section .field-grid,
+.page-pad .config-section .field-grid.cols-3 { grid-template-columns: minmax(0, 1fr); }
 .page-pad form.ant-form:not(.ant-form-inline) > .ant-form-item:has(textarea),
 .page-pad form.ant-form:not(.ant-form-inline) > .ant-typography,
 .page-pad form.ant-form:not(.ant-form-inline) > .ant-btn,
@@ -622,7 +698,10 @@ html[data-theme="dark"] .ant-btn.ant-btn-primary:not(:disabled):hover {
   .page-pad .ant-collapse-content-box,
   .page-pad .ant-collapse-content-box > div,
   .field-grid, .field-grid.cols-3, .field-row, .config-section .field-grid, .locked-grid { grid-template-columns: minmax(0, 1fr); }
-  .endpoint-row, .jwks-split, .grant-row, .identity-row { grid-template-columns: minmax(0, 1fr); }
+  .endpoint-row, .jwks-split, .grant-row, .identity-row, .roster-row { grid-template-columns: minmax(0, 1fr); }
+  .page-pad .config-section { grid-template-columns: minmax(0, 1fr); }
+  .page-pad .config-section > h3,
+  .page-pad .config-section > :not(h3) { grid-column: 1; }
   .jwks-code, .jwks-preview { height: 240px; }
   .bento { grid-template-columns: 1fr; }
   .tile-chart, .tile-ring, .tile-ips { grid-column: auto; min-height: 280px; }

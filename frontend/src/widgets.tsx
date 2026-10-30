@@ -53,6 +53,18 @@ export function joinLines(value?: string[]) {
   return (value || []).join('\n')
 }
 
+export function PageHead({ title, text, extra }: { title: string; text?: string; extra?: ReactNode }) {
+  return (
+    <div className="page-head">
+      <div>
+        <h2>{title}</h2>
+        {text ? <p>{text}</p> : null}
+      </div>
+      {extra ? <div className="page-head-extra">{extra}</div> : null}
+    </div>
+  )
+}
+
 export function Stage({ kicker, title, text, extra }: { kicker: string; title: string; text: string; extra?: ReactNode }) {
   return (
     <section className="stage">

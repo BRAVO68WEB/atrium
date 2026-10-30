@@ -3,7 +3,7 @@ import { Button, Form, Input, Modal, Select, Table, Tabs, Tag, Typography, messa
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { useMeta } from '../App'
-import { Flag, Stage, WindowSelect, confirmName, errText } from '../widgets'
+import { Flag, PageHead, WindowSelect, confirmName, errText } from '../widgets'
 
 function faceColor(name: string) {
   let n = 0
@@ -63,21 +63,20 @@ export function Users() {
   useEffect(() => { load() }, [])
   const shown = useMemo(() => rows.filter((row) => `${row.username} ${row.email || ''} ${row.id}`.toLowerCase().includes(q.trim().toLowerCase())), [rows, q])
   return (
-    <div>
-      <div className="dash-toolbar">
-        <Input.Search allowClear placeholder="Search username, email, or id" style={{ width: 320 }} onChange={(e) => setQ(e.target.value)} />
-        <div className="spacer" />
-        <Button type="primary" onClick={() => setOpen(true)}>Create</Button>
-      </div>
-      <Stage kicker="People" title={`${shown.length} accounts`} text="People who can sign in. Open an account for sessions, access, and organizations." />
-      <div className="directory">
-        {shown.length === 0 ? <p className="hint">No accounts match.</p> : shown.map((row) => (
-          <Link key={row.id} className="person" to={`/users/${row.id}`}>
+    <div className="console">
+      <PageHead title="Users" text="People who can sign in. Open an account for sessions, access, and organizations." extra={<Button type="primary" onClick={() => setOpen(true)}>Add user</Button>} />
+      <div className="roster">
+        <div className="roster-tools">
+          <Input.Search allowClear placeholder="Search username, email, or id" onChange={(e) => setQ(e.target.value)} />
+        </div>
+        {shown.length === 0 ? <p className="hint" style={{ padding: 16 }}>No accounts match.</p> : shown.map((row) => (
+          <Link key={row.id} className="roster-row" to={`/users/${row.id}`}>
             <span className="face" style={{ background: faceColor(row.username) }}>{row.username.slice(0, 1).toUpperCase()}</span>
-            <span className="who">
+            <span>
               <strong>{row.username}</strong>
-              <span>{row.email || 'No email'}</span>
+              <span className="sub">{row.email || 'No email'}</span>
             </span>
+            <span className="mono">{row.id}</span>
             {row.disabled ? <Tag color="error">disabled</Tag> : row.migration_pending ? <Tag>migration</Tag> : <Tag color="success">active</Tag>}
           </Link>
         ))}
@@ -143,7 +142,14 @@ export function UserDetail() {
 
   return (
     <div className="page-pad">
-      <Typography.Title level={4} style={{ marginTop: 0 }}>{user.username}</Typography.Title>
+      <Link className="back-link" to="/users">Users</Link>
+      <div className="org-head">
+        <div className="org-mark"><span>{user.username.slice(0, 1).toUpperCase()}</span></div>
+        <div>
+          <h2>{user.username}</h2>
+          <span className="mono">{user.email || user.id}</span>
+        </div>
+      </div>
       <Typography.Paragraph type="secondary">
         Attempts {String(analytics?.attempts ?? 0)} · failure rate {analytics ? `${Math.round(Number(analytics.failure_rate) * 1000) / 10}%` : '—'} · new addresses {String(analytics?.new_ips ?? 0)} · MFA attempts {String(analytics?.mfa_attempts ?? 0)}
       </Typography.Paragraph>
