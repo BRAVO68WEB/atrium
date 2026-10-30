@@ -7,9 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/bravo68web/atrium/internal/config"
 	"github.com/bravo68web/atrium/internal/database"
@@ -19,20 +17,6 @@ import (
 	"github.com/bravo68web/atrium/pkg/passhash"
 	"github.com/go-chi/chi/v5"
 )
-
-type resetMail struct {
-	mu    sync.Mutex
-	texts []string
-}
-
-func (m *resetMail) Enabled() bool { return true }
-
-func (m *resetMail) Send(_, _, text string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.texts = append(m.texts, text)
-	return nil
-}
 
 func TestUsernameLookupAndResetEmail(t *testing.T) {
 	db, err := database.New(filepath.Join(t.TempDir(), "mgmt.db"))
@@ -46,7 +30,7 @@ func TestUsernameLookupAndResetEmail(t *testing.T) {
 	cfg := config.DefaultConfig()
 	userRepo := repository.NewUserRepository(db)
 	users := service.NewUserService(userRepo, service.NewTOTPService(userRepo, &cfg.Security.MFA), &cfg.Security, passhash.Bcrypt(0))
-	mail := &resetMail{}
+	mail := &captureMail{}
 	account := service.NewAccountService(users, userRepo, repository.NewEmailTokenRepository(db), repository.NewLoginEventRepository(db), nil, nil, mail, nil, cfg)
 	mgmt := NewManagementController(nil, users, nil, nil, nil, nil, nil, account, nil, nil)
 	ada, err := users.CreateUser("ada", "Correct-horse-1", "ada@example.com", "")
@@ -95,15 +79,10 @@ func TestUsernameLookupAndResetEmail(t *testing.T) {
 		body, _ := io.ReadAll(reset.Body)
 		t.Fatalf("reset %d %s", reset.StatusCode, body)
 	}
-	mail.mu.Lock()
-	sent := len(mail.texts)
-	body := ""
-	if sent > 0 {
-		body = mail.texts[0]
-	}
-	mail.mu.Unlock()
-	if sent != 1 || !strings.Contains(body, "/reset?token=") {
-		t.Fatalf("mail %d %q", sent, body)
+	mail.waitCount(t, 1)
+	body := mail.last()
+	if mail.count() != 1 || !strings.Contains(body, "/reset?token=") {
+		t.Fatalf("mail %d %q", mail.count(), body)
 	}
 
 	sam, err := users.GetUserByUsername("sam")
@@ -118,5 +97,4 @@ func TestUsernameLookupAndResetEmail(t *testing.T) {
 	if denied.StatusCode != http.StatusConflict {
 		t.Fatalf("empty hash reset %d", denied.StatusCode)
 	}
-	_ = time.Now()
 }
