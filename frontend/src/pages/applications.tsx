@@ -442,6 +442,8 @@ export function ApplicationDetail() {
   const [consents, setConsents] = useState<{ user_id: string; scopes: string[]; granted_at: string }[]>([])
   const [orgName, setOrgName] = useState('')
   const [copiedId, setCopiedId] = useState(false)
+  const [copiedField, setCopiedField] = useState('')
+  const [shownSecret, setShownSecret] = useState('')
   const [error, setError] = useState('')
 
   const load = () => {
@@ -456,7 +458,12 @@ export function ApplicationDetail() {
     api<{ name: string }[]>('/dashboard/api/scopes').then((rows) => setScopes(rows.map((row) => row.name))).catch(() => undefined)
     api<typeof consents>(`/dashboard/api/consents?client_id=${encodeURIComponent(id)}`).then(setConsents).catch(() => setConsents([]))
   }
-  useEffect(() => { load() }, [id, meta.org_enabled])
+  useEffect(() => { setShownSecret(''); load() }, [id, meta.org_enabled])
+  useEffect(() => {
+    if (!copiedField) return
+    const timer = window.setTimeout(() => setCopiedField(''), 1200)
+    return () => window.clearTimeout(timer)
+  }, [copiedField])
   useEffect(() => {
     if (!copiedId) return
     const timer = window.setTimeout(() => setCopiedId(false), 1200)
@@ -499,7 +506,7 @@ export function ApplicationDetail() {
     delete body.secret
     try {
       const next = await api<Client>(`/dashboard/api/clients/${id}`, { method: 'PUT', body: JSON.stringify(body) })
-      setClient(next)
+      setClient({ ...next, secret: next.secret || client.secret })
       message.success('Saved')
     } catch (err) {
       message.error(errText(err))
@@ -513,24 +520,37 @@ export function ApplicationDetail() {
     if ((client.jwks || '').trim() && !(await confirmName('create', 'Type create to replace the current key set'))) return
     try {
       const result = await api<{ private_pem: string; client: Client }>(`/dashboard/api/clients/${id}/keys`, { method: 'POST', body: '{}' })
-      setClient(result.client)
+      setClient((current) => result.client ? { ...result.client, secret: result.client.secret || current?.secret } : current)
       if (result.private_pem) showSecret('Signing key', result.private_pem)
       message.success('Signing key created')
     } catch (err) { message.error(errText(err)) }
+  }
+  const copyField = async (which: string, value: string) => {
+    if (!value) {
+      message.info('There is no secret to copy')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopiedField(which)
+    } catch {
+      message.error('Could not copy')
+    }
   }
   const resetSecret = async () => {
     if (!(await confirmName('reset', 'Type reset to replace the client secret'))) return
     try {
       const result = await api<{ secret: string }>(`/dashboard/api/clients/${id}/secret`, { method: 'POST', body: '{}' })
-      if (result.secret) showSecret('Client secret', result.secret)
-      message.success('Client secret reset')
+      setShownSecret(result.secret || '')
+      setClient((current) => current ? { ...current, secret: result.secret } : current)
+      message.success('Client secret reset. Copy it before you leave this page.')
     } catch (err) { message.error(errText(err)) }
   }
   const rotateKey = async () => {
     if (!(await confirmName('rotate', 'Type rotate to rotate this signing key'))) return
     try {
       const result = await api<{ private_pem: string; client: Client }>(`/dashboard/api/clients/${id}/keys/rotate`, { method: 'POST', body: '{}' })
-      setClient(result.client)
+      setClient((current) => result.client ? { ...result.client, secret: result.client.secret || current?.secret } : current)
       if (result.private_pem) showSecret('Signing key', result.private_pem)
       message.success('Signing key rotated')
     } catch (err) { message.error(errText(err)) }
@@ -578,9 +598,26 @@ export function ApplicationDetail() {
             <Form key={client.updated_at} layout="vertical" disabled={managed} initialValues={{ name: client.name, dcr_enabled: client.dcr_enabled, cimd_enabled: client.cimd_enabled }} onFinish={save}>
               <Section title="Identity">
                 <Sub title="Application">
-                  <Form.Item name="name" label="Name" rules={[{ required: true }]}><Input /></Form.Item>
-                  <Form.Item label="Client ID"><Input className="mono" value={client.id} disabled /></Form.Item>
-                  {!managed ? <Button htmlType="button" onClick={() => { void resetSecret() }}>Reset client secret</Button> : null}
+                  <Form.Item className="span-2" name="name" label="Name" rules={[{ required: true }]}><Input /></Form.Item>
+                  <div className="span-2 identity-row">
+                    <div>
+                      <span className="identity-label">ID</span>
+                      <button type="button" className="identity-copy" title="Click to copy" onClick={() => { void copyField('id', client.id) }}>
+                        <span className="mono">{client.id}</span>
+                        <span className="copy-state">{copiedField === 'id' ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                    <div>
+                      <span className="identity-label">Secret</span>
+                      <div className="identity-secret-line">
+                        <button type="button" className={shownSecret ? 'identity-copy' : 'identity-copy redacted'} title={shownSecret ? 'Click to copy' : 'Click to copy the saved secret'} onClick={() => { void copyField('secret', shownSecret || client.secret || '') }}>
+                          <span className="mono">{shownSecret || (client.secret ? '••••••••••••••••' : 'Not set')}</span>
+                          <span className="copy-state">{copiedField === 'secret' ? 'Copied' : 'Copy'}</span>
+                        </button>
+                        {!managed ? <Button htmlType="button" onClick={() => { void resetSecret() }}>Reset</Button> : null}
+                      </div>
+                    </div>
+                  </div>
                 </Sub>
               </Section>
               <Section title="Registration">

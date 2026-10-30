@@ -316,6 +316,36 @@ html[data-theme="dark"] .ant-switch-checked .ant-switch-inner { color: #14161c; 
   cursor: pointer;
 }
 .id-copy:hover { color: var(--brand-primary); }
+.identity-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  gap: 14px 18px;
+  align-items: end;
+}
+.identity-label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 600; }
+.identity-secret-line { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.identity-copy {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.identity-copy:hover { border-color: color-mix(in srgb, var(--brand-primary) 45%, var(--line)); }
+.identity-copy .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.identity-copy.redacted .mono { letter-spacing: 0.14em; color: var(--muted); }
+.identity-copy .copy-state { flex: 0 0 auto; color: var(--brand-primary); font-size: 12px; font-weight: 600; }
 .endpoint-row {
   display: grid;
   grid-template-columns: minmax(220px, 320px) minmax(0, 1fr) auto;
@@ -571,7 +601,7 @@ html[data-theme="dark"] .jwks-chips em.jwks-warn { color: #fecaca; }
 }
 .login-tools { display: flex; justify-content: flex-end; margin: -8px -8px 4px; }
 .lockup { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 0 0 8px; }
-.lockup img { max-width: 180px; max-height: 48px; object-fit: contain; }
+.lockup img { height: 56px; width: auto; max-width: 180px; border-radius: 14px; object-fit: contain; }
 .lockup .product { font-weight: 700; font-size: 0.95rem; }
 html[data-theme="dark"] .ant-btn.ant-btn-primary {
   background: var(--brand-primary);
@@ -592,7 +622,7 @@ html[data-theme="dark"] .ant-btn.ant-btn-primary:not(:disabled):hover {
   .page-pad .ant-collapse-content-box,
   .page-pad .ant-collapse-content-box > div,
   .field-grid, .field-grid.cols-3, .field-row, .config-section .field-grid, .locked-grid { grid-template-columns: minmax(0, 1fr); }
-  .endpoint-row, .jwks-split, .grant-row { grid-template-columns: minmax(0, 1fr); }
+  .endpoint-row, .jwks-split, .grant-row, .identity-row { grid-template-columns: minmax(0, 1fr); }
   .jwks-code, .jwks-preview { height: 240px; }
   .bento { grid-template-columns: 1fr; }
   .tile-chart, .tile-ring, .tile-ips { grid-column: auto; min-height: 280px; }

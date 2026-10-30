@@ -88,7 +88,15 @@ func secretPath(path string) bool {
 }
 
 func keepCreateSecret(path, method string) bool {
-	return method == http.MethodPost && (path == "/api/clients" || path == "/api/webhooks")
+	if method == http.MethodPost && (path == "/api/clients" || path == "/api/webhooks") {
+		return true
+	}
+	// The application page copies the saved secret and shows a new one after reset.
+	// The client list still has the secret removed.
+	if method == http.MethodGet && strings.HasPrefix(path, "/api/clients/") && !strings.Contains(strings.TrimPrefix(path, "/api/clients/"), "/") {
+		return true
+	}
+	return method == http.MethodPost && strings.HasPrefix(path, "/api/clients/") && strings.HasSuffix(path, "/secret")
 }
 
 func stripSecret(doc any) {

@@ -15,6 +15,7 @@ import { Events } from './pages/events'
 import { Settings } from './pages/settings'
 import { Themes } from './pages/themes'
 import { errText } from './widgets'
+import mark from './mark.png'
 
 const MetaContext = createContext<Meta | null>(null)
 const BrandContext = createContext<Brand>(fallbackBrand)
@@ -127,7 +128,7 @@ function Login({ onReady }: { onReady: (meta: Meta) => void }) {
       <div className="login-card">
         <div className="login-tools"><ThemeToggle /></div>
         <div className="lockup">
-          {brand.logo_url ? <img src={brand.logo_url} alt="" /> : null}
+          <img src={brand.logo_url || mark} alt={brand.product_name || 'Atrium'} />
           <span className="product">{brand.product_name}</span>
         </div>
         <h1>Dashboard</h1>
