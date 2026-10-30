@@ -346,6 +346,27 @@ paths:
           description: The management client is limited to a different organization
         "404":
           description: Organization not found
+    patch:
+      tags: [Management]
+      summary: Update an organization
+      description: |
+        Body may include `name`, `slug`, and `logo_url`. Omitted fields stay as they are.
+        An empty `logo_url` clears the logo. `slug` is lowercase letters, numbers, and hyphens.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: orgID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated organization
+        "400":
+          description: Invalid name, slug, or logo URL
+        "403":
+          description: The management client is limited to a different organization
+        "404":
+          description: Organization not found
 
   /api/orgs/{orgID}/domains:
     post:
@@ -367,6 +388,21 @@ paths:
           description: The client cannot change domains
 
   /api/orgs/{orgID}/members:
+    get:
+      tags: [Management]
+      summary: List organization members
+      description: Each row is a user in the organization, with username, email, name, and role.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: orgID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Members
+        "404":
+          description: Organization not found
     post:
       tags: [Management]
       summary: Add a user to an organization
@@ -1262,6 +1298,7 @@ paths:
         keys to verify JWT signatures (ID tokens, access tokens).
 
         The server generates RSA-2048 and EC P-256 keys on startup.
+        Application signing keys are included in the same keys array.
       operationId: jwks
       responses:
         "200":

@@ -117,6 +117,38 @@ func (c *ManagementController) HandleGetOrg(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, org)
 }
 
+func (c *ManagementController) HandleUpdateOrg(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleUpdateOrg")()
+	_, org, ok := c.loadManagedOrg(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Name    *string `json:"name"`
+		Slug    *string `json:"slug"`
+		LogoURL *string `json:"logo_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
+		return
+	}
+	updated, err := c.orgs.Update(org.ID, req.Name, req.Slug, req.LogoURL)
+	if err != nil {
+		if errors.Is(err, service.ErrOrgDisabled) {
+			writeError(w, http.StatusForbidden, "org_disabled", "organizations are disabled")
+			return
+		}
+		if errors.Is(err, service.ErrOrgInvalid) {
+			writeError(w, http.StatusNotFound, "not_found", "organization not found")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	c.writeAudit(r, "org.update", "org", updated.ID, map[string]any{"slug": updated.Slug})
+	writeJSON(w, http.StatusOK, updated)
+}
+
 func (c *ManagementController) HandleAddOrgDomain(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.ManagementController.HandleAddOrgDomain")()
 	client, org, ok := c.loadManagedOrg(w, r)
@@ -144,6 +176,31 @@ func (c *ManagementController) HandleAddOrgDomain(w http.ResponseWriter, r *http
 		return
 	}
 	writeJSON(w, http.StatusOK, updated)
+}
+
+func (c *ManagementController) HandleListOrgMembers(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListOrgMembers")()
+	_, org, ok := c.loadManagedOrg(w, r)
+	if !ok {
+		return
+	}
+	members, err := c.orgs.Members(org.ID)
+	if err != nil {
+		if errors.Is(err, service.ErrOrgDisabled) {
+			writeError(w, http.StatusForbidden, "org_disabled", "organizations are disabled")
+			return
+		}
+		if errors.Is(err, service.ErrOrgInvalid) {
+			writeError(w, http.StatusNotFound, "not_found", "organization not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "server_error", "failed to list members")
+		return
+	}
+	if members == nil {
+		members = []models.OrgMember{}
+	}
+	writeJSON(w, http.StatusOK, members)
 }
 
 func (c *ManagementController) HandleAddOrgMember(w http.ResponseWriter, r *http.Request) {

@@ -20,25 +20,27 @@ import (
 )
 
 type ManagementController struct {
-	clientSvc    *service.ClientService
-	userSvc      *service.UserService
-	tokenSvc     *service.TokenService
-	totpSvc      *service.TOTPService
-	scopeRepo    *repository.ScopeRepository
-	resourceRepo *repository.ResourceRepository
-	consentRepo  *repository.ConsentRepository
-	account      *service.AccountService
-	sessions     *service.SessionService
-	tokenRepo    *repository.TokenRepository
-	hooks        *service.WebhookDispatcher
-	audit        *service.AuditLog
-	keys         *oidc.KeySet
-	keyRetain    time.Duration
-	orgs         *service.OrgService
-	grants       *service.GrantService
-	push         *push.Handler
-	backup       *service.Backup
-	access       *service.AccessService
+	clientSvc          *service.ClientService
+	userSvc            *service.UserService
+	tokenSvc           *service.TokenService
+	totpSvc            *service.TOTPService
+	scopeRepo          *repository.ScopeRepository
+	resourceRepo       *repository.ResourceRepository
+	consentRepo        *repository.ConsentRepository
+	account            *service.AccountService
+	sessions           *service.SessionService
+	tokenRepo          *repository.TokenRepository
+	hooks              *service.WebhookDispatcher
+	audit              *service.AuditLog
+	keys               *oidc.KeySet
+	keyRetain          time.Duration
+	orgs               *service.OrgService
+	grants             *service.GrantService
+	push               *push.Handler
+	backup             *service.Backup
+	access             *service.AccessService
+	managementClientID string
+	clientKeys         *service.ClientKeyService
 }
 
 func (c *ManagementController) SetPush(h *push.Handler) {
@@ -68,6 +70,17 @@ func (c *ManagementController) SetKeys(keys *oidc.KeySet, retain time.Duration) 
 		c.keys = keys
 		c.keyRetain = retain
 	}
+}
+
+func (c *ManagementController) SetManagementClientID(id string) {
+	defer telemetry.Step("controller.ManagementController.SetManagementClientID")()
+	if c != nil {
+		c.managementClientID = strings.TrimSpace(id)
+	}
+}
+
+func (c *ManagementController) managementClient(id string) bool {
+	return c != nil && c.managementClientID != "" && id == c.managementClientID
 }
 
 func (c *ManagementController) SetWebhooks(d *service.WebhookDispatcher) {
@@ -198,6 +211,10 @@ func (c *ManagementController) HandleCreateClient(w http.ResponseWriter, r *http
 		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
 		return
 	}
+	if c.managementClient(req.ID) {
+		writeError(w, http.StatusForbidden, "forbidden", "The management client is not editable")
+		return
+	}
 
 	client, err := c.clientSvc.CreateClient(service.CreateClientInput{
 		ID:                                    req.ID,
@@ -242,12 +259,17 @@ func (c *ManagementController) HandleGetClient(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusNotFound, "not_found", "Client not found")
 		return
 	}
+	_ = c.annotateSigningKey(clientID, &client.SigningKid, &client.SigningAlg)
 	writeJSON(w, http.StatusOK, client)
 }
 
 func (c *ManagementController) HandleUpdateClient(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.ManagementController.HandleUpdateClient")()
 	clientID := chi.URLParam(r, "clientID")
+	if c.managementClient(clientID) {
+		writeError(w, http.StatusForbidden, "forbidden", "The management client is not editable")
+		return
+	}
 	existing, err := c.clientSvc.GetClient(clientID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "not_found", "Client not found")
@@ -328,7 +350,14 @@ func (c *ManagementController) HandleUpdateClient(w http.ResponseWriter, r *http
 		existing.SectorIdentifierURI = *req.SectorIdentifierURI
 	}
 	if req.JWKS != nil {
-		existing.JWKS = *req.JWKS
+		_, _, hosted, activeErr := c.clientKeys.Active(clientID)
+		if activeErr != nil {
+			writeError(w, http.StatusInternalServerError, "server_error", "Failed to read the signing key")
+			return
+		}
+		if c.clientKeys == nil || !hosted {
+			existing.JWKS = *req.JWKS
+		}
 	}
 	if req.IDTokenEncryptedResponseAlg != nil {
 		existing.IDTokenEncryptedResponseAlg = *req.IDTokenEncryptedResponseAlg
@@ -355,9 +384,19 @@ func (c *ManagementController) HandleUpdateClient(w http.ResponseWriter, r *http
 func (c *ManagementController) HandleDeleteClient(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.ManagementController.HandleDeleteClient")()
 	clientID := chi.URLParam(r, "clientID")
+	if c.managementClient(clientID) {
+		writeError(w, http.StatusForbidden, "forbidden", "The management client is not editable")
+		return
+	}
 	if err := c.clientSvc.DeleteClient(clientID); err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to delete client")
 		return
+	}
+	if c.clientKeys != nil {
+		if err := c.clientKeys.Delete(clientID); err != nil {
+			writeError(w, http.StatusInternalServerError, "server_error", "Failed to delete the signing key")
+			return
+		}
 	}
 	c.writeAudit(r, "client.delete", "client", clientID, map[string]any{})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
@@ -940,7 +979,7 @@ func (c *ManagementController) HandleUpdateResource(w http.ResponseWriter, r *ht
 
 	var req struct {
 		Name        string   `json:"name"`
-		Description string   `json:"description"`
+		Description *string  `json:"description"`
 		Scopes      []string `json:"scopes"`
 	}
 
@@ -952,8 +991,8 @@ func (c *ManagementController) HandleUpdateResource(w http.ResponseWriter, r *ht
 	if req.Name != "" {
 		existing.Name = req.Name
 	}
-	if req.Description != "" {
-		existing.Description = req.Description
+	if req.Description != nil {
+		existing.Description = *req.Description
 	}
 	if req.Scopes != nil {
 		existing.Scopes = req.Scopes
@@ -997,15 +1036,31 @@ func (c *ManagementController) HandleListResourceScopes(w http.ResponseWriter, r
 func (c *ManagementController) HandleListConsents(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.ManagementController.HandleListConsents")()
 	userID := r.URL.Query().Get("user_id")
-	if userID == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "user_id is required")
+	clientID := r.URL.Query().Get("client_id")
+	if userID == "" && clientID == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "user_id or client_id is required")
 		return
 	}
 
-	consents, err := c.consentRepo.ListByUser(userID)
+	var consents []*models.Consent
+	var err error
+	if userID != "" {
+		consents, err = c.consentRepo.ListByUser(userID)
+	} else {
+		consents, err = c.consentRepo.ListByClient(clientID)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to list consents")
 		return
+	}
+	if userID != "" && clientID != "" {
+		filtered := consents[:0]
+		for _, consent := range consents {
+			if consent.ClientID == clientID {
+				filtered = append(filtered, consent)
+			}
+		}
+		consents = filtered
 	}
 
 	writeJSON(w, http.StatusOK, consents)
@@ -1144,6 +1199,38 @@ func (c *ManagementController) HandleListAudit(w http.ResponseWriter, r *http.Re
 		rows = []repository.AuditRow{}
 	}
 	writeJSON(w, http.StatusOK, rows)
+}
+
+func (c *ManagementController) HandleListKeys(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListKeys")()
+	if c.keys == nil {
+		writeError(w, http.StatusInternalServerError, "server_error", "Signing keys are not configured")
+		return
+	}
+	type keyRow struct {
+		Kid       string `json:"kid"`
+		Alg       string `json:"alg"`
+		Kty       string `json:"kty"`
+		Status    string `json:"status"`
+		CreatedAt string `json:"created_at,omitempty"`
+		RetireAt  string `json:"retire_at,omitempty"`
+		ClientID  string `json:"client_id,omitempty"`
+	}
+	rows := make([]keyRow, 0)
+	for _, key := range c.keys.SigningKeys() {
+		rows = append(rows, keyRow{Kid: key.Kid, Alg: key.Alg, Kty: key.Kty, Status: key.Status, CreatedAt: key.CreatedAt, RetireAt: key.RetireAt})
+	}
+	if c.clientKeys != nil {
+		extra, err := c.clientKeys.Published()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "server_error", "Failed to read signing keys")
+			return
+		}
+		for _, key := range extra {
+			rows = append(rows, keyRow{Kid: key.Kid, Alg: key.Alg, Kty: key.Kty, Status: key.Status, CreatedAt: key.CreatedAt, RetireAt: key.RetireAt, ClientID: key.ClientID})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"keys": rows})
 }
 
 func (c *ManagementController) HandleRotateKeys(w http.ResponseWriter, r *http.Request) {

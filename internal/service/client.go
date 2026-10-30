@@ -168,6 +168,18 @@ func (s *ClientService) ValidateClient(clientID, clientSecret string) (*models.C
 	return client, nil
 }
 
+func (s *ClientService) ResetSecret(id string) (string, error) {
+	defer telemetry.Step("service.ClientService.ResetSecret")()
+	if _, err := s.clientRepo.GetByID(id); err != nil {
+		return "", err
+	}
+	secret := generateSecret()
+	if err := s.clientRepo.ResetSecret(id, secret); err != nil {
+		return "", err
+	}
+	return secret, nil
+}
+
 func (s *ClientService) ValidateGrantType(client *models.Client, grantType string) error {
 	defer telemetry.Step("service.ClientService.ValidateGrantType")()
 	for _, gt := range client.GrantTypes {

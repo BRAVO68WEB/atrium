@@ -491,6 +491,19 @@ stderr. `json` prints one JSON object per record.
 `telemetry.otlp_endpoint`. An empty endpoint with tracing enabled is a
 startup error. See [Deploy](DEPLOY.md).
 
+## Operator console
+
+`dashboard.enabled` defaults to false. Set it to true to serve `/dashboard`.
+Sign in with the management client id and secret. The session cookie lasts
+`dashboard.session_lifetime`, which defaults to 8h.
+
+The console can edit this file. A saved change is on disk immediately and
+takes effect after the process starts again. In Docker, the console can
+stop the process when `ATRIUM_IN_DOCKER=1`. `restart: unless-stopped` brings
+the container back. The config file must be mounted read-write, and uid
+65534 must be able to write it. Leave a secret field blank to keep the
+value already in the file.
+
 ## Related
 
 [Branding](BRANDING.md) is the HTML and asset overlay.

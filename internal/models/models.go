@@ -23,6 +23,8 @@ type Client struct {
 	PostLogoutRedirectURIs                     []string  `json:"post_logout_redirect_uris,omitempty"`
 	JWKS                                       string    `json:"jwks,omitempty"`
 	JWKSUri                                    string    `json:"jwks_uri,omitempty"`
+	SigningKid                                 string    `json:"signing_kid,omitempty"`
+	SigningAlg                                 string    `json:"signing_alg,omitempty"`
 	RequestObjectSigningAlg                    string    `json:"request_object_signing_alg,omitempty"`
 	RegistrationSource                         string    `json:"registration_source,omitempty"`
 	DCREnabled                                 bool      `json:"dcr_enabled"`
@@ -90,6 +92,16 @@ type OrgMembership struct {
 	UserID    string    `json:"user_id"`
 	Role      string    `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// OrgMember is a person shown on an organization.
+type OrgMember struct {
+	UserID     string `json:"user_id"`
+	Username   string `json:"username"`
+	Email      string `json:"email,omitempty"`
+	GivenName  string `json:"given_name,omitempty"`
+	FamilyName string `json:"family_name,omitempty"`
+	Role       string `json:"role"`
 }
 
 type AccessToken struct {
@@ -266,10 +278,12 @@ type RoleScope struct {
 
 // UserRole is a role assigned to a user. An empty OrgID is global.
 type UserRole struct {
-	UserID string `json:"user_id,omitempty"`
-	RoleID string `json:"role_id"`
-	Name   string `json:"name,omitempty"`
-	OrgID  string `json:"org_id,omitempty"`
+	UserID  string `json:"user_id,omitempty"`
+	RoleID  string `json:"role_id"`
+	Name    string `json:"name,omitempty"`
+	OrgID   string `json:"org_id,omitempty"`
+	OrgName string `json:"org_name,omitempty"`
+	OrgSlug string `json:"org_slug,omitempty"`
 }
 
 // UserScope is a resource scope assigned to a user without a role.
@@ -278,6 +292,8 @@ type UserScope struct {
 	Resource string `json:"resource"`
 	Scope    string `json:"scope"`
 	OrgID    string `json:"org_id,omitempty"`
+	OrgName  string `json:"org_name,omitempty"`
+	OrgSlug  string `json:"org_slug,omitempty"`
 }
 
 // UserAccess is the stored role and direct-scope grants for one user.

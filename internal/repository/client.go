@@ -226,6 +226,26 @@ func (r *ClientRepository) CountPairwise() (int, error) {
 	return n, err
 }
 
+func (r *ClientRepository) ResetSecret(id, plain string) error {
+	defer telemetry.Step("repository.ClientRepository.ResetSecret")()
+	sealed, err := r.Seal(plain)
+	if err != nil {
+		return err
+	}
+	result, err := r.db.Exec(`UPDATE clients SET secret = ?, updated_at = ? WHERE id = ?`, sealed, time.Now().UTC(), id)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *ClientRepository) Delete(id string) error {
 	defer telemetry.Step("repository.ClientRepository.Delete")()
 	_, err := r.db.Exec("DELETE FROM clients WHERE id = ?", id)

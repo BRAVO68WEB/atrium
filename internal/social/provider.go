@@ -99,6 +99,35 @@ func Resolve(p config.SocialProvider) (Resolved, error) {
 		if r.UsernameField == "" {
 			r.UsernameField = "login"
 		}
+	case "gitlab":
+		if r.Issuer == "" {
+			r.Issuer = "https://gitlab.com"
+		}
+		if r.Authorization == "" {
+			r.Authorization = "https://gitlab.com/oauth/authorize"
+		}
+		if r.Token == "" {
+			r.Token = "https://gitlab.com/oauth/token"
+		}
+		if r.Userinfo == "" {
+			r.Userinfo = "https://gitlab.com/oauth/userinfo"
+		}
+		r.UseIDToken = true
+		if len(r.Scopes) == 0 {
+			r.Scopes = []string{"openid", "profile", "email"}
+		}
+		if r.SubjectField == "" {
+			r.SubjectField = "sub"
+		}
+		if r.EmailField == "" {
+			r.EmailField = "email"
+		}
+		if r.UsernameField == "" {
+			r.UsernameField = "preferred_username"
+		}
+		if r.EmailVerifiedField == "" {
+			r.EmailVerifiedField = "email_verified"
+		}
 	case "facebook":
 		if r.Authorization == "" {
 			r.Authorization = "https://www.facebook.com/v19.0/dialog/oauth"
@@ -170,6 +199,8 @@ func defaultName(kind, id string) string {
 		return "Google"
 	case "github":
 		return "GitHub"
+	case "gitlab":
+		return "GitLab"
 	case "facebook":
 		return "Facebook"
 	default:
