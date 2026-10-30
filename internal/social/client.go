@@ -65,20 +65,15 @@ func DiscoverIssuer(ctx context.Context, issuer string) (DiscoveryDocument, erro
 		return DiscoveryDocument{}, fmt.Errorf("issuer must be an absolute URL")
 	}
 	host := u.Hostname()
-	if u.Scheme != "https" && !(u.Scheme == "http" && (host == "localhost" || host == "127.0.0.1")) {
+	localHTTP := u.Scheme == "http" && (host == "localhost" || host == "127.0.0.1")
+	if u.Scheme != "https" && !localHTTP {
 		return DiscoveryDocument{}, fmt.Errorf("issuer must use https")
 	}
 	doc, err := NewClient(nil).discovery(ctx, issuer)
 	if err != nil {
 		return DiscoveryDocument{}, err
 	}
-	return DiscoveryDocument{
-		Issuer:                doc.Issuer,
-		AuthorizationEndpoint: doc.AuthorizationEndpoint,
-		TokenEndpoint:         doc.TokenEndpoint,
-		UserinfoEndpoint:      doc.UserinfoEndpoint,
-		JWKSURI:               doc.JWKSURI,
-	}, nil
+	return DiscoveryDocument(doc), nil
 }
 
 // NewClient returns a client that times out at 10 seconds and does not follow redirects.

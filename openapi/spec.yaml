@@ -2941,6 +2941,84 @@ paths:
         "403":
           description: A user token cannot read the audit log
 
+  /api/keys:
+    get:
+      tags: [Management]
+      summary: List signing keys
+      description: |
+        Public tenant RSA and EC keys, plus application public keys from the same set as `GET /oidc/jwks`.
+        Private key material is not returned. Application keys include `client_id`.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Signing keys
+
+  /api/clients/{clientID}/keys:
+    post:
+      tags: [Management]
+      summary: Create an application signing key
+      description: |
+        Creates the first RSA signing key for an application and returns the private PEM once.
+        The public key is added to `GET /oidc/jwks`. The management client cannot have one.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: clientID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: New signing key
+        "403":
+          description: The management client is not editable
+        "409":
+          description: The application already has a signing key
+
+  /api/clients/{clientID}/keys/rotate:
+    post:
+      tags: [Management]
+      summary: Rotate an application signing key
+      description: |
+        Retires the active application signing key for `oidc.key_retain` and creates the next one.
+        The private PEM is returned once. The previous public key stays in `GET /oidc/jwks` until it expires.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: clientID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rotated signing key
+        "403":
+          description: The management client is not editable
+        "404":
+          description: The application has no signing key
+
+  /api/clients/{clientID}/secret:
+    post:
+      tags: [Management]
+      summary: Reset a client secret
+      description: |
+        Replaces the client secret and returns the new secret once. The previous secret stops working immediately.
+        The management client cannot be reset here.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: clientID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: New client secret
+        "403":
+          description: The management client is not editable
+        "404":
+          description: Client not found
+
   /api/keys/rotate:
     post:
       tags: [Management]
