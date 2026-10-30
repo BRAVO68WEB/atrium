@@ -6,6 +6,7 @@ database:
   dsn: postgres://oauth:oauth@postgres:5432/oauth?sslmode=disable
 security:
   issuer: http://localhost:8080
+  data_key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 smtp:
   enabled: true
   host: mailpit

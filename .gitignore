@@ -15,6 +15,9 @@ dist/
 coverage.html
 coverage.txt
 junit.xml
+junit-unit.xml
+junit-integration.xml
+junit-e2e.xml
 
 # Database files
 *.db
@@ -67,6 +70,9 @@ testdata/
 # Node end-to-end suite
 e2e/node_modules/
 e2e/.cache/
+
+# Operator console
+frontend/node_modules/
 
 # Temporary files
 *.tmp

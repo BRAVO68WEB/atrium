@@ -6,15 +6,23 @@ ldflags := '-s -w -X github.com/bravo68web/atrium/internal/version.Version=dev -
 default:
     @just --list
 
-# Build all binaries. Rebuild after editing internal/hashalgo/algo.go.
-build:
-    go build -trimpath -ldflags="{{ldflags}}" -o bin/atrium ./cmd/atrium
+# Build the operator console into internal/dashboard/dist.
+build-ui:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd frontend
+    corepack pnpm install --frozen-lockfile
+    corepack pnpm build
+
+# Build all binaries. The server embeds the console. Rebuild after editing internal/hashalgo/algo.go.
+build: build-ui
+    go build -tags embed -trimpath -ldflags="{{ldflags}}" -o bin/atrium ./cmd/atrium
     go build -trimpath -ldflags="{{ldflags}}" -o bin/atrium-cli ./cmd/atrium-cli
     go build -trimpath -ldflags="{{ldflags}}" -o bin/atrium-mobile ./cmd/atrium-mobile
 
 # Build server only
-build-server:
-    go build -trimpath -ldflags="{{ldflags}}" -o bin/atrium ./cmd/atrium
+build-server: build-ui
+    go build -tags embed -trimpath -ldflags="{{ldflags}}" -o bin/atrium ./cmd/atrium
 
 # Build CLI only
 build-cli:
@@ -25,11 +33,11 @@ build-mobile:
     go build -trimpath -ldflags="{{ldflags}}" -o bin/atrium-mobile ./cmd/atrium-mobile
 
 # Run the server from the project root. Loads config.yaml and recompiles algo.go.
-run:
-    go run -trimpath -ldflags="{{ldflags}}" cmd/atrium/main.go
+run: build-ui
+    go run -tags embed -trimpath -ldflags="{{ldflags}}" cmd/atrium/main.go
 
-# Run the server with hot reload (requires air)
-dev:
+# Run the server with hot reload (requires air). The console assets are built once first.
+dev: build-ui
     air
 
 # Run tests

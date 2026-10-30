@@ -15,6 +15,7 @@ import (
 
 	"github.com/bravo68web/atrium/internal/aauth"
 	"github.com/bravo68web/atrium/internal/auth"
+	"github.com/bravo68web/atrium/internal/branding"
 	"github.com/bravo68web/atrium/internal/controller"
 	"github.com/bravo68web/atrium/internal/handlers/oauth"
 	"github.com/bravo68web/atrium/internal/oidc"
@@ -116,6 +117,8 @@ func (r *Router) securityHeaders(next http.Handler) http.Handler {
 }
 
 func (r *Router) setupRoutes() {
+	r.mux.Get("/favicon.ico", branding.ServeDefaultFavicon)
+	r.mux.Get("/favicon.png", branding.ServeDefaultFavicon)
 	r.mux.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{
 			"status": "ok",
@@ -201,6 +204,19 @@ func (r *Router) setupRoutes() {
 		r2.Get("/", r.webCtrl.HandleLoginPage)
 		r2.Post("/", r.webCtrl.HandleLogin)
 	})
+	r.mux.Get("/login/link", r.webCtrl.HandleLoginLink)
+	r.mux.Route("/login/otp", func(r2 chi.Router) {
+		r2.Get("/", r.webCtrl.HandleLoginOTPPage)
+		r2.Post("/", r.webCtrl.HandleLoginOTP)
+		r2.Post("/resend", r.webCtrl.HandleLoginOTPResend)
+	})
+	r.mux.Route("/login/migrate", func(r2 chi.Router) {
+		r2.Get("/", r.webCtrl.HandleMigrateOTPPage)
+		r2.Post("/", r.webCtrl.HandleMigrateOTP)
+		r2.Post("/resend", r.webCtrl.HandleMigrateResend)
+		r2.Get("/password", r.webCtrl.HandleMigratePasswordPage)
+		r2.Post("/password", r.webCtrl.HandleMigratePassword)
+	})
 
 	r.mux.Route("/login/mfa", func(r2 chi.Router) {
 		r2.Post("/", r.webCtrl.HandleMFA)
@@ -259,6 +275,9 @@ func mountManagement(mgmt chi.Router, r *Router) {
 		r3.Get("/{clientID}", r.managementCtrl.HandleGetClient)
 		r3.Put("/{clientID}", r.managementCtrl.HandleUpdateClient)
 		r3.Delete("/{clientID}", r.managementCtrl.HandleDeleteClient)
+		r3.Post("/{clientID}/secret", r.managementCtrl.HandleResetClientSecret)
+		r3.Post("/{clientID}/keys", r.managementCtrl.HandleCreateClientKey)
+		r3.Post("/{clientID}/keys/rotate", r.managementCtrl.HandleRotateClientKey)
 	})
 
 	mgmt.Route("/users", func(r3 chi.Router) {
@@ -271,11 +290,12 @@ func mountManagement(mgmt chi.Router, r *Router) {
 		r3.Get("/{userID}/mfa/status", r.managementCtrl.HandleMFAStatus)
 		r3.Post("/{userID}/mfa/disable", r.managementCtrl.HandleMFADisable)
 		r3.Get("/{userID}", r.managementCtrl.HandleGetUser)
+		r3.Delete("/{userID}", r.managementCtrl.HandleDeleteUser)
 	})
 
 	mgmt.Route("/tokens", func(r3 chi.Router) {
 		r3.Get("/", r.managementCtrl.HandleListTokens)
-		r3.Post("/{token}/revoke", r.managementCtrl.HandleRevokeToken)
+		r3.Post("/{id}/revoke", r.managementCtrl.HandleRevokeToken)
 	})
 
 	mgmt.Route("/ciba", func(r3 chi.Router) {

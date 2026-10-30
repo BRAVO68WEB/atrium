@@ -1,16 +1,35 @@
 package config
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"testing"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
+
+// TestDataKey is a fixed 32-byte key used when tests omit security.data_key.
+const TestDataKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+
+// DecodeDataKey reads security.data_key. It is 32 bytes of standard base64.
+func DecodeDataKey(encoded string) ([]byte, error) {
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(encoded))
+	if err != nil || len(raw) != 32 {
+		return nil, fmt.Errorf("security.data_key must be 32 bytes, standard base64")
+	}
+	return raw, nil
+}
+
+func testingDataKey(cfg *Config) bool {
+	return cfg != nil && strings.TrimSpace(cfg.Security.DataKey) == "" && testing.Testing()
+}
 
 type Config struct {
 	Server       ServerConfig       `yaml:"server"`
@@ -34,6 +53,16 @@ type Config struct {
 	AAuth        AAuthConfig        `yaml:"aauth"`
 	XAA          XAAConfig          `yaml:"xaa"`
 	Debug        DebugConfig        `yaml:"debug"`
+	Dashboard    DashboardConfig    `yaml:"dashboard"`
+	// File is the path Load read. The dashboard writes this file. It is not a YAML key.
+	File string `yaml:"-"`
+}
+
+// DashboardConfig is the operator console. Enabled stays false unless set,
+// so a default server does not mount /dashboard.
+type DashboardConfig struct {
+	Enabled         bool          `yaml:"enabled"`
+	SessionLifetime time.Duration `yaml:"session_lifetime"`
 }
 
 // DebugConfig turns on developer-only routes. UI is the auth-page preview.
@@ -133,12 +162,16 @@ type SecurityConfig struct {
 	RequirePKCE               bool                `yaml:"require_pkce"`
 	AllowPlainPKCE            bool                `yaml:"allow_plain_pkce"`
 	AccessTokenFormat         string              `yaml:"access_token_format"`
+	DataKey                   string              `yaml:"data_key"`
 	Issuer                    string              `yaml:"issuer"`
 	HashAlgo                  string              `yaml:"hash_algo"`
 	SessionLifetime           time.Duration       `yaml:"session_lifetime"`
 	ResetTokenLifetime        time.Duration       `yaml:"reset_token_lifetime"`
 	TrustedProxies            []string            `yaml:"trusted_proxies"`
 	LoginIdentifier           string              `yaml:"login_identifier"`
+	IdentifierFirst           bool                `yaml:"identifier_first"`
+	DisablePasswords          bool                `yaml:"disable_passwords"`
+	PasswordlessMode          string              `yaml:"passwordless_mode"`
 	DisableRegistration       bool                `yaml:"disable_registration"`
 	DisableSocialRegistration bool                `yaml:"disable_social_registration"`
 	AllowInsecureFetch        bool                `yaml:"allow_insecure_fetch"`
@@ -198,7 +231,7 @@ type BrandingConfig struct {
 	Templates          string `yaml:"templates"`
 }
 
-// SocialProvider is one upstream OAuth app. Type is google, github, facebook, oidc, or oauth2.
+// SocialProvider is one upstream OAuth app. Type is google, github, gitlab, facebook, oidc, or oauth2.
 type SocialProvider struct {
 	ID                    string   `yaml:"id"`
 	Type                  string   `yaml:"type"`
@@ -436,36 +469,76 @@ func DefaultConfig() *Config {
 			IDPs:    []XAAIdentityProvider{},
 		},
 		Debug: DebugConfig{UI: false},
+		Dashboard: DashboardConfig{
+			Enabled:         false,
+			SessionLifetime: 8 * time.Hour,
+		},
 	}
 }
 
 func Load(path string) (*Config, error) {
-	cfg := DefaultConfig()
 	if path == "" {
+		cfg := DefaultConfig()
 		cfg.Normalize()
 		return cfg, nil
 	}
-
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read config %s: %w", path, err)
 	}
-
-	if err := yaml.Unmarshal(data, cfg); err != nil {
+	cfg, err := Parse(data)
+	if err != nil {
 		return nil, fmt.Errorf("parse config %s: %w", path, err)
 	}
+	cfg.File = path
+	return cfg, nil
+}
+
+// Parse decodes YAML into a config that already has the built-in defaults.
+// An empty buffer is the defaults. Validators that run at startup for branding,
+// social login, and platform settings run here too.
+func Parse(data []byte) (*Config, error) {
+	cfg := DefaultConfig()
+	if len(bytes.TrimSpace(data)) == 0 {
+		cfg.Normalize()
+		return cfg, nil
+	}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
+	}
 	cfg.Normalize()
-	if err := ValidateBranding(cfg); err != nil {
+	if err := ValidateReady(cfg); err != nil {
 		return nil, err
+	}
+	return cfg, nil
+}
+
+// ValidateReady is the check a config file must pass before the process will serve.
+func ValidateReady(cfg *Config) error {
+	if err := ValidateBranding(cfg); err != nil {
+		return err
 	}
 	if err := ValidateSocial(cfg); err != nil {
-		return nil, err
+		return err
 	}
 	if err := ValidatePlatform(cfg); err != nil {
-		return nil, err
+		return err
 	}
-
-	return cfg, nil
+	if err := ValidatePush(cfg); err != nil {
+		return err
+	}
+	if err := ValidateAAuth(cfg); err != nil {
+		return err
+	}
+	if err := ValidateXAA(cfg); err != nil {
+		return err
+	}
+	if strings.TrimSpace(cfg.Security.DataKey) != "" {
+		if _, err := DecodeDataKey(cfg.Security.DataKey); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func defaultBranding() BrandingConfig {
@@ -520,6 +593,10 @@ func (c *Config) Normalize() {
 	if c.Security.LoginIdentifier == "" {
 		c.Security.LoginIdentifier = "username"
 	}
+	c.Security.PasswordlessMode = strings.ToLower(strings.TrimSpace(c.Security.PasswordlessMode))
+	if c.Security.DisablePasswords && c.Security.PasswordlessMode == "" {
+		c.Security.PasswordlessMode = "otp"
+	}
 	c.Notify.Type = strings.ToLower(strings.TrimSpace(c.Notify.Type))
 	if c.Notify.Type == "" {
 		c.Notify.Type = "memory"
@@ -548,6 +625,9 @@ func (c *Config) Normalize() {
 	}
 	if c.Push.GracePeriodSeconds <= 0 {
 		c.Push.GracePeriodSeconds = 300
+	}
+	if c.Dashboard.SessionLifetime <= 0 {
+		c.Dashboard.SessionLifetime = 8 * time.Hour
 	}
 
 	fallback := strings.TrimRight(strings.TrimSpace(c.Security.Issuer), "/")
@@ -749,7 +829,7 @@ func checkBrandAssetRef(dir, name, field string) error {
 var socialIDPattern = regexp.MustCompile(`^[a-z0-9_-]+$`)
 
 var socialTypes = map[string]bool{
-	"google": true, "github": true, "facebook": true, "oidc": true, "oauth2": true,
+	"google": true, "github": true, "gitlab": true, "facebook": true, "oidc": true, "oauth2": true,
 }
 
 // ValidateSocial checks provider ids, types, and the endpoints an enabled app needs.
@@ -818,10 +898,26 @@ func ValidatePlatform(cfg *Config) error {
 	default:
 		return fmt.Errorf("security.access_token_format must be opaque or jwt")
 	}
+	if testingDataKey(cfg) {
+		cfg.Security.DataKey = TestDataKey
+	}
+	if _, err := DecodeDataKey(cfg.Security.DataKey); err != nil {
+		return err
+	}
 	switch cfg.Security.LoginIdentifier {
 	case "", "username", "email":
 	default:
 		return fmt.Errorf("security.login_identifier must be username or email")
+	}
+	switch cfg.Security.PasswordlessMode {
+	case "", "otp", "link":
+	default:
+		return fmt.Errorf("security.passwordless_mode must be otp or link")
+	}
+	if cfg.Security.DisablePasswords {
+		if !cfg.SMTP.Enabled || strings.TrimSpace(cfg.SMTP.Host) == "" || strings.TrimSpace(cfg.SMTP.From) == "" {
+			return fmt.Errorf("smtp.enabled, smtp.host, and smtp.from are required when security.disable_passwords is true")
+		}
 	}
 	bot := cfg.Security.BotProtection.Provider
 	switch bot {

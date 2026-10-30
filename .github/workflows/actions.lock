@@ -12,10 +12,13 @@ workflows:
         - 'codecov/codecov-action@v5.5.5'
         - 'golangci/golangci-lint-action@v9.3.0'
         - 'vegardit/fast-apt-mirror.sh@1.4.5'
+    '.github/workflows/preview-tag.yml':
+        - 'actions/checkout@v4.4.0'
     '.github/workflows/release.yml':
         - 'actions/attest-build-provenance@v2.4.0'
         - 'actions/checkout@v4.4.0'
         - 'actions/setup-go@v5.6.0'
+        - 'actions/setup-node@v4.4.0'
         - 'docker/build-push-action@v6.19.2'
         - 'docker/login-action@v3.7.0'
         - 'docker/metadata-action@v5.10.0'

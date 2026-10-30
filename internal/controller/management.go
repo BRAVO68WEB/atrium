@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/bravo68web/atrium/internal/mailer"
 	"github.com/bravo68web/atrium/internal/models"
 	"github.com/bravo68web/atrium/internal/oidc"
 	"github.com/bravo68web/atrium/internal/push"
@@ -18,25 +20,27 @@ import (
 )
 
 type ManagementController struct {
-	clientSvc    *service.ClientService
-	userSvc      *service.UserService
-	tokenSvc     *service.TokenService
-	totpSvc      *service.TOTPService
-	scopeRepo    *repository.ScopeRepository
-	resourceRepo *repository.ResourceRepository
-	consentRepo  *repository.ConsentRepository
-	account      *service.AccountService
-	sessions     *service.SessionService
-	tokenRepo    *repository.TokenRepository
-	hooks        *service.WebhookDispatcher
-	audit        *service.AuditLog
-	keys         *oidc.KeySet
-	keyRetain    time.Duration
-	orgs         *service.OrgService
-	grants       *service.GrantService
-	push         *push.Handler
-	backup       *service.Backup
-	access       *service.AccessService
+	clientSvc          *service.ClientService
+	userSvc            *service.UserService
+	tokenSvc           *service.TokenService
+	totpSvc            *service.TOTPService
+	scopeRepo          *repository.ScopeRepository
+	resourceRepo       *repository.ResourceRepository
+	consentRepo        *repository.ConsentRepository
+	account            *service.AccountService
+	sessions           *service.SessionService
+	tokenRepo          *repository.TokenRepository
+	hooks              *service.WebhookDispatcher
+	audit              *service.AuditLog
+	keys               *oidc.KeySet
+	keyRetain          time.Duration
+	orgs               *service.OrgService
+	grants             *service.GrantService
+	push               *push.Handler
+	backup             *service.Backup
+	access             *service.AccessService
+	managementClientID string
+	clientKeys         *service.ClientKeyService
 }
 
 func (c *ManagementController) SetPush(h *push.Handler) {
@@ -66,6 +70,17 @@ func (c *ManagementController) SetKeys(keys *oidc.KeySet, retain time.Duration) 
 		c.keys = keys
 		c.keyRetain = retain
 	}
+}
+
+func (c *ManagementController) SetManagementClientID(id string) {
+	defer telemetry.Step("controller.ManagementController.SetManagementClientID")()
+	if c != nil {
+		c.managementClientID = strings.TrimSpace(id)
+	}
+}
+
+func (c *ManagementController) managementClient(id string) bool {
+	return c != nil && c.managementClientID != "" && id == c.managementClientID
 }
 
 func (c *ManagementController) SetWebhooks(d *service.WebhookDispatcher) {
@@ -182,6 +197,7 @@ func (c *ManagementController) HandleCreateClient(w http.ResponseWriter, r *http
 		PostLogoutRedirectURIs                     []string `json:"post_logout_redirect_uris"`
 		DCREnabled                                 bool     `json:"dcr_enabled"`
 		CIMDEnabled                                bool     `json:"cimd_enabled"`
+		SkipConsent                                bool     `json:"skip_consent"`
 		SubjectType                                string   `json:"subject_type"`
 		SectorIdentifierURI                        string   `json:"sector_identifier_uri"`
 		JWKS                                       string   `json:"jwks"`
@@ -193,6 +209,10 @@ func (c *ManagementController) HandleCreateClient(w http.ResponseWriter, r *http
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
+		return
+	}
+	if c.managementClient(req.ID) {
+		writeError(w, http.StatusForbidden, "forbidden", "The management client is not editable")
 		return
 	}
 
@@ -213,6 +233,7 @@ func (c *ManagementController) HandleCreateClient(w http.ResponseWriter, r *http
 		PostLogoutRedirectURIs:                     req.PostLogoutRedirectURIs,
 		DCREnabled:                                 req.DCREnabled,
 		CIMDEnabled:                                req.CIMDEnabled,
+		SkipConsent:                                req.SkipConsent,
 		SubjectType:                                req.SubjectType,
 		SectorIdentifierURI:                        req.SectorIdentifierURI,
 		JWKS:                                       req.JWKS,
@@ -238,12 +259,17 @@ func (c *ManagementController) HandleGetClient(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusNotFound, "not_found", "Client not found")
 		return
 	}
+	_ = c.annotateSigningKey(clientID, &client.SigningKid, &client.SigningAlg)
 	writeJSON(w, http.StatusOK, client)
 }
 
 func (c *ManagementController) HandleUpdateClient(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.ManagementController.HandleUpdateClient")()
 	clientID := chi.URLParam(r, "clientID")
+	if c.managementClient(clientID) {
+		writeError(w, http.StatusForbidden, "forbidden", "The management client is not editable")
+		return
+	}
 	existing, err := c.clientSvc.GetClient(clientID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "not_found", "Client not found")
@@ -266,6 +292,7 @@ func (c *ManagementController) HandleUpdateClient(w http.ResponseWriter, r *http
 		PostLogoutRedirectURIs                     []string `json:"post_logout_redirect_uris"`
 		DCREnabled                                 *bool    `json:"dcr_enabled"`
 		CIMDEnabled                                *bool    `json:"cimd_enabled"`
+		SkipConsent                                *bool    `json:"skip_consent"`
 		SubjectType                                string   `json:"subject_type"`
 		SectorIdentifierURI                        *string  `json:"sector_identifier_uri"`
 		JWKS                                       *string  `json:"jwks"`
@@ -313,6 +340,9 @@ func (c *ManagementController) HandleUpdateClient(w http.ResponseWriter, r *http
 	if req.CIMDEnabled != nil {
 		existing.CIMDEnabled = *req.CIMDEnabled
 	}
+	if req.SkipConsent != nil {
+		existing.SkipConsent = *req.SkipConsent
+	}
 	if req.SubjectType != "" {
 		existing.SubjectType = req.SubjectType
 	}
@@ -320,7 +350,14 @@ func (c *ManagementController) HandleUpdateClient(w http.ResponseWriter, r *http
 		existing.SectorIdentifierURI = *req.SectorIdentifierURI
 	}
 	if req.JWKS != nil {
-		existing.JWKS = *req.JWKS
+		_, _, hosted, activeErr := c.clientKeys.Active(clientID)
+		if activeErr != nil {
+			writeError(w, http.StatusInternalServerError, "server_error", "Failed to read the signing key")
+			return
+		}
+		if c.clientKeys == nil || !hosted {
+			existing.JWKS = *req.JWKS
+		}
 	}
 	if req.IDTokenEncryptedResponseAlg != nil {
 		existing.IDTokenEncryptedResponseAlg = *req.IDTokenEncryptedResponseAlg
@@ -347,9 +384,19 @@ func (c *ManagementController) HandleUpdateClient(w http.ResponseWriter, r *http
 func (c *ManagementController) HandleDeleteClient(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.ManagementController.HandleDeleteClient")()
 	clientID := chi.URLParam(r, "clientID")
+	if c.managementClient(clientID) {
+		writeError(w, http.StatusForbidden, "forbidden", "The management client is not editable")
+		return
+	}
 	if err := c.clientSvc.DeleteClient(clientID); err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to delete client")
 		return
+	}
+	if c.clientKeys != nil {
+		if err := c.clientKeys.Delete(clientID); err != nil {
+			writeError(w, http.StatusInternalServerError, "server_error", "Failed to delete the signing key")
+			return
+		}
 	}
 	c.writeAudit(r, "client.delete", "client", clientID, map[string]any{})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
@@ -359,6 +406,19 @@ func (c *ManagementController) HandleDeleteClient(w http.ResponseWriter, r *http
 
 func (c *ManagementController) HandleListUsers(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.ManagementController.HandleListUsers")()
+	if username := strings.TrimSpace(r.URL.Query().Get("username")); username != "" {
+		user, err := c.userSvc.GetUserByUsername(username)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				writeJSON(w, http.StatusOK, []*models.User{})
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "server_error", "Failed to list users")
+			return
+		}
+		writeJSON(w, http.StatusOK, []*models.User{user})
+		return
+	}
 	users, err := c.userSvc.ListUsers()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to list users")
@@ -370,16 +430,17 @@ func (c *ManagementController) HandleListUsers(w http.ResponseWriter, r *http.Re
 func (c *ManagementController) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.ManagementController.HandleCreateUser")()
 	var req struct {
-		Username      string            `json:"username"`
-		Password      string            `json:"password"`
-		Email         string            `json:"email"`
-		Phone         string            `json:"phone_number"`
-		GivenName     string            `json:"given_name"`
-		FamilyName    string            `json:"family_name"`
-		EmailVerified *bool             `json:"email_verified"`
-		Disabled      bool              `json:"disabled"`
-		Attributes    map[string]string `json:"attributes"`
-		UserMetadata  map[string]string `json:"user_metadata"`
+		Username         string            `json:"username"`
+		Password         string            `json:"password"`
+		Email            string            `json:"email"`
+		Phone            string            `json:"phone_number"`
+		GivenName        string            `json:"given_name"`
+		FamilyName       string            `json:"family_name"`
+		EmailVerified    *bool             `json:"email_verified"`
+		Disabled         bool              `json:"disabled"`
+		MigrationPending bool              `json:"migration_pending"`
+		Attributes       map[string]string `json:"attributes"`
+		UserMetadata     map[string]string `json:"user_metadata"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -392,16 +453,17 @@ func (c *ManagementController) HandleCreateUser(w http.ResponseWriter, r *http.R
 		verified = *req.EmailVerified
 	}
 	user, err := c.userSvc.InsertUser(service.NewUser{
-		Username:      req.Username,
-		Password:      req.Password,
-		Email:         req.Email,
-		Phone:         req.Phone,
-		GivenName:     req.GivenName,
-		FamilyName:    req.FamilyName,
-		EmailVerified: verified,
-		Disabled:      req.Disabled,
-		Attributes:    req.Attributes,
-		UserMetadata:  req.UserMetadata,
+		Username:         req.Username,
+		Password:         req.Password,
+		Email:            req.Email,
+		Phone:            req.Phone,
+		GivenName:        req.GivenName,
+		FamilyName:       req.FamilyName,
+		EmailVerified:    verified,
+		Disabled:         req.Disabled,
+		MigrationPending: req.MigrationPending,
+		Attributes:       req.Attributes,
+		UserMetadata:     req.UserMetadata,
 	})
 	if writePassword(w, err) {
 		return
@@ -419,6 +481,71 @@ func (c *ManagementController) HandleCreateUser(w http.ResponseWriter, r *http.R
 	}
 
 	writeJSON(w, http.StatusCreated, user)
+}
+
+func (c *ManagementController) HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleDeleteUser")()
+	userID := chi.URLParam(r, "userID")
+	if err := c.userSvc.DeleteUser(userID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "User not found")
+		return
+	}
+	c.writeAudit(r, "user.delete", "user", userID, map[string]any{})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (c *ManagementController) HandleResetEmail(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleResetEmail")()
+	userID := chi.URLParam(r, "userID")
+	if _, err := c.userSvc.GetUser(userID); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "User not found")
+		return
+	}
+	if c.account == nil {
+		writeError(w, http.StatusServiceUnavailable, "mailer_disabled", "SMTP is not configured")
+		return
+	}
+	err := c.account.SendPasswordReset(userID)
+	if errors.Is(err, mailer.ErrDisabled) {
+		writeError(w, http.StatusServiceUnavailable, "mailer_disabled", "SMTP is not configured")
+		return
+	}
+	if errors.Is(err, service.ErrNoPassword) {
+		writeError(w, http.StatusConflict, "no_password", "User has no password")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "mail_failed", "Failed to send email")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "sent"})
+}
+
+func (c *ManagementController) HandleMigrationNotice(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleMigrationNotice")()
+	user, err := c.userSvc.GetUser(chi.URLParam(r, "userID"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "User not found")
+		return
+	}
+	if c.account == nil {
+		writeError(w, http.StatusServiceUnavailable, "mailer_disabled", "SMTP is not configured")
+		return
+	}
+	err = c.account.SendMigrationNotice(user)
+	if errors.Is(err, service.ErrNotMigrating) {
+		writeError(w, http.StatusConflict, "not_migrating", "User is not waiting for a password")
+		return
+	}
+	if errors.Is(err, mailer.ErrDisabled) {
+		writeError(w, http.StatusServiceUnavailable, "mailer_disabled", "SMTP is not configured")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "mail_failed", "Failed to send email")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "sent"})
 }
 
 func (c *ManagementController) HandlePatchUser(w http.ResponseWriter, r *http.Request) {
@@ -589,10 +716,7 @@ func (c *ManagementController) HandleRevokeRefreshToken(w http.ResponseWriter, r
 		writeError(w, http.StatusNotFound, "not_found", "Refresh token not found")
 		return
 	}
-	_ = c.tokenRepo.RevokeRefreshToken(rt.Token)
-	if rt.AccessToken != "" {
-		_ = c.tokenRepo.RevokeAccessToken(rt.AccessToken)
-	}
+	_ = c.tokenRepo.RevokeRefreshByID(rt.ID)
 	c.writeAudit(r, "token.revoke", "refresh_token", rt.ID, map[string]any{"client_id": rt.ClientID})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
 }
@@ -625,7 +749,7 @@ func (c *ManagementController) HandleListTokens(w http.ResponseWriter, r *http.R
 
 func (c *ManagementController) HandleRevokeToken(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.ManagementController.HandleRevokeToken")()
-	token := chi.URLParam(r, "token")
+	token := chi.URLParam(r, "id")
 	if err := c.tokenSvc.RevokeToken(token); err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to revoke token")
 		return
@@ -855,7 +979,7 @@ func (c *ManagementController) HandleUpdateResource(w http.ResponseWriter, r *ht
 
 	var req struct {
 		Name        string   `json:"name"`
-		Description string   `json:"description"`
+		Description *string  `json:"description"`
 		Scopes      []string `json:"scopes"`
 	}
 
@@ -867,8 +991,8 @@ func (c *ManagementController) HandleUpdateResource(w http.ResponseWriter, r *ht
 	if req.Name != "" {
 		existing.Name = req.Name
 	}
-	if req.Description != "" {
-		existing.Description = req.Description
+	if req.Description != nil {
+		existing.Description = *req.Description
 	}
 	if req.Scopes != nil {
 		existing.Scopes = req.Scopes
@@ -912,15 +1036,31 @@ func (c *ManagementController) HandleListResourceScopes(w http.ResponseWriter, r
 func (c *ManagementController) HandleListConsents(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.ManagementController.HandleListConsents")()
 	userID := r.URL.Query().Get("user_id")
-	if userID == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "user_id is required")
+	clientID := r.URL.Query().Get("client_id")
+	if userID == "" && clientID == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "user_id or client_id is required")
 		return
 	}
 
-	consents, err := c.consentRepo.ListByUser(userID)
+	var consents []*models.Consent
+	var err error
+	if userID != "" {
+		consents, err = c.consentRepo.ListByUser(userID)
+	} else {
+		consents, err = c.consentRepo.ListByClient(clientID)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to list consents")
 		return
+	}
+	if userID != "" && clientID != "" {
+		filtered := consents[:0]
+		for _, consent := range consents {
+			if consent.ClientID == clientID {
+				filtered = append(filtered, consent)
+			}
+		}
+		consents = filtered
 	}
 
 	writeJSON(w, http.StatusOK, consents)
@@ -1059,6 +1199,38 @@ func (c *ManagementController) HandleListAudit(w http.ResponseWriter, r *http.Re
 		rows = []repository.AuditRow{}
 	}
 	writeJSON(w, http.StatusOK, rows)
+}
+
+func (c *ManagementController) HandleListKeys(w http.ResponseWriter, r *http.Request) {
+	defer telemetry.Step("controller.ManagementController.HandleListKeys")()
+	if c.keys == nil {
+		writeError(w, http.StatusInternalServerError, "server_error", "Signing keys are not configured")
+		return
+	}
+	type keyRow struct {
+		Kid       string `json:"kid"`
+		Alg       string `json:"alg"`
+		Kty       string `json:"kty"`
+		Status    string `json:"status"`
+		CreatedAt string `json:"created_at,omitempty"`
+		RetireAt  string `json:"retire_at,omitempty"`
+		ClientID  string `json:"client_id,omitempty"`
+	}
+	rows := make([]keyRow, 0)
+	for _, key := range c.keys.SigningKeys() {
+		rows = append(rows, keyRow{Kid: key.Kid, Alg: key.Alg, Kty: key.Kty, Status: key.Status, CreatedAt: key.CreatedAt, RetireAt: key.RetireAt})
+	}
+	if c.clientKeys != nil {
+		extra, err := c.clientKeys.Published()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "server_error", "Failed to read signing keys")
+			return
+		}
+		for _, key := range extra {
+			rows = append(rows, keyRow{Kid: key.Kid, Alg: key.Alg, Kty: key.Kty, Status: key.Status, CreatedAt: key.CreatedAt, RetireAt: key.RetireAt, ClientID: key.ClientID})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"keys": rows})
 }
 
 func (c *ManagementController) HandleRotateKeys(w http.ResponseWriter, r *http.Request) {

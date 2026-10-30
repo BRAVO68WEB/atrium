@@ -35,6 +35,8 @@ func MountAccountAPI(api chi.Router, account *controller.AccountController, user
 func MountManagementExtras(api chi.Router, mgmt *controller.ManagementController) {
 	api.Patch("/users/{userID}", mgmt.HandlePatchUser)
 	api.Post("/users/{userID}/password", mgmt.HandleSetPassword)
+	api.Post("/users/{userID}/password/reset-email", mgmt.HandleResetEmail)
+	api.Post("/users/{userID}/migration-notice", mgmt.HandleMigrationNotice)
 	api.Post("/users/{userID}/push/revoke", mgmt.HandleRevokeUserDevices)
 	api.Post("/users/{userID}/push/enroll", mgmt.HandleEnrollUserDevice)
 	api.Get("/users/{userID}/sessions", mgmt.HandleListUserSessions)
@@ -56,11 +58,14 @@ func MountManagementExtras(api chi.Router, mgmt *controller.ManagementController
 	api.Delete("/webhooks/{id}", mgmt.HandleDeleteWebhook)
 	api.Post("/webhooks/{id}/test", mgmt.HandleTestWebhook)
 	api.Get("/audit", mgmt.HandleListAudit)
+	api.Get("/keys", mgmt.HandleListKeys)
 	api.Post("/keys/rotate", mgmt.HandleRotateKeys)
 	api.Get("/orgs", mgmt.HandleListOrgs)
 	api.Post("/orgs", mgmt.HandleCreateOrg)
 	api.Get("/orgs/{orgID}", mgmt.HandleGetOrg)
+	api.Patch("/orgs/{orgID}", mgmt.HandleUpdateOrg)
 	api.Post("/orgs/{orgID}/domains", mgmt.HandleAddOrgDomain)
+	api.Get("/orgs/{orgID}/members", mgmt.HandleListOrgMembers)
 	api.Post("/orgs/{orgID}/members", mgmt.HandleAddOrgMember)
 }
 

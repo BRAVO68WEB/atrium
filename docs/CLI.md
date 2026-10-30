@@ -135,14 +135,14 @@ subjects only match when that salt is unchanged.
 
 ```bash
 ./bin/atrium-cli token list --client-id <id> --user-id <id>
-./bin/atrium-cli token revoke <access-token>
+./bin/atrium-cli token revoke <id>
 ./bin/atrium-cli token introspect <token>
 ./bin/atrium-cli token refresh list
 ./bin/atrium-cli token refresh revoke <id>
 ```
 
-`refresh list` prints public ids. It does not print the refresh token
-secret.
+`token list` and `refresh list` print public ids. They do not print
+the bearer. `token revoke` takes the access-token id from that list.
 
 ### MFA
 

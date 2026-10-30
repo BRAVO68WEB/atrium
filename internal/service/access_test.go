@@ -58,6 +58,18 @@ func TestRoleScopesFollowTheOrganization(t *testing.T) {
 	if _, err := access.AssignScope("user-1", "https://api.envsync.cloud", "audit:read", ""); err != nil {
 		t.Fatal(err)
 	}
+	listed, err := access.UserAccess("user-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, role := range listed.Roles {
+		if role.Name == "accountant" && (role.OrgName != "Acme" || role.OrgSlug != "acme-corp" || role.OrgID != "org-1") {
+			t.Fatalf("accountant org %+v", role)
+		}
+		if role.Name == "viewer" && (role.OrgID != "" || role.OrgName != "") {
+			t.Fatalf("viewer should be global %+v", role)
+		}
+	}
 
 	global, err := access.Narrow("user-1", "", []string{"openid", "projects:read", "billing:read", "audit:read", "management"})
 	if err != nil {

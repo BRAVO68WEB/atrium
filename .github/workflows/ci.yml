@@ -21,9 +21,20 @@ jobs:
         with:
           go-version: "1.26"
 
+      - name: Set up Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Build the operator console
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.12.1 --activate
+          cd frontend && pnpm install --frozen-lockfile && pnpm build
+
       - name: Build all binaries
         run: |
-          go build -o bin/atrium ./cmd/atrium
+          go build -tags embed -o bin/atrium ./cmd/atrium
           go build -o bin/atrium-cli ./cmd/atrium-cli
           go build -o bin/atrium-mobile ./cmd/atrium-mobile
 
@@ -47,24 +58,54 @@ jobs:
           go-version: "1.26"
 
       - name: Run tests
-        run: go run gotest.tools/gotestsum@v1.13.0 --format standard-verbose --junitfile junit.xml -- -race -count=1 -covermode=atomic -coverpkg=./internal/...,./pkg/... -coverprofile=coverage.out ./...
+        run: |
+          set -euo pipefail
+          unit_pkgs=$(go list ./... | grep -v '/tests/integration$')
+          test -n "$unit_pkgs"
+          set +e
+          status=0
+          # shellcheck disable=SC2086
+          go run gotest.tools/gotestsum@v1.13.0 --format standard-verbose --junitfile junit-unit.xml -- -race -count=1 -covermode=atomic -coverpkg=./internal/...,./pkg/... -coverprofile=coverage-unit.out $unit_pkgs || status=$?
+          go run gotest.tools/gotestsum@v1.13.0 --format standard-verbose --junitfile junit-integration.xml -- -race -count=1 -covermode=atomic -coverpkg=./internal/...,./pkg/... -coverprofile=coverage-integration.out ./tests/integration/... || status=$?
+          exit "$status"
 
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() && hashFiles('junit.xml') != '' }}
+      - name: Upload unit test results to Codecov
+        if: ${{ !cancelled() && hashFiles('junit-unit.xml') != '' }}
         uses: codecov/codecov-action@v5.5.5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: junit.xml
+          files: junit-unit.xml
           disable_search: true
           report_type: test_results
+          flags: unit
 
-      - name: Upload coverage reports to Codecov
-        if: ${{ !cancelled() && hashFiles('coverage.out') != '' }}
+      - name: Upload unit coverage to Codecov
+        if: ${{ !cancelled() && hashFiles('coverage-unit.out') != '' }}
         uses: codecov/codecov-action@v5.5.5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.out
+          files: coverage-unit.out
           disable_search: true
+          flags: unit
+
+      - name: Upload integration test results to Codecov
+        if: ${{ !cancelled() && hashFiles('junit-integration.xml') != '' }}
+        uses: codecov/codecov-action@v5.5.5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: junit-integration.xml
+          disable_search: true
+          report_type: test_results
+          flags: integration
+
+      - name: Upload integration coverage to Codecov
+        if: ${{ !cancelled() && hashFiles('coverage-integration.out') != '' }}
+        uses: codecov/codecov-action@v5.5.5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage-integration.out
+          disable_search: true
+          flags: integration
 
   lint:
     name: Lint
@@ -203,6 +244,16 @@ jobs:
       - name: Run the end-to-end suite
         working-directory: e2e
         run: npm test
+
+      - name: Upload end-to-end results to Codecov
+        if: ${{ !cancelled() && hashFiles('e2e/junit-e2e.xml') != '' }}
+        uses: codecov/codecov-action@v5.5.5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: e2e/junit-e2e.xml
+          disable_search: true
+          report_type: test_results
+          flags: e2e
 
   main-from-dev:
     name: Main accepts dev

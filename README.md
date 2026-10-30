@@ -40,6 +40,7 @@ and traces turn on when you set them.
   management client
 - Dynamic client registration and client ID metadata documents
 - Social login, webhooks, audit, and login analytics
+- An operator console at `/dashboard` when `dashboard.enabled` is true
 
 Access tokens are opaque unless you set `security.access_token_format` to
 `jwt`.

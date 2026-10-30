@@ -16,7 +16,11 @@ import (
 
 func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("oauth.Handler.handlePasswordToken")()
-	clientID, clientSecret := presentedClient(r)
+	clientID, clientSecret, authErr := h.credentials(r)
+	if authErr != nil {
+		writeTokenError(w, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
+		return
+	}
 
 	if clientID == "" {
 		writeTokenError(w, http.StatusBadRequest, "invalid_client", "Client credentials required")
@@ -56,6 +60,11 @@ func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 	}
 	tokenType := boundTokenType(client)
 
+	if h.cfg != nil && h.cfg.Security.DisablePasswords {
+		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "Passwords are disabled")
+		return
+	}
+
 	username := r.Form.Get("username")
 	password := r.Form.Get("password")
 
@@ -66,6 +75,11 @@ func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 
 	if h.userSvc == nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Password hasher is not configured")
+		return
+	}
+
+	if existing, lookupErr := h.userSvc.FindByLogin(username); lookupErr == nil && existing.NeedsMigration() {
+		writeTokenError(w, http.StatusBadRequest, "migration_required", "Set a password in the browser before using this grant")
 		return
 	}
 
@@ -139,6 +153,7 @@ func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:   time.Now().Add(h.cfg.Security.RefreshTokenLifetime),
 	}
 
+	h.stampCert(r, accessTok)
 	if err := h.tokenRepo.SaveAccessToken(accessTok); err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to save access token")
 		return

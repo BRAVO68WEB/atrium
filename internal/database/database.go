@@ -242,6 +242,7 @@ func (db *DB) Migrate() error {
 			client_id TEXT NOT NULL,
 			request_params TEXT NOT NULL,
 			expires_at DATETIME NOT NULL,
+			used INTEGER NOT NULL DEFAULT 0,
 			FOREIGN KEY (client_id) REFERENCES clients(id)
 		)`,
 		`CREATE TABLE IF NOT EXISTS ciba_requests (
@@ -479,6 +480,18 @@ func (db *DB) Migrate() error {
 			binding_message TEXT,
 			status TEXT NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS client_signing_keys (
+			client_id TEXT NOT NULL,
+			kid TEXT PRIMARY KEY,
+			alg TEXT NOT NULL,
+			status TEXT NOT NULL,
+			private_pem TEXT NOT NULL,
+			public_jwk TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			retire_at TEXT
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_client_signing_keys_client ON client_signing_keys(client_id)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_client_signing_keys_active ON client_signing_keys(client_id) WHERE status = 'active'`,
 	}
 
 	for _, migration := range migrations {
@@ -541,6 +554,11 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE push_devices ADD COLUMN grace_until TEXT`,
 		`ALTER TABLE push_devices ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE push_auth_requests ADD COLUMN delivery_mode TEXT`,
+		`ALTER TABLE pushed_auth_requests ADD COLUMN used INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE users ADD COLUMN migration_pending INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE clients ADD COLUMN skip_consent INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE sessions ADD COLUMN migration_password INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE access_tokens ADD COLUMN id TEXT`,
 	}
 	for _, alter := range alters {
 		if _, err := db.Exec(alter); err != nil && db.driver == "postgres" && !isDuplicateColumn(err) {
@@ -552,6 +570,12 @@ func (db *DB) Migrate() error {
 		_, _ = db.Exec(`UPDATE users SET email_verified = 1 WHERE email IS NOT NULL AND email != ''`)
 	}
 	if err := db.backfillRefreshIDs(); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_access_tokens_id ON access_tokens(id)`); err != nil {
+		return fmt.Errorf("access token ids: %w", err)
+	}
+	if err := db.hashStoredCredentials(); err != nil {
 		return err
 	}
 	return db.ensureUniqueEmails()

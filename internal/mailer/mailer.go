@@ -103,9 +103,7 @@ func (m *smtpMailer) Send(to, subject, text string) error {
 	if err != nil {
 		return err
 	}
-	safeText := sanitizeMailText(text)
-	msg := fmt.Sprintf("To: %s\r\nFrom: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
-		toAddr, fromAddr, subject, safeText)
+	msg := mimeMessage(toAddr, fromAddr, subject, text, "")
 	if _, err := w.Write([]byte(msg)); err != nil {
 		return err
 	}
@@ -113,6 +111,89 @@ func (m *smtpMailer) Send(to, subject, text string) error {
 		return err
 	}
 	return client.Quit()
+}
+
+// SendHTML delivers a plain part and an HTML part. An empty HTML part is a plain message.
+func (m *smtpMailer) SendHTML(to, subject, text, htmlBody string) error {
+	defer telemetry.Step("mailer.smtpMailer.SendHTML")()
+	if strings.TrimSpace(htmlBody) == "" {
+		return m.Send(to, subject, text)
+	}
+	toAddr, err := mailbox(to)
+	if err != nil {
+		return err
+	}
+	fromAddr, err := mailbox(m.cfg.From)
+	if err != nil {
+		return err
+	}
+	subject = oneLine(subject)
+	if subject == "" {
+		return fmt.Errorf("mail subject is empty")
+	}
+	return m.deliver(toAddr, fromAddr, mimeMessage(toAddr, fromAddr, subject, text, htmlBody))
+}
+
+func (m *smtpMailer) deliver(toAddr, fromAddr, msg string) error {
+	addr := net.JoinHostPort(m.cfg.Host, strconv.Itoa(m.cfg.Port))
+	var conn net.Conn
+	var err error
+	tlsConfig := &tls.Config{ServerName: m.cfg.Host}
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	if m.cfg.ImplicitTLS {
+		conn, err = tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
+	} else {
+		conn, err = dialer.Dial("tcp", addr)
+	}
+	if err != nil {
+		return err
+	}
+	client, err := smtp.NewClient(conn, m.cfg.Host)
+	if err != nil {
+		_ = conn.Close()
+		return err
+	}
+	defer func() { _ = client.Close() }()
+
+	if !m.cfg.ImplicitTLS && m.cfg.StartTLS {
+		if err := client.StartTLS(tlsConfig); err != nil {
+			return err
+		}
+	}
+	if m.cfg.Username != "" {
+		if err := client.Auth(smtp.PlainAuth("", m.cfg.Username, m.cfg.Password, m.cfg.Host)); err != nil {
+			return err
+		}
+	}
+	if err := client.Mail(fromAddr); err != nil {
+		return err
+	}
+	if err := client.Rcpt(toAddr); err != nil {
+		return err
+	}
+	w, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte(msg)); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return client.Quit()
+}
+
+func mimeMessage(to, from, subject, text, htmlBody string) string {
+	text = sanitizeMailText(text)
+	if strings.TrimSpace(htmlBody) == "" {
+		return fmt.Sprintf("To: %s\r\nFrom: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
+			to, from, subject, text)
+	}
+	htmlBody = sanitizeMailText(htmlBody)
+	boundary := "atrium-mail-boundary"
+	return fmt.Sprintf("To: %s\r\nFrom: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=%s\r\n\r\n--%s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s\r\n--%s\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s\r\n--%s--\r\n",
+		to, from, subject, boundary, boundary, text, boundary, htmlBody, boundary)
 }
 
 func sanitizeMailText(text string) string {

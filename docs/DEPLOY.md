@@ -32,7 +32,12 @@ missing file passed to `--config` exits. An empty `--config` still loads
 
 Run the server from the project root. Startup reads
 `internal/hashalgo/algo.go` and refuses to serve when that file differs
-from the binary.
+from the binary. Startup also refuses to serve when `security.data_key`
+is missing. Generate 32 bytes, base64-encode them, and put the result
+in that field before you restart an existing server. Example configs
+include a sample key so they start. Replace it before a real client
+secret is stored. The first start encrypts client secrets and hashes
+token rows that still hold a bearer.
 
 `GET /health` returns `{"status":"ok"}`.
 
@@ -195,6 +200,23 @@ http://localhost:8025. RabbitMQ management is at
 http://localhost:15672 with user `oauth` and password `oauth`. The
 collector prints spans to its own log.
 
+## Operator console
+
+Set `dashboard.enabled` to true and open `/dashboard`. Sign in with the
+management client id and secret. The page is the management API: applications,
+users, organizations, roles, sign-in policy, events, and server settings.
+
+Saving a setting rewrites the mounted `config.yaml`. The process keeps the
+old settings until it starts again. The compose files set
+`restart: unless-stopped` and `ATRIUM_IN_DOCKER=1`, and mount the config
+file read-write. The console's Restart button sends SIGTERM. Docker starts
+the container again, and you sign in once more. The file must be writable
+by uid 65534, which is the user in the image.
+
+`just build` and the image build compile `frontend/` and embed it in the
+`atrium` binary. `go build` without `-tags embed` still compiles, and
+`/dashboard` then shows a page that says the assets are missing.
+
 ## Logs and traces
 
 Each request writes one log record. The fields are `method`, `route`,
@@ -217,19 +239,25 @@ time spent in each.
 
 ## Release
 
-Pushing a `v*` tag is the only publish step. Pushes to `dev` or `main`
-do not publish a release by themselves. A tag pushes the same image to
-GHCR and Docker Hub.
+A green push to `dev` publishes a prerelease. The tagger reads
+`VERSION` and pushes `v` plus that value plus `-rc.N`, using the next
+free N. `VERSION` is `0.2.0` on this line, so the tags look like
+`v0.2.0-rc.4`. That GitHub Release is a prerelease, and the image is
+also tagged `preview` on both registries. It does not move `latest`.
 
-Tag `vX.Y.Z-rc.N` on `dev`. That GitHub Release is a prerelease, and
-the image is also tagged `preview` on both registries. It does not
-move `latest`.
+You still push a stable tag by hand from `main`, after `dev` has been
+merged there. A stable tag must point at `main`. A preview tag must
+point at `dev`. A stable tag also publishes `X.Y.Z`, `X.Y`, `X`, and
+`latest`. When the stable tag named in `VERSION` already exists, bump
+`VERSION` to the next line before the next preview.
 
-Tag `vX.Y.Z` on `main`, after `dev` has been merged there. That release
-is stable. A stable tag also publishes `X.Y.Z`, `X.Y`, `X`, and
-`latest` on both registries. A stable tag that does not point at
-`main`, or a preview tag that points at `main`, fails the release
-workflow.
+The automatic tagger uses `GITHUB_TOKEN`. That push does not start the
+release workflow on its own, so the tagger calls it and passes the tag
+name. A `v*` tag you push yourself still publishes through the same
+workflow. To publish a tag that already exists, run the Release
+workflow and pass that tag.
+
+Push a stable tag like this:
 
 ```bash
 git tag v1.2.3

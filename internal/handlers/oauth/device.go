@@ -35,8 +35,22 @@ func (h *Handler) HandleDeviceAuthorization(w http.ResponseWriter, r *http.Reque
 		})
 		return
 	}
+	if credentialsInURI(r) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error":             "invalid_request",
+			"error_description": "Client credentials must not be in the request URI",
+		})
+		return
+	}
 
-	clientID, clientSecret := presentedClient(r)
+	clientID, clientSecret, authErr := h.credentials(r)
+	if authErr != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error":             "invalid_client",
+			"error_description": "Invalid client credentials",
+		})
+		return
+	}
 
 	if clientID == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
@@ -177,7 +191,11 @@ func (h *Handler) HandleDeviceToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientID, clientSecret := presentedClient(r)
+	clientID, clientSecret, authErr := h.credentials(r)
+	if authErr != nil {
+		writeTokenError(w, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
+		return
+	}
 
 	dc, err := h.deviceRepo.GetByDeviceCode(deviceCode)
 	if err != nil {
@@ -269,6 +287,7 @@ func (h *Handler) HandleDeviceToken(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:   time.Now().Add(h.cfg.Security.RefreshTokenLifetime),
 	}
 
+	h.stampCert(r, accessTok)
 	if err := h.tokenRepo.SaveAccessToken(accessTok); err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to save access token")
 		return
@@ -309,7 +328,7 @@ func (h *Handler) HandleDeviceVerification(w http.ResponseWriter, r *http.Reques
 		userCode = r.URL.Query().Get("user_code")
 	}
 	session := h.getSession(r)
-	if session == nil || !session.Authenticated || (h.cfg.Security.MFA.Required && !session.MFAVerified) {
+	if session == nil || !session.Authenticated || session.PasswordPending || (h.cfg.Security.MFA.Required && !session.MFAVerified) {
 		next := "/device"
 		if userCode != "" {
 			next = "/device?user_code=" + url.QueryEscape(userCode)

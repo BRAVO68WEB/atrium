@@ -46,6 +46,36 @@ type discovery struct {
 	JWKSURI               string `json:"jwks_uri"`
 }
 
+// DiscoveryDocument is an OpenID provider configuration.
+type DiscoveryDocument struct {
+	Issuer                string `json:"issuer"`
+	AuthorizationEndpoint string `json:"authorization_endpoint"`
+	TokenEndpoint         string `json:"token_endpoint"`
+	UserinfoEndpoint      string `json:"userinfo_endpoint"`
+	JWKSURI               string `json:"jwks_uri"`
+}
+
+// DiscoverIssuer loads /.well-known/openid-configuration for an issuer.
+// http is accepted only for localhost.
+func DiscoverIssuer(ctx context.Context, issuer string) (DiscoveryDocument, error) {
+	defer telemetry.Step("social.DiscoverIssuer")()
+	issuer = strings.TrimRight(strings.TrimSpace(issuer), "/")
+	u, err := url.Parse(issuer)
+	if err != nil || u.Host == "" || u.User != nil {
+		return DiscoveryDocument{}, fmt.Errorf("issuer must be an absolute URL")
+	}
+	host := u.Hostname()
+	localHTTP := u.Scheme == "http" && (host == "localhost" || host == "127.0.0.1")
+	if u.Scheme != "https" && !localHTTP {
+		return DiscoveryDocument{}, fmt.Errorf("issuer must use https")
+	}
+	doc, err := NewClient(nil).discovery(ctx, issuer)
+	if err != nil {
+		return DiscoveryDocument{}, err
+	}
+	return DiscoveryDocument(doc), nil
+}
+
 // NewClient returns a client that times out at 10 seconds and does not follow redirects.
 func NewClient(httpClient *http.Client) *Client {
 	defer telemetry.Step("social.NewClient")()

@@ -184,8 +184,9 @@ func (r *RoleRepository) RemoveScope(userID, resource, scope, orgID string) erro
 
 func (r *RoleRepository) UserRoles(userID string) ([]models.UserRole, error) {
 	defer telemetry.Step("repository.RoleRepository.UserRoles")()
-	rows, err := r.db.Query(`SELECT ur.user_id, ur.role_id, roles.name, ur.org_id
+	rows, err := r.db.Query(`SELECT ur.user_id, ur.role_id, roles.name, ur.org_id, COALESCE(o.name, ''), COALESCE(o.slug, '')
 		FROM user_roles ur JOIN roles ON roles.id = ur.role_id
+		LEFT JOIN organizations o ON o.id = ur.org_id
 		WHERE ur.user_id = ? ORDER BY roles.name, ur.org_id`, userID)
 	if err != nil {
 		return nil, err
@@ -194,7 +195,7 @@ func (r *RoleRepository) UserRoles(userID string) ([]models.UserRole, error) {
 	out := []models.UserRole{}
 	for rows.Next() {
 		var item models.UserRole
-		if err := rows.Scan(&item.UserID, &item.RoleID, &item.Name, &item.OrgID); err != nil {
+		if err := rows.Scan(&item.UserID, &item.RoleID, &item.Name, &item.OrgID, &item.OrgName, &item.OrgSlug); err != nil {
 			return nil, err
 		}
 		out = append(out, item)
@@ -204,8 +205,9 @@ func (r *RoleRepository) UserRoles(userID string) ([]models.UserRole, error) {
 
 func (r *RoleRepository) UserScopes(userID string) ([]models.UserScope, error) {
 	defer telemetry.Step("repository.RoleRepository.UserScopes")()
-	rows, err := r.db.Query(`SELECT user_id, resource_uri, scope, org_id FROM user_scopes
-		WHERE user_id = ? ORDER BY resource_uri, scope, org_id`, userID)
+	rows, err := r.db.Query(`SELECT s.user_id, s.resource_uri, s.scope, s.org_id, COALESCE(o.name, ''), COALESCE(o.slug, '')
+		FROM user_scopes s LEFT JOIN organizations o ON o.id = s.org_id
+		WHERE s.user_id = ? ORDER BY s.resource_uri, s.scope, s.org_id`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +215,7 @@ func (r *RoleRepository) UserScopes(userID string) ([]models.UserScope, error) {
 	out := []models.UserScope{}
 	for rows.Next() {
 		var item models.UserScope
-		if err := rows.Scan(&item.UserID, &item.Resource, &item.Scope, &item.OrgID); err != nil {
+		if err := rows.Scan(&item.UserID, &item.Resource, &item.Scope, &item.OrgID, &item.OrgName, &item.OrgSlug); err != nil {
 			return nil, err
 		}
 		out = append(out, item)

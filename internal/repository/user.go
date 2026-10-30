@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bravo68web/atrium/internal/database"
@@ -13,7 +14,7 @@ import (
 )
 
 const userColumns = `id, username, password_hash, COALESCE(email, ''), COALESCE(phone_number, ''), created_at,
-	last_login_at, COALESCE(email_verified, 0), COALESCE(disabled, 0), COALESCE(given_name, ''), COALESCE(family_name, ''), COALESCE(attributes, '{}'), COALESCE(user_metadata, '{}')`
+	last_login_at, COALESCE(email_verified, 0), COALESCE(disabled, 0), COALESCE(given_name, ''), COALESCE(family_name, ''), COALESCE(attributes, '{}'), COALESCE(user_metadata, '{}'), COALESCE(migration_pending, 0)`
 
 func decodeStringMap(raw string) map[string]string {
 	defer telemetry.Step("repository.decodeStringMap")()
@@ -58,12 +59,12 @@ func scanUser(scan func(dest ...any) error) (*models.User, error) {
 	defer telemetry.Step("repository.scanUser")()
 	user := &models.User{}
 	var lastLogin sql.NullTime
-	var emailVerified, disabled int
+	var emailVerified, disabled, migrationPending int
 	var attrs, meta string
 	if err := scan(
 		&user.ID, &user.Username, &user.PasswordHash,
 		&user.Email, &user.PhoneNumber, &user.CreatedAt,
-		&lastLogin, &emailVerified, &disabled, &user.GivenName, &user.FamilyName, &attrs, &meta,
+		&lastLogin, &emailVerified, &disabled, &user.GivenName, &user.FamilyName, &attrs, &meta, &migrationPending,
 	); err != nil {
 		return nil, err
 	}
@@ -75,6 +76,8 @@ func scanUser(scan func(dest ...any) error) (*models.User, error) {
 	}
 	user.EmailVerified = emailVerified != 0
 	user.Disabled = disabled != 0
+	user.MigrationPending = migrationPending != 0
+	user.HasPassword = strings.TrimSpace(user.PasswordHash) != ""
 	return user, nil
 }
 
@@ -98,13 +101,14 @@ func (r *UserRepository) Create(user *models.User) error {
 		return err
 	}
 	query := `INSERT INTO users (id, username, password_hash, email, phone_number, created_at,
-		email_verified, disabled, given_name, family_name, attributes, user_metadata)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		email_verified, disabled, given_name, family_name, attributes, user_metadata, migration_pending)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err = r.db.Exec(query,
 		user.ID, user.Username, user.PasswordHash,
 		user.Email, user.PhoneNumber, user.CreatedAt,
 		boolInt(user.EmailVerified), boolInt(user.Disabled), user.GivenName, user.FamilyName, rawAttrs, rawMeta,
+		boolInt(user.MigrationPending),
 	)
 	return err
 }
@@ -183,7 +187,12 @@ func (r *UserRepository) TouchLastLogin(id string, at time.Time) error {
 
 func (r *UserRepository) UpdatePasswordHash(id, hash string) error {
 	defer telemetry.Step("repository.UserRepository.UpdatePasswordHash")()
-	res, err := r.db.Exec(`UPDATE users SET password_hash = ? WHERE id = ?`, hash, id)
+	return r.SetPasswordState(id, hash, false)
+}
+
+func (r *UserRepository) SetPasswordState(id, hash string, migrationPending bool) error {
+	defer telemetry.Step("repository.UserRepository.SetPasswordState")()
+	res, err := r.db.Exec(`UPDATE users SET password_hash = ?, migration_pending = ? WHERE id = ?`, hash, boolInt(migrationPending), id)
 	if err != nil {
 		return err
 	}
@@ -195,6 +204,57 @@ func (r *UserRepository) UpdatePasswordHash(id, hash string) error {
 		return fmt.Errorf("user not found")
 	}
 	return nil
+}
+
+var userChildDeletes = []string{
+	`DELETE FROM authorization_codes WHERE user_id = ?`,
+	`DELETE FROM consents WHERE user_id = ?`,
+	`DELETE FROM ciba_requests WHERE user_id = ?`,
+	`DELETE FROM access_tokens WHERE user_id = ?`,
+	`DELETE FROM refresh_tokens WHERE user_id = ?`,
+	`DELETE FROM device_codes WHERE user_id = ?`,
+	`DELETE FROM session_clients WHERE sid IN (SELECT id FROM sessions WHERE user_id = ?)`,
+	`DELETE FROM sessions WHERE user_id = ?`,
+	`DELETE FROM email_tokens WHERE user_id = ?`,
+	`DELETE FROM login_events WHERE user_id = ?`,
+	`DELETE FROM social_identities WHERE user_id = ?`,
+	`DELETE FROM org_memberships WHERE user_id = ?`,
+	`DELETE FROM pairwise_subjects WHERE user_id = ?`,
+	`DELETE FROM user_roles WHERE user_id = ?`,
+	`DELETE FROM user_scopes WHERE user_id = ?`,
+	`DELETE FROM push_registration_tokens WHERE user_id = ?`,
+	`DELETE FROM push_auth_requests WHERE user_id = ?`,
+	`DELETE FROM push_devices WHERE user_id = ?`,
+}
+
+func (r *UserRepository) Delete(id string) error {
+	defer telemetry.Step("repository.UserRepository.Delete")()
+	if _, err := r.GetByID(id); err != nil {
+		return fmt.Errorf("user not found")
+	}
+	run := func(q database.SQL) error {
+		for _, stmt := range userChildDeletes {
+			if _, err := q.Exec(stmt, id); err != nil {
+				return err
+			}
+		}
+		res, err := q.Exec(`DELETE FROM users WHERE id = ?`, id)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("user not found")
+		}
+		return nil
+	}
+	if tx, ok := r.db.(*database.DB); ok {
+		return tx.WithTx(run)
+	}
+	return run(r.db)
 }
 
 func (r *UserRepository) UpdateMFA(id string, mfaEnabled bool, mfaSecret string) error {

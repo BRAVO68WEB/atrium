@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 )
 
@@ -22,10 +23,13 @@ type Client struct {
 	PostLogoutRedirectURIs                     []string  `json:"post_logout_redirect_uris,omitempty"`
 	JWKS                                       string    `json:"jwks,omitempty"`
 	JWKSUri                                    string    `json:"jwks_uri,omitempty"`
+	SigningKid                                 string    `json:"signing_kid,omitempty"`
+	SigningAlg                                 string    `json:"signing_alg,omitempty"`
 	RequestObjectSigningAlg                    string    `json:"request_object_signing_alg,omitempty"`
 	RegistrationSource                         string    `json:"registration_source,omitempty"`
 	DCREnabled                                 bool      `json:"dcr_enabled"`
 	CIMDEnabled                                bool      `json:"cimd_enabled"`
+	SkipConsent                                bool      `json:"skip_consent"`
 	SubjectType                                string    `json:"subject_type,omitempty"`
 	SectorIdentifierURI                        string    `json:"sector_identifier_uri,omitempty"`
 	IDTokenEncryptedResponseAlg                string    `json:"id_token_encrypted_response_alg,omitempty"`
@@ -38,19 +42,21 @@ type Client struct {
 }
 
 type User struct {
-	ID            string            `json:"id"`
-	Username      string            `json:"username"`
-	PasswordHash  string            `json:"-"`
-	Email         string            `json:"email,omitempty"`
-	PhoneNumber   string            `json:"phone_number,omitempty"`
-	GivenName     string            `json:"given_name,omitempty"`
-	FamilyName    string            `json:"family_name,omitempty"`
-	EmailVerified bool              `json:"email_verified"`
-	Disabled      bool              `json:"disabled"`
-	Attributes    map[string]string `json:"attributes,omitempty"`
-	UserMetadata  map[string]string `json:"user_metadata,omitempty"`
-	LastLoginAt   *time.Time        `json:"last_login_at,omitempty"`
-	CreatedAt     time.Time         `json:"created_at"`
+	ID               string            `json:"id"`
+	Username         string            `json:"username"`
+	PasswordHash     string            `json:"-"`
+	Email            string            `json:"email,omitempty"`
+	PhoneNumber      string            `json:"phone_number,omitempty"`
+	GivenName        string            `json:"given_name,omitempty"`
+	FamilyName       string            `json:"family_name,omitempty"`
+	EmailVerified    bool              `json:"email_verified"`
+	Disabled         bool              `json:"disabled"`
+	HasPassword      bool              `json:"has_password"`
+	MigrationPending bool              `json:"migration_pending"`
+	Attributes       map[string]string `json:"attributes,omitempty"`
+	UserMetadata     map[string]string `json:"user_metadata,omitempty"`
+	LastLoginAt      *time.Time        `json:"last_login_at,omitempty"`
+	CreatedAt        time.Time         `json:"created_at"`
 }
 
 type AuthorizationCode struct {
@@ -88,20 +94,32 @@ type OrgMembership struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// OrgMember is a person shown on an organization.
+type OrgMember struct {
+	UserID     string `json:"user_id"`
+	Username   string `json:"username"`
+	Email      string `json:"email,omitempty"`
+	GivenName  string `json:"given_name,omitempty"`
+	FamilyName string `json:"family_name,omitempty"`
+	Role       string `json:"role"`
+}
+
 type AccessToken struct {
-	Token     string    `json:"token"`
-	ClientID  string    `json:"client_id"`
-	UserID    string    `json:"user_id,omitempty"`
-	Scopes    []string  `json:"scopes"`
-	Resource  string    `json:"resource,omitempty"`
-	TokenType string    `json:"token_type"`
-	DPoPJKT   string    `json:"dpop_jkt,omitempty"`
-	IssuedAt  time.Time `json:"iat,omitempty"`
-	JTI       string    `json:"jti,omitempty"`
-	OrgID     string    `json:"org_id,omitempty"`
-	Act       string    `json:"act,omitempty"`
-	ExpiresAt time.Time `json:"expires_at"`
-	Revoked   bool      `json:"revoked"`
+	ID             string    `json:"id,omitempty"`
+	Token          string    `json:"-"`
+	ClientID       string    `json:"client_id"`
+	UserID         string    `json:"user_id,omitempty"`
+	Scopes         []string  `json:"scopes"`
+	Resource       string    `json:"resource,omitempty"`
+	TokenType      string    `json:"token_type"`
+	DPoPJKT        string    `json:"dpop_jkt,omitempty"`
+	CertThumbprint string    `json:"cert_thumbprint,omitempty"`
+	IssuedAt       time.Time `json:"iat,omitempty"`
+	JTI            string    `json:"jti,omitempty"`
+	OrgID          string    `json:"org_id,omitempty"`
+	Act            string    `json:"act,omitempty"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	Revoked        bool      `json:"revoked"`
 }
 
 type RefreshToken struct {
@@ -135,16 +153,26 @@ type DeviceCode struct {
 }
 
 type BrowserSession struct {
-	ID          string    `json:"id"`
-	UserID      string    `json:"user_id"`
-	Username    string    `json:"username"`
-	AuthTime    time.Time `json:"auth_time"`
-	MFAVerified bool      `json:"mfa_verified"`
-	UserAgent   string    `json:"user_agent,omitempty"`
-	IP          string    `json:"ip,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	Revoked     bool      `json:"revoked"`
+	ID              string    `json:"id"`
+	UserID          string    `json:"user_id"`
+	Username        string    `json:"username"`
+	AuthTime        time.Time `json:"auth_time"`
+	MFAVerified     bool      `json:"mfa_verified"`
+	PasswordPending bool      `json:"password_pending,omitempty"`
+	UserAgent       string    `json:"user_agent,omitempty"`
+	IP              string    `json:"ip,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	Revoked         bool      `json:"revoked"`
+}
+
+// NeedsMigration is an imported account with no password yet.
+// A passwordless account that is not pending, such as SAML, does not match.
+func (u *User) NeedsMigration() bool {
+	if u == nil || !u.MigrationPending {
+		return false
+	}
+	return strings.TrimSpace(u.PasswordHash) == ""
 }
 
 type LoginEvent struct {
@@ -162,6 +190,7 @@ type PushedAuthRequest struct {
 	ClientID      string    `json:"client_id"`
 	RequestParams string    `json:"request_params"`
 	ExpiresAt     time.Time `json:"expires_at"`
+	Used          bool      `json:"used"`
 }
 
 type CIBARequest struct {
@@ -249,10 +278,12 @@ type RoleScope struct {
 
 // UserRole is a role assigned to a user. An empty OrgID is global.
 type UserRole struct {
-	UserID string `json:"user_id,omitempty"`
-	RoleID string `json:"role_id"`
-	Name   string `json:"name,omitempty"`
-	OrgID  string `json:"org_id,omitempty"`
+	UserID  string `json:"user_id,omitempty"`
+	RoleID  string `json:"role_id"`
+	Name    string `json:"name,omitempty"`
+	OrgID   string `json:"org_id,omitempty"`
+	OrgName string `json:"org_name,omitempty"`
+	OrgSlug string `json:"org_slug,omitempty"`
 }
 
 // UserScope is a resource scope assigned to a user without a role.
@@ -261,6 +292,8 @@ type UserScope struct {
 	Resource string `json:"resource"`
 	Scope    string `json:"scope"`
 	OrgID    string `json:"org_id,omitempty"`
+	OrgName  string `json:"org_name,omitempty"`
+	OrgSlug  string `json:"org_slug,omitempty"`
 }
 
 // UserAccess is the stored role and direct-scope grants for one user.

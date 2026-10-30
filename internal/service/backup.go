@@ -43,20 +43,21 @@ type BackupDocument struct {
 
 // BackupUser keeps the account id so a restore does not mint a new one.
 type BackupUser struct {
-	ID            string            `json:"id"`
-	Username      string            `json:"username"`
-	Email         string            `json:"email,omitempty"`
-	EmailVerified bool              `json:"email_verified,omitempty"`
-	PasswordHash  string            `json:"password_hash"`
-	GivenName     string            `json:"given_name,omitempty"`
-	FamilyName    string            `json:"family_name,omitempty"`
-	PhoneNumber   string            `json:"phone_number,omitempty"`
-	Disabled      bool              `json:"disabled,omitempty"`
-	TOTPSecret    string            `json:"totp_secret,omitempty"`
-	Attributes    map[string]string `json:"attributes,omitempty"`
-	UserMetadata  map[string]string `json:"user_metadata,omitempty"`
-	Orgs          []string          `json:"orgs,omitempty"`
-	CreatedAt     time.Time         `json:"created_at,omitempty"`
+	ID               string            `json:"id"`
+	Username         string            `json:"username"`
+	Email            string            `json:"email,omitempty"`
+	EmailVerified    bool              `json:"email_verified,omitempty"`
+	PasswordHash     string            `json:"password_hash"`
+	GivenName        string            `json:"given_name,omitempty"`
+	FamilyName       string            `json:"family_name,omitempty"`
+	PhoneNumber      string            `json:"phone_number,omitempty"`
+	Disabled         bool              `json:"disabled,omitempty"`
+	MigrationPending bool              `json:"migration_pending,omitempty"`
+	TOTPSecret       string            `json:"totp_secret,omitempty"`
+	Attributes       map[string]string `json:"attributes,omitempty"`
+	UserMetadata     map[string]string `json:"user_metadata,omitempty"`
+	Orgs             []string          `json:"orgs,omitempty"`
+	CreatedAt        time.Time         `json:"created_at,omitempty"`
 }
 
 type BackupOrg struct {
@@ -270,7 +271,7 @@ func (b *Backup) Restore(doc BackupDocument, dry, force bool) (RestoreResult, er
 			}
 		}
 		for _, client := range doc.Clients {
-			if err := upsertClient(q, client); err != nil {
+			if err := b.upsertClient(q, client); err != nil {
 				return err
 			}
 		}
@@ -361,7 +362,8 @@ func (b *Backup) exportUsers() ([]BackupUser, error) {
 			EmailVerified: user.EmailVerified, PasswordHash: user.PasswordHash,
 			GivenName: user.GivenName, FamilyName: user.FamilyName,
 			PhoneNumber: user.PhoneNumber, Disabled: user.Disabled,
-			Attributes: user.Attributes, UserMetadata: user.UserMetadata,
+			MigrationPending: user.MigrationPending,
+			Attributes:       user.Attributes, UserMetadata: user.UserMetadata,
 			CreatedAt: user.CreatedAt,
 		}
 		if enabled {
@@ -552,8 +554,11 @@ func validateBackup(doc BackupDocument) error {
 		if strings.TrimSpace(row.ID) == "" || strings.TrimSpace(row.Username) == "" {
 			return fmt.Errorf("users[%d] needs an id and a username", i)
 		}
-		if strings.TrimSpace(row.PasswordHash) == "" {
+		if strings.TrimSpace(row.PasswordHash) == "" && !row.MigrationPending {
 			return fmt.Errorf("users[%d] needs a password_hash", i)
+		}
+		if strings.TrimSpace(row.PasswordHash) != "" && row.MigrationPending {
+			return fmt.Errorf("users[%d] migration_pending cannot include a password_hash", i)
 		}
 		if users[row.ID] {
 			return fmt.Errorf("users[%d] repeats id %s", i, row.ID)
@@ -677,16 +682,18 @@ func upsertUser(q database.SQL, user BackupUser) error {
 		created = time.Now().UTC()
 	}
 	_, err = q.Exec(`INSERT INTO users (id, username, password_hash, email, phone_number, created_at,
-		email_verified, disabled, given_name, family_name, attributes, user_metadata, mfa_enabled, mfa_secret)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		email_verified, disabled, given_name, family_name, attributes, user_metadata, mfa_enabled, mfa_secret,
+		migration_pending)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (id) DO UPDATE SET username = excluded.username, password_hash = excluded.password_hash,
 		email = excluded.email, phone_number = excluded.phone_number, email_verified = excluded.email_verified,
 		disabled = excluded.disabled, given_name = excluded.given_name, family_name = excluded.family_name,
 		attributes = excluded.attributes, user_metadata = excluded.user_metadata,
-		mfa_enabled = excluded.mfa_enabled, mfa_secret = excluded.mfa_secret`,
+		mfa_enabled = excluded.mfa_enabled, mfa_secret = excluded.mfa_secret,
+		migration_pending = excluded.migration_pending`,
 		user.ID, user.Username, user.PasswordHash, user.Email, user.PhoneNumber, created,
 		bit(user.EmailVerified), bit(user.Disabled), user.GivenName, user.FamilyName, string(raw), string(rawMeta),
-		bit(user.TOTPSecret != ""), user.TOTPSecret)
+		bit(user.TOTPSecret != ""), user.TOTPSecret, bit(user.MigrationPending))
 	return err
 }
 
@@ -733,7 +740,7 @@ func replaceOrgMembers(q database.SQL, org BackupOrg) error {
 	return nil
 }
 
-func upsertClient(q database.SQL, client models.Client) error {
+func (b *Backup) upsertClient(q database.SQL, client models.Client) error {
 	source := client.RegistrationSource
 	if source == "" {
 		source = "management"
@@ -750,6 +757,14 @@ func upsertClient(q database.SQL, client models.Client) error {
 	if updated.IsZero() {
 		updated = created
 	}
+	secret := client.Secret
+	if b != nil && b.clients != nil {
+		sealed, err := b.clients.Seal(client.Secret)
+		if err != nil {
+			return err
+		}
+		secret = sealed
+	}
 	_, err := q.Exec(`INSERT INTO clients (id, secret, name, redirect_uris, grant_types, scopes,
 		token_endpoint_auth_method, dpop_bound_access_tokens,
 		require_pushed_authorization_requests, backchannel_token_delivery_mode,
@@ -760,8 +775,8 @@ func upsertClient(q database.SQL, client models.Client) error {
 		subject_type, sector_identifier_uri,
 		id_token_encrypted_response_alg, id_token_encrypted_response_enc,
 		userinfo_encrypted_response_alg, userinfo_encrypted_response_enc,
-		created_at, updated_at, org_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		created_at, updated_at, org_id, skip_consent)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (id) DO UPDATE SET secret = excluded.secret, name = excluded.name,
 		redirect_uris = excluded.redirect_uris, grant_types = excluded.grant_types, scopes = excluded.scopes,
 		token_endpoint_auth_method = excluded.token_endpoint_auth_method,
@@ -782,8 +797,8 @@ func upsertClient(q database.SQL, client models.Client) error {
 		id_token_encrypted_response_enc = excluded.id_token_encrypted_response_enc,
 		userinfo_encrypted_response_alg = excluded.userinfo_encrypted_response_alg,
 		userinfo_encrypted_response_enc = excluded.userinfo_encrypted_response_enc,
-		org_id = excluded.org_id`,
-		client.ID, client.Secret, client.Name, jsonList(client.RedirectURIs), jsonList(client.GrantTypes), jsonList(client.Scopes),
+		org_id = excluded.org_id, skip_consent = excluded.skip_consent`,
+		client.ID, secret, client.Name, jsonList(client.RedirectURIs), jsonList(client.GrantTypes), jsonList(client.Scopes),
 		client.TokenEndpointAuthMethod, bit(client.DPoPBoundAccessTokens),
 		bit(client.RequirePushedAuthorizationRequests), client.BackchannelTokenDeliveryMode,
 		client.BackchannelClientNotificationEndpoint, client.BackchannelAuthenticationRequestSigningAlg,
@@ -793,7 +808,7 @@ func upsertClient(q database.SQL, client models.Client) error {
 		subject, client.SectorIdentifierURI,
 		client.IDTokenEncryptedResponseAlg, client.IDTokenEncryptedResponseEnc,
 		client.UserinfoEncryptedResponseAlg, client.UserinfoEncryptedResponseEnc,
-		created, updated, client.OrgID)
+		created, updated, client.OrgID, bit(client.SkipConsent))
 	return err
 }
 

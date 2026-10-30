@@ -99,6 +99,11 @@ func loginAutocomplete(cfg *config.Config) string {
 }
 
 // LoginTitle is the login page heading after defaults are applied.
+// Snapshot is the public branding view. It has no secrets.
+func (t Theme) Snapshot() View {
+	return t.view
+}
+
 func (t Theme) LoginTitle() string {
 	defer telemetry.Step("branding.Theme.LoginTitle")()
 	if t.loginTitle == "" {

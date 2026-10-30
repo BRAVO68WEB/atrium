@@ -25,6 +25,20 @@ func (r *OrgRepository) Create(org *models.Organization) error {
 	return err
 }
 
+func (r *OrgRepository) Update(org *models.Organization) error {
+	defer telemetry.Step("repository.OrgRepository.Update")()
+	res, err := r.db.Exec(`UPDATE organizations SET name = ?, slug = ?, logo_url = ? WHERE id = ?`,
+		org.Name, org.Slug, org.LogoURL, org.ID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func scanOrg(scan func(dest ...any) error) (*models.Organization, error) {
 	defer telemetry.Step("repository.scanOrg")()
 	org := &models.Organization{}
@@ -151,6 +165,28 @@ func (r *OrgRepository) RemoveMember(orgID, userID string) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (r *OrgRepository) ListMembers(orgID string) ([]models.OrgMember, error) {
+	defer telemetry.Step("repository.OrgRepository.ListMembers")()
+	rows, err := r.db.Query(`SELECT m.user_id, u.username, COALESCE(u.email, ''), COALESCE(u.given_name, ''), COALESCE(u.family_name, ''), m.role
+		FROM org_memberships m
+		JOIN users u ON u.id = m.user_id
+		WHERE m.org_id = ?
+		ORDER BY u.username`, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := []models.OrgMember{}
+	for rows.Next() {
+		var member models.OrgMember
+		if err := rows.Scan(&member.UserID, &member.Username, &member.Email, &member.GivenName, &member.FamilyName, &member.Role); err != nil {
+			return nil, err
+		}
+		out = append(out, member)
+	}
+	return out, rows.Err()
 }
 
 func (r *OrgRepository) MemberRole(orgID, userID string) (string, error) {

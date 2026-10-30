@@ -260,7 +260,7 @@ Endpoints:
     GET/POST   /api/users
     GET        /api/users/{id}
     GET        /api/tokens
-    POST       /api/tokens/{token}/revoke
+    POST       /api/tokens/{id}/revoke
     GET        /api/ciba/pending
     POST       /api/ciba/{id}/approve
     POST       /api/ciba/{id}/deny

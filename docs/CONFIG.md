@@ -105,6 +105,7 @@ security:
   allow_plain_pkce: true
   oob_helper: false
   hash_algo: internal/hashalgo/algo.go
+  data_key: replace-me
   trusted_proxies: []
   disable_registration: false
   disable_social_registration: false
@@ -256,8 +257,35 @@ mode, sign-in, forgot-password, and that grant look up the mailbox. A
 mailbox is stored in lowercase, and a second account cannot reuse it,
 including when the identifier is `username`.
 
+`security.identifier_first` is false unless set. When it is true, the
+sign-in page asks for the identifier first. The next submit looks the
+account up. An account with no password and `migration_pending` is sent
+the email code and never sees a password field. Any other account is
+shown the password field, with social buttons under it when providers
+are configured. The password grant is unchanged.
+
+`security.disable_passwords` is false unless set. When it is true, browser
+sign-in and the password grant do not accept a password. `security.passwordless_mode`
+is `otp` (the default) or `link`. `otp` emails a 6-digit code (`login_otp`,
+10 minutes) and signs the browser in when the code matches. `link` emails
+a one-time URL (`login_link`, 10 minutes) and signs the browser in when it
+is opened. An unknown identifier gets the same screen and no mail. Forgot
+and reset are refused. Migration password setup is not used while passwords
+are disabled. `smtp.enabled`, `smtp.host`, and `smtp.from` are required,
+and startup fails without them.
+
 `security.password` is checked when a password is set. `block_username`
 rejects a password that contains the username.
+
+A migrated account has an empty password and `migration_pending`. The
+next browser sign-in emails a 6-digit code (`migrate_otp`, 10 minutes),
+then requires a new password before any OAuth code is issued. The
+password grant returns `migration_required` and does not send mail.
+`POST /api/users/{id}/migration-notice` sends `migrate_notice` with no
+code. An empty password with `migration_pending` false, such as a SAML
+account, does not receive the code, and forgot-password does not attach
+one. Restore and import accept that empty hash only together with the
+flag.
 
 `security.access_token_format` is `opaque` or `jwt`. Opaque is the
 default. Access tokens are never encrypted. ID tokens and UserInfo are
@@ -283,6 +311,14 @@ the string. `MD5`, `SHA256`, `SHA512`, `SHA3512`, `SHA2_128`, and
 `PBKDF2` are PBKDF2-HMAC constructions. `SHA2_128` uses a 16-byte
 SHA-256 key because SHA-2 has no 128-bit hash. New passwords should
 stay on bcrypt or argon2id.
+
+`security.data_key` is required. It is 32 bytes of standard base64.
+`atrium-cli init` writes one. Startup refuses to serve when it is
+missing or the wrong length. Client secrets are encrypted with this
+key. Opaque access tokens and refresh tokens are stored as SHA-256.
+A JWT access token is not stored; the row keeps its `jti`. The key
+stays in the config file, not in the database. Changing it does not
+decrypt old secrets. Set each client secret again if you replace it.
 
 ## Mail templates
 
@@ -454,6 +490,19 @@ stderr. `json` prints one JSON object per record.
 `telemetry.enabled` defaults to false. Turning it on requires
 `telemetry.otlp_endpoint`. An empty endpoint with tracing enabled is a
 startup error. See [Deploy](DEPLOY.md).
+
+## Operator console
+
+`dashboard.enabled` defaults to false. Set it to true to serve `/dashboard`.
+Sign in with the management client id and secret. The session cookie lasts
+`dashboard.session_lifetime`, which defaults to 8h.
+
+The console can edit this file. A saved change is on disk immediately and
+takes effect after the process starts again. In Docker, the console can
+stop the process when `ATRIUM_IN_DOCKER=1`. `restart: unless-stopped` brings
+the container back. The config file must be mounted read-write, and uid
+65534 must be able to write it. Leave a secret field blank to keep the
+value already in the file.
 
 ## Related
 

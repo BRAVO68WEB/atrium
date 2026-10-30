@@ -13,13 +13,29 @@ import (
 	"github.com/bravo68web/atrium/pkg/crypto"
 )
 
+func (h *Handler) revokeUsedCode(authCode *models.AuthorizationCode) {
+	defer telemetry.Step("oauth.Handler.revokeUsedCode")()
+	if h == nil || h.tokenRepo == nil || authCode == nil {
+		return
+	}
+	if authCode.FamilyID != "" {
+		_ = h.tokenRepo.RevokeFamily(authCode.FamilyID)
+		return
+	}
+	_ = h.tokenRepo.RevokeAllForClient(authCode.ClientID, authCode.UserID)
+}
+
 func (h *Handler) handleAuthorizationCodeToken(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("oauth.Handler.handleAuthorizationCodeToken")()
 	code := r.Form.Get("code")
 	redirectURI := r.Form.Get("redirect_uri")
 	codeVerifier := r.Form.Get("code_verifier")
 
-	clientID, clientSecret := presentedClient(r)
+	clientID, clientSecret, authErr := h.credentials(r)
+	if authErr != nil {
+		writeTokenError(w, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
+		return
+	}
 
 	if code == "" {
 		writeTokenError(w, http.StatusBadRequest, "invalid_request", "code is required")
@@ -34,6 +50,12 @@ func (h *Handler) handleAuthorizationCodeToken(w http.ResponseWriter, r *http.Re
 
 	client, ok := h.requireClient(r.Context(), w, authCode.ClientID, "", http.StatusBadRequest)
 	if !ok {
+		return
+	}
+
+	if authCode.Used {
+		h.revokeUsedCode(authCode)
+		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "Authorization code already used")
 		return
 	}
 
@@ -52,16 +74,6 @@ func (h *Handler) handleAuthorizationCodeToken(w http.ResponseWriter, r *http.Re
 
 	dpopJKT, ok := h.enforceClientDPoP(w, r, client)
 	if !ok {
-		return
-	}
-
-	if authCode.Used {
-		if authCode.FamilyID != "" {
-			_ = h.tokenRepo.RevokeFamily(authCode.FamilyID)
-		} else {
-			_ = h.tokenRepo.RevokeAllForClient(authCode.ClientID, authCode.UserID)
-		}
-		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "Authorization code already used")
 		return
 	}
 
@@ -107,6 +119,10 @@ func (h *Handler) handleAuthorizationCodeToken(w http.ResponseWriter, r *http.Re
 			writeTokenError(w, http.StatusBadRequest, "invalid_grant", "code_verifier is required")
 			return
 		}
+		if authCode.CodeChallengeMethod == "plain" && (h.cfg == nil || !h.cfg.Security.AllowPlainPKCE) {
+			writeTokenError(w, http.StatusBadRequest, "invalid_grant", "plain PKCE is disabled")
+			return
+		}
 		if !crypto.ValidateCodeChallenge(codeVerifier, authCode.CodeChallenge, authCode.CodeChallengeMethod) {
 			writeTokenError(w, http.StatusBadRequest, "invalid_grant", "Invalid code_verifier")
 			return
@@ -115,11 +131,7 @@ func (h *Handler) handleAuthorizationCodeToken(w http.ResponseWriter, r *http.Re
 
 	if err := h.authCodeRepo.MarkUsed(code); err != nil {
 		if errors.Is(err, repository.ErrCodeUsed) {
-			if authCode.FamilyID != "" {
-				_ = h.tokenRepo.RevokeFamily(authCode.FamilyID)
-			} else {
-				_ = h.tokenRepo.RevokeAllForClient(authCode.ClientID, authCode.UserID)
-			}
+			h.revokeUsedCode(authCode)
 			writeTokenError(w, http.StatusBadRequest, "invalid_grant", "Authorization code already used")
 			return
 		}
@@ -174,6 +186,7 @@ func (h *Handler) handleAuthorizationCodeToken(w http.ResponseWriter, r *http.Re
 		ExpiresAt:   time.Now().Add(h.cfg.Security.RefreshTokenLifetime),
 	}
 
+	h.stampCert(r, accessTok)
 	if err := h.tokenRepo.SaveAccessToken(accessTok); err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to save access token")
 		return
@@ -187,7 +200,7 @@ func (h *Handler) handleAuthorizationCodeToken(w http.ResponseWriter, r *http.Re
 	var idToken string
 	if containsScope(authCode.Scopes, "openid") && h.oidcHandler != nil {
 		// Use nonce stored with the authorization code, not from the token request
-		idToken, err = h.oidcHandler.CreateIDToken(r.Context(), authCode.ClientID, authCode.UserID, authCode.Nonce, authCode.Scopes, oidc.IDTokenExtra{SID: authCode.SessionID, AuthTime: authCode.AuthTime, OrgID: authCode.OrgID, OrgSlug: orgSlug})
+		idToken, err = h.oidcHandler.CreateIDToken(r.Context(), authCode.ClientID, authCode.UserID, authCode.Nonce, authCode.Scopes, oidc.IDTokenExtra{SID: authCode.SessionID, AuthTime: authCode.AuthTime, OrgID: authCode.OrgID, OrgSlug: orgSlug, AccessToken: accessToken, Code: code})
 		if err != nil {
 			writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to create ID token")
 			return

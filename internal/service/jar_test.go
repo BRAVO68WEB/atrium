@@ -54,6 +54,15 @@ func TestJARAcceptsARS256ObjectAndRejectsNone(t *testing.T) {
 	if _, err := svc.ValidateRequestObject(badKid, client); err == nil || !strings.Contains(err.Error(), "no matching key") {
 		t.Fatalf("bad kid %v", err)
 	}
+	mismatch := signRequest(t, jwt.SigningMethodRS256, key, "app-key", "", jwt.MapClaims{
+		"iss":       "app",
+		"aud":       "https://issuer.example",
+		"exp":       time.Now().Add(time.Minute).Unix(),
+		"client_id": "other",
+	})
+	if _, err := svc.ValidateRequestObject(mismatch, client); err == nil || !strings.Contains(err.Error(), "client_id") {
+		t.Fatalf("client_id mismatch %v", err)
+	}
 }
 
 func TestJARAcceptsOneECKeyWithoutAKID(t *testing.T) {

@@ -42,7 +42,11 @@ func (h *Handler) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientID, clientSecret := presentedClient(r)
+	clientID, clientSecret, authErr := h.credentials(r)
+	if authErr != nil {
+		writeTokenError(w, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
+		return
+	}
 
 	client, ok := h.requireClient(r.Context(), w, refreshToken.ClientID, "", http.StatusBadRequest)
 	if !ok {
@@ -55,7 +59,7 @@ func (h *Handler) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	boundJKT := ""
-	if old, err := h.tokenRepo.GetAccessToken(refreshToken.AccessToken); err == nil {
+	if old, err := h.tokenRepo.GetAccessTokenByKey(refreshToken.AccessToken); err == nil {
 		boundJKT = old.DPoPJKT
 	}
 	dpopJKT, ok := h.boundRefreshDPoP(w, r, client, boundJKT)
@@ -116,6 +120,7 @@ func (h *Handler) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:   time.Now().Add(h.cfg.Security.RefreshTokenLifetime),
 	}
 
+	h.stampCert(r, accessTok)
 	if err := h.tokenRepo.SaveAccessToken(accessTok); err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to save access token")
 		return
@@ -125,7 +130,7 @@ func (h *Handler) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to save refresh token")
 		return
 	}
-	_ = h.tokenRepo.RevokeAccessToken(refreshToken.AccessToken)
+	_ = h.tokenRepo.RevokeStoredAccessToken(refreshToken.AccessToken)
 	_ = h.tokenRepo.RevokeRefreshToken(refreshTokenStr)
 
 	writeTokenResponse(w, newAccessToken, newRefreshToken, int(h.cfg.Security.AccessTokenLifetime.Seconds()), tokenType, strings.Join(refreshToken.Scopes, " "))
