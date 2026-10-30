@@ -15,6 +15,7 @@ import (
 
 	"github.com/bravo68web/atrium/internal/aauth"
 	"github.com/bravo68web/atrium/internal/auth"
+	"github.com/bravo68web/atrium/internal/branding"
 	"github.com/bravo68web/atrium/internal/controller"
 	"github.com/bravo68web/atrium/internal/handlers/oauth"
 	"github.com/bravo68web/atrium/internal/oidc"
@@ -116,6 +117,8 @@ func (r *Router) securityHeaders(next http.Handler) http.Handler {
 }
 
 func (r *Router) setupRoutes() {
+	r.mux.Get("/favicon.ico", branding.ServeDefaultFavicon)
+	r.mux.Get("/favicon.png", branding.ServeDefaultFavicon)
 	r.mux.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{
 			"status": "ok",
@@ -272,6 +275,9 @@ func mountManagement(mgmt chi.Router, r *Router) {
 		r3.Get("/{clientID}", r.managementCtrl.HandleGetClient)
 		r3.Put("/{clientID}", r.managementCtrl.HandleUpdateClient)
 		r3.Delete("/{clientID}", r.managementCtrl.HandleDeleteClient)
+		r3.Post("/{clientID}/secret", r.managementCtrl.HandleResetClientSecret)
+		r3.Post("/{clientID}/keys", r.managementCtrl.HandleCreateClientKey)
+		r3.Post("/{clientID}/keys/rotate", r.managementCtrl.HandleRotateClientKey)
 	})
 
 	mgmt.Route("/users", func(r3 chi.Router) {

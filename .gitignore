@@ -71,6 +71,9 @@ testdata/
 e2e/node_modules/
 e2e/.cache/
 
+# Operator console
+frontend/node_modules/
+
 # Temporary files
 *.tmp
 *.bak

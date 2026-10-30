@@ -20,9 +20,12 @@ services:
       postgres:
         condition: service_healthy
     command: ["-config", "/config/config.yaml"]
+    environment:
+      ATRIUM_IN_DOCKER: "1"
+    restart: unless-stopped
     ports:
       - "8080:8080"
     volumes:
-      - ./config.yaml:/config/config.yaml:ro
+      - ./config.yaml:/config/config.yaml
 volumes:
   pgdata:

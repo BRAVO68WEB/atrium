@@ -79,12 +79,27 @@ AAuth discovery is separate from these routes. It is off unless
 | GET, POST | `/oauth/logout` | RP-initiated logout |
 | GET | `/.well-known/openid-configuration` | OIDC discovery |
 | GET | `/.well-known/oauth-authorization-server` | Authorization server metadata |
-| GET | `/oidc/jwks` | Signing keys |
+| GET | `/oidc/jwks` | Tenant and application signing keys |
 | GET | `/oidc/userinfo` | UserInfo |
 | GET, POST | `/login/migrate` | Email code for a migrated user with no password |
 | POST | `/login/migrate/resend` | Send another code |
 | GET, POST | `/login/migrate/password` | Forced password after the code |
 | POST | `/api/users/{userID}/migration-notice` | Mail the sign-in notice, without a code |
+
+`GET /oidc/jwks` is the only JWKS document. Its `keys` array holds the
+tenant RSA and EC signing keys and the public half of every application
+keypair. `POST /api/clients/{clientID}/secret` replaces the client secret and
+returns the new secret once. The previous secret stops working
+immediately. The management client cannot be reset here.
+
+`POST /api/clients/{clientID}/keys` creates the first RSA
+keypair for an application and returns the private PEM once.
+`POST /api/clients/{clientID}/keys/rotate` retires that key for
+`oidc.key_retain` and creates the next one. Both routes need a
+management token. The management client cannot have one of these keys.
+The client's `jwks_uri` is `/oidc/jwks`. `jwks` on the client is only
+that application's public keys, so a signature is checked against its
+own key.
 
 `POST /oauth/token` accepts these `grant_type` values when the client
 allows them:
@@ -227,6 +242,15 @@ The stored JSON must stay within 16 KiB and 50 keys. This route does
 not return `attributes`. It rejects `attributes`, `disabled`, and
 `email_verified`.
 
+## Operator console
+
+`/dashboard` is the browser for the management API. It is mounted only when
+`dashboard.enabled` is true. Sign in with `POST /dashboard/session` and the
+management client id and secret. The session is an HttpOnly cookie on
+`/dashboard`. Calls then go to `/dashboard/api/*`, which uses that session
+and the same handlers as `/api`. `PUT /dashboard/api/config` writes
+`config.yaml` and does not apply the new file until the process restarts.
+
 ## Management API
 
 Clients, users, and tokens:
@@ -303,6 +327,10 @@ GET    /api/consents
 DELETE /api/consents
 ```
 
+`GET /api/consents` takes `user_id`, `client_id`, or both. `user_id` lists
+that person's consents. `client_id` alone lists every consent for that
+application. Both together keep the person's rows for that application.
+
 A role is a name plus scopes that already exist on an API resource.
 Assign that role to a user, or assign one resource scope directly.
 Leave `org_id` empty and the grant is on every token. Set `org_id`
@@ -328,7 +356,9 @@ Organizations, webhooks, audit, analytics, CIBA, and keys:
 GET    /api/orgs
 POST   /api/orgs
 GET    /api/orgs/{orgID}
+PATCH  /api/orgs/{orgID}
 POST   /api/orgs/{orgID}/domains
+GET    /api/orgs/{orgID}/members
 POST   /api/orgs/{orgID}/members
 ```
 
@@ -336,7 +366,9 @@ POST   /api/orgs/{orgID}/members
 `logo_url`. `logo_url` is an absolute http or https URL. The organization
 picker shows that image. An empty `logo_url` shows the first letter of
 the name on a colored ground. The color is chosen from the name, so it
-stays the same each visit.
+stays the same each visit. `PATCH /api/orgs/{orgID}` changes `name`,
+`slug`, and `logo_url`. Omitted fields stay as they are. An empty
+`logo_url` clears the logo.
 
 ```
 
@@ -349,6 +381,7 @@ POST   /api/webhooks/{id}/test
 
 GET    /api/audit
 GET    /api/analytics/logins
+GET    /api/keys
 POST   /api/keys/rotate
 
 GET    /api/ciba/pending
@@ -373,8 +406,12 @@ error is logged and does not change that response.
 `POST /api/webhooks/{id}/test` still waits for the receiver and sends
 `webhook.test`.
 
-`POST /api/keys/rotate` returns the new key ids. Private keys stay in
-SQL. See [Infrastructure](INFRA.md).
+`GET /api/keys` lists the same keys published in `GET /oidc/jwks`: key
+id, algorithm, type, and whether the key is active, retiring, or
+expired. Application keys include `client_id`. It does not return
+private keys. `POST /api/keys/rotate` retires the active tenant RSA and
+EC keys and returns the new key ids. Private keys stay in SQL. See
+[Infrastructure](INFRA.md).
 
 ## Errors
 

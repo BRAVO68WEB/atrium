@@ -200,6 +200,23 @@ http://localhost:8025. RabbitMQ management is at
 http://localhost:15672 with user `oauth` and password `oauth`. The
 collector prints spans to its own log.
 
+## Operator console
+
+Set `dashboard.enabled` to true and open `/dashboard`. Sign in with the
+management client id and secret. The page is the management API: applications,
+users, organizations, roles, sign-in policy, events, and server settings.
+
+Saving a setting rewrites the mounted `config.yaml`. The process keeps the
+old settings until it starts again. The compose files set
+`restart: unless-stopped` and `ATRIUM_IN_DOCKER=1`, and mount the config
+file read-write. The console's Restart button sends SIGTERM. Docker starts
+the container again, and you sign in once more. The file must be writable
+by uid 65534, which is the user in the image.
+
+`just build` and the image build compile `frontend/` and embed it in the
+`atrium` binary. `go build` without `-tags embed` still compiles, and
+`/dashboard` then shows a page that says the assets are missing.
+
 ## Logs and traces
 
 Each request writes one log record. The fields are `method`, `route`,

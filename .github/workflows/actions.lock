@@ -18,6 +18,7 @@ workflows:
         - 'actions/attest-build-provenance@v2.4.0'
         - 'actions/checkout@v4.4.0'
         - 'actions/setup-go@v5.6.0'
+        - 'actions/setup-node@v4.4.0'
         - 'docker/build-push-action@v6.19.2'
         - 'docker/login-action@v3.7.0'
         - 'docker/metadata-action@v5.10.0'

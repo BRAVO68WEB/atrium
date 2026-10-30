@@ -58,11 +58,14 @@ func MountManagementExtras(api chi.Router, mgmt *controller.ManagementController
 	api.Delete("/webhooks/{id}", mgmt.HandleDeleteWebhook)
 	api.Post("/webhooks/{id}/test", mgmt.HandleTestWebhook)
 	api.Get("/audit", mgmt.HandleListAudit)
+	api.Get("/keys", mgmt.HandleListKeys)
 	api.Post("/keys/rotate", mgmt.HandleRotateKeys)
 	api.Get("/orgs", mgmt.HandleListOrgs)
 	api.Post("/orgs", mgmt.HandleCreateOrg)
 	api.Get("/orgs/{orgID}", mgmt.HandleGetOrg)
+	api.Patch("/orgs/{orgID}", mgmt.HandleUpdateOrg)
 	api.Post("/orgs/{orgID}/domains", mgmt.HandleAddOrgDomain)
+	api.Get("/orgs/{orgID}/members", mgmt.HandleListOrgMembers)
 	api.Post("/orgs/{orgID}/members", mgmt.HandleAddOrgMember)
 }
 

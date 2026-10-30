@@ -80,7 +80,7 @@ func TestPasswordlessOTPSignsInWithoutPassword(t *testing.T) {
 	if sent.StatusCode != http.StatusFound || !strings.Contains(sent.location, "/login/otp") {
 		t.Fatalf("otp redirect %d %s", sent.StatusCode, sent.location)
 	}
-	code := regexp.MustCompile(`\b\d{6}\b`).FindString(mail.last())
+	code := regexp.MustCompile(`\b\d{6}\b`).FindString(mail.waitLast(t))
 	if code == "" {
 		t.Fatalf("mail missing code: %q", mail.last())
 	}
@@ -162,7 +162,7 @@ func TestPasswordlessLinkSignsInOnce(t *testing.T) {
 	if sent.StatusCode != http.StatusOK || !strings.Contains(sent.body, "sign-in link") {
 		t.Fatalf("link notice %d %s", sent.StatusCode, sent.body)
 	}
-	match := regexp.MustCompile(`token=([^&\s]+)`).FindStringSubmatch(mail.last())
+	match := regexp.MustCompile(`token=([^&\s]+)`).FindStringSubmatch(mail.waitLast(t))
 	if len(match) != 2 {
 		t.Fatalf("mail missing link: %q", mail.last())
 	}

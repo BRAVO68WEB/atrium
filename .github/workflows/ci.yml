@@ -21,9 +21,20 @@ jobs:
         with:
           go-version: "1.26"
 
+      - name: Set up Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Build the operator console
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.12.1 --activate
+          cd frontend && pnpm install --frozen-lockfile && pnpm build
+
       - name: Build all binaries
         run: |
-          go build -o bin/atrium ./cmd/atrium
+          go build -tags embed -o bin/atrium ./cmd/atrium
           go build -o bin/atrium-cli ./cmd/atrium-cli
           go build -o bin/atrium-mobile ./cmd/atrium-mobile
 

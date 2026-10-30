@@ -19,6 +19,7 @@ import (
 	"github.com/bravo68web/atrium/internal/cache"
 	"github.com/bravo68web/atrium/internal/config"
 	"github.com/bravo68web/atrium/internal/controller"
+	"github.com/bravo68web/atrium/internal/dashboard"
 	"github.com/bravo68web/atrium/internal/database"
 	"github.com/bravo68web/atrium/internal/handlers/oauth"
 	"github.com/bravo68web/atrium/internal/hashalgo"
@@ -207,6 +208,8 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue, shared *redis.Cli
 	tokenSvc := service.NewTokenService(tokenRepo)
 	auditLog := service.NewAuditLog(repository.NewAuditRepository(conn))
 	mgmtCtrl := controller.NewManagementController(clientSvc, userSvc, tokenSvc, totpSvc, scopeRepo, resourceRepo, consentRepo, accountSvc, sessionSvc, tokenRepo)
+	mgmtCtrl.SetManagementClientID(cfg.Management.ClientID)
+	mgmtCtrl.SetClientKeys(service.NewClientKeyService(clientRepo, cfg.Security.Issuer, cfg.OIDC.KeyRetain))
 	mgmtCtrl.SetOrgs(orgs)
 	mgmtCtrl.SetAccess(access)
 	mgmtCtrl.SetWebhooks(hooks)
@@ -274,6 +277,22 @@ func Build(cfg *config.Config, db *database.DB, q queue.Queue, shared *redis.Cli
 
 	rt := route.NewRouter(mgmtCtrl, webCtrl, oauthHandler, oidcHandler, pushHandler, aauthHandler, accountCtrl, authn, root.OpenAPISpec, root.TemplateFS)
 	rt.SetContentSecurityPolicy(service.ContentSecurityPolicy(cfg.Security.BotProtection.Provider))
+	if cfg.Dashboard.Enabled {
+		dash := dashboard.New(dashboard.Options{
+			Config:  cfg,
+			Clients: clientSvc,
+			Issue: func(id, secret string) (string, int, string) {
+				return dashboard.IssueClientCredentials(oauthHandler.HandleToken, id, secret)
+			},
+			API:       rt.GetMux(),
+			Orgs:      orgs.ListForUser,
+			Resources: mgmtCtrl,
+			Pages:     webCtrl,
+			Secure:    cfg.Server.TLS.Enabled,
+			InDocker:  dashboard.InDocker(),
+		})
+		dash.Mount(rt.GetMux())
+	}
 	jobs, notifyRedis, err := openNotify(cfg, shared, redisClient)
 	if err != nil {
 		closeRedis(redisClient)

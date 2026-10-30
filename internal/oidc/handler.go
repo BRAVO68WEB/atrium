@@ -418,8 +418,27 @@ func (h *Handler) identityClaims(ctx context.Context, clientID, userID, nonce st
 func (h *Handler) HandleJWKS(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("oidc.Handler.HandleJWKS")()
 	jwks := h.keySet.ToJWKS()
+	if h != nil && h.clients != nil {
+		extra, err := h.clients.PublishedClientSigningKeys(time.Now())
+		if err != nil {
+			http.Error(w, "jwks", http.StatusInternalServerError)
+			return
+		}
+		seen := map[string]bool{}
+		for _, key := range jwks.Keys {
+			seen[key.Kid] = true
+		}
+		for _, row := range extra {
+			var jwk JWK
+			if json.Unmarshal([]byte(row.PublicJWK), &jwk) != nil || jwk.Kid == "" || seen[jwk.Kid] {
+				continue
+			}
+			seen[jwk.Kid] = true
+			jwks.Keys = append(jwks.Keys, jwk)
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "max-age=3600")
+	w.Header().Set("Cache-Control", "public, max-age=60")
 	_ = json.NewEncoder(w).Encode(jwks)
 }
 

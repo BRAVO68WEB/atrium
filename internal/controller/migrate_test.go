@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	root "github.com/bravo68web/atrium"
 	"github.com/bravo68web/atrium/internal/config"
@@ -52,6 +53,30 @@ func (m *captureMail) count() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.texts)
+}
+
+// waitCount blocks until asynchronous login mail has been captured.
+func (m *captureMail) waitCount(t *testing.T, n int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if m.count() >= n {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func (m *captureMail) waitLast(t *testing.T) string {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if text := m.last(); text != "" {
+			return text
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return m.last()
 }
 
 func (m *captureMail) containing(part string) int {
@@ -135,7 +160,7 @@ func TestMigratedUserSetsPasswordAfterEmailCode(t *testing.T) {
 	if login.StatusCode != http.StatusFound || !strings.Contains(login.location, "/login/migrate") {
 		t.Fatalf("login redirect %d %s", login.StatusCode, login.location)
 	}
-	code := regexp.MustCompile(`\b\d{6}\b`).FindString(mail.last())
+	code := regexp.MustCompile(`\b\d{6}\b`).FindString(mail.waitLast(t))
 	if code == "" {
 		t.Fatalf("mail missing code: %q", mail.last())
 	}
@@ -258,6 +283,7 @@ func TestIdentifierFirstSkipsPasswordWhenUnset(t *testing.T) {
 	if pending.StatusCode != http.StatusFound || !strings.Contains(pending.location, "/login/migrate") {
 		t.Fatalf("pending login %d %s", pending.StatusCode, pending.location)
 	}
+	mail.waitCount(t, 1)
 	if mail.count() != 1 {
 		t.Fatalf("mail count %d", mail.count())
 	}
