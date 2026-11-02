@@ -16,7 +16,7 @@ func TestAccessTokenUsesJWTProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := handler.CreateAccessTokenJWT(context.Background(), "app", "user-1", "openid", "Bearer", time.Hour, "", "", "https://api.example", "actor-1")
+	raw, err := handler.CreateAccessTokenJWT(context.Background(), "app", "user-1", "openid", "Bearer", time.Hour, "", "", "https://api.example", "actor-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestAccessTokenUsesJWTProfile(t *testing.T) {
 	if act["sub"] != "actor-1" {
 		t.Fatalf("act %v", claims["act"])
 	}
-	issuerOnly, err := handler.CreateAccessTokenJWT(context.Background(), "app", "", "openid", "Bearer", time.Hour, "", "", "", "")
+	issuerOnly, err := handler.CreateAccessTokenJWT(context.Background(), "app", "", "openid", "Bearer", time.Hour, "", "", "", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,6 +48,17 @@ func TestAccessTokenUsesJWTProfile(t *testing.T) {
 	}
 	if empty["aud"] != config.DefaultConfig().Security.Issuer || empty["sub"] != "app" {
 		t.Fatalf("client token %v", empty)
+	}
+	idToken, err := handler.CreateIDToken(context.Background(), "app", "user-1", "nonce-1", []string{"openid"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	idClaims := jwt.MapClaims{}
+	if _, _, err := jwt.NewParser(jwt.WithoutClaimsValidation()).ParseUnverified(idToken, idClaims); err != nil {
+		t.Fatal(err)
+	}
+	if idClaims["azp"] != "app" {
+		t.Fatalf("id token azp %v", idClaims["azp"])
 	}
 	if _, ok := empty["act"]; ok {
 		t.Fatalf("act should be absent: %v", empty["act"])

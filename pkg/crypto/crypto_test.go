@@ -154,6 +154,7 @@ func TestValidateCodeChallenge(t *testing.T) {
 		{"invalid S256", verifier, "wrong_challenge", "S256", false},
 		{"valid plain", verifier, verifier, "plain", true},
 		{"invalid plain", verifier, "wrong", "plain", false},
+		{"short verifier", "abc", "abc", "plain", false},
 		{"unsupported method", verifier, challenge, "unknown", false},
 	}
 

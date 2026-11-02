@@ -3,6 +3,7 @@ package oidc
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -90,6 +91,32 @@ func NewHandler(db *database.DB, cfg *config.Config) (*Handler, error) {
 	return h, nil
 }
 
+func (h *Handler) orgRole(orgID, userID string) string {
+	defer telemetry.Step("oidc.Handler.orgRole")()
+	if h == nil || h.orgs == nil || orgID == "" || userID == "" {
+		return ""
+	}
+	role, err := h.orgs.MemberRole(orgID, userID)
+	if err != nil {
+		return ""
+	}
+	return role
+}
+
+func (h *Handler) OrgRole(orgID, userID string) string {
+	defer telemetry.Step("oidc.Handler.OrgRole")()
+	return h.orgRole(orgID, userID)
+}
+
+// TokenHash is the OIDC at_hash and c_hash value: the left half of SHA-256, base64url.
+func TokenHash(value string) string {
+	if value == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(value))
+	return base64.RawURLEncoding.EncodeToString(sum[:len(sum)/2])
+}
+
 func generateKid() string {
 	defer telemetry.Step("oidc.generateKid")()
 	b := make([]byte, 16)
@@ -105,6 +132,8 @@ type IDTokenClaims struct {
 	Nonce             string `json:"nonce,omitempty"`
 	AuthTime          int64  `json:"auth_time,omitempty"`
 	AtHash            string `json:"at_hash,omitempty"`
+	CHash             string `json:"c_hash,omitempty"`
+	Azp               string `json:"azp,omitempty"`
 	Name              string `json:"name,omitempty"`
 	GivenName         string `json:"given_name,omitempty"`
 	FamilyName        string `json:"family_name,omitempty"`
@@ -116,13 +145,16 @@ type IDTokenClaims struct {
 	Sub               string `json:"sub"`
 	OrgID             string `json:"org_id,omitempty"`
 	OrgSlug           string `json:"org_slug,omitempty"`
+	OrgRole           string `json:"org_role,omitempty"`
 }
 
 type IDTokenExtra struct {
-	SID      string
-	AuthTime time.Time
-	OrgID    string
-	OrgSlug  string
+	SID         string
+	AuthTime    time.Time
+	OrgID       string
+	OrgSlug     string
+	AccessToken string
+	Code        string
 }
 
 func (h *Handler) CreateIDToken(ctx context.Context, clientID, userID, nonce string, scopes []string, extra ...IDTokenExtra) (string, error) {
@@ -157,7 +189,7 @@ func (h *Handler) CreateIDTokenWithES256(ctx context.Context, clientID, userID, 
 // The profile is RFC 9068: typ at+jwt, aud is the resource or the issuer,
 // and client_id plus azp name the client. Callers still store the compact
 // token so revocation and UserInfo keep working.
-func (h *Handler) CreateAccessTokenJWT(ctx context.Context, clientID, userID, scope, _ string, lifetime time.Duration, orgID, orgSlug, resource, actor string) (string, error) {
+func (h *Handler) CreateAccessTokenJWT(ctx context.Context, clientID, userID, scope, _ string, lifetime time.Duration, orgID, orgSlug, resource, actor string, extra map[string]any) (string, error) {
 	defer telemetry.Step("oidc.Handler.CreateAccessTokenJWT")()
 	if h == nil || h.keySet == nil {
 		return "", fmt.Errorf("signing keys are not loaded")
@@ -195,8 +227,17 @@ func (h *Handler) CreateAccessTokenJWT(ctx context.Context, clientID, userID, sc
 	if orgSlug != "" {
 		claims["org_slug"] = orgSlug
 	}
+	if role := h.orgRole(orgID, userID); role != "" {
+		claims["org_role"] = role
+	}
 	if actor != "" {
 		claims["act"] = map[string]string{"sub": actor}
+	}
+	for name, value := range extra {
+		if _, exists := claims[name]; exists {
+			continue
+		}
+		claims[name] = value
 	}
 	key, kid := h.keySet.GetRSAKey()
 	if key == nil {
@@ -211,8 +252,34 @@ func (h *Handler) CreateAccessTokenJWT(ctx context.Context, clientID, userID, sc
 // AccessTokenSubject verifies an access token this server signed and returns sub.
 func (h *Handler) AccessTokenSubject(raw string) (string, error) {
 	defer telemetry.Step("oidc.Handler.AccessTokenSubject")()
+	claims, err := h.parseAccessToken(raw)
+	if err != nil {
+		return "", err
+	}
+	sub, _ := claims["sub"].(string)
+	if sub == "" {
+		return "", fmt.Errorf("invalid access token")
+	}
+	return sub, nil
+}
+
+// AccessTokenJTI verifies an access token this server signed and returns jti.
+func (h *Handler) AccessTokenJTI(raw string) (string, error) {
+	defer telemetry.Step("oidc.Handler.AccessTokenJTI")()
+	claims, err := h.parseAccessToken(raw)
+	if err != nil {
+		return "", err
+	}
+	jti, _ := claims["jti"].(string)
+	if jti == "" {
+		return "", fmt.Errorf("invalid access token")
+	}
+	return jti, nil
+}
+
+func (h *Handler) parseAccessToken(raw string) (jwt.MapClaims, error) {
 	if h == nil || h.keySet == nil {
-		return "", fmt.Errorf("signing keys are not loaded")
+		return nil, fmt.Errorf("signing keys are not loaded")
 	}
 	claims := jwt.MapClaims{}
 	token, err := jwt.ParseWithClaims(raw, claims, func(t *jwt.Token) (any, error) {
@@ -226,17 +293,27 @@ func (h *Handler) AccessTokenSubject(raw string) (string, error) {
 		return nil, fmt.Errorf("unknown signing key")
 	})
 	if err != nil || token == nil || !token.Valid {
-		return "", fmt.Errorf("invalid access token")
+		return nil, fmt.Errorf("invalid access token")
 	}
 	iss, _ := claims["iss"].(string)
 	if iss != h.issuer() {
-		return "", fmt.Errorf("invalid access token")
+		return nil, fmt.Errorf("invalid access token")
 	}
-	sub, _ := claims["sub"].(string)
-	if sub == "" {
-		return "", fmt.Errorf("invalid access token")
+	return claims, nil
+}
+
+// SetDataKey decrypts client secrets read by this handler.
+func (h *Handler) SetDataKey(key []byte) {
+	if h != nil && h.clients != nil {
+		h.clients.SetKey(key)
 	}
-	return sub, nil
+}
+
+// UseTokenVerifier makes JWT access-token lookups on this handler verify the signature.
+func (h *Handler) UseTokenVerifier() {
+	if h != nil && h.tokens != nil {
+		h.tokens.SetAccessVerifier(h.AccessTokenJTI)
+	}
 }
 
 func signIDToken(method jwt.SigningMethod, kid string, key any, claims jwt.Claims) (string, error) {
@@ -270,6 +347,7 @@ func (h *Handler) identityClaims(ctx context.Context, clientID, userID, nonce st
 			"iss": h.issuer(),
 			"sub": sub,
 			"aud": clientID,
+			"azp": clientID,
 			"exp": now.Add(time.Hour).Unix(),
 			"iat": now.Unix(),
 			"nbf": now.Unix(),
@@ -289,7 +367,16 @@ func (h *Handler) identityClaims(ctx context.Context, clientID, userID, nonce st
 		if ex.OrgSlug != "" {
 			claims["org_slug"] = ex.OrgSlug
 		}
-		for key, value := range applyClaimMappings(mappings, user, scopes) {
+		if role := h.orgRole(ex.OrgID, userID); role != "" {
+			claims["org_role"] = role
+		}
+		if hash := TokenHash(ex.AccessToken); hash != "" {
+			claims["at_hash"] = hash
+		}
+		if hash := TokenHash(ex.Code); hash != "" {
+			claims["c_hash"] = hash
+		}
+		for key, value := range applyClaimMappings(mappings, sub, user, scopes) {
 			claims[key] = value
 		}
 		return claims, nil
@@ -309,6 +396,10 @@ func (h *Handler) identityClaims(ctx context.Context, clientID, userID, nonce st
 		SID:     ex.SID,
 		OrgID:   ex.OrgID,
 		OrgSlug: ex.OrgSlug,
+		OrgRole: h.orgRole(ex.OrgID, userID),
+		AtHash:  TokenHash(ex.AccessToken),
+		CHash:   TokenHash(ex.Code),
+		Azp:     clientID,
 	}
 	if !ex.AuthTime.IsZero() {
 		claims.AuthTime = ex.AuthTime.Unix()
@@ -333,17 +424,50 @@ func (h *Handler) identityClaims(ctx context.Context, clientID, userID, nonce st
 func (h *Handler) HandleJWKS(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("oidc.Handler.HandleJWKS")()
 	jwks := h.keySet.ToJWKS()
+	if h != nil && h.clients != nil {
+		extra, err := h.clients.PublishedClientSigningKeys(time.Now())
+		if err != nil {
+			http.Error(w, "jwks", http.StatusInternalServerError)
+			return
+		}
+		seen := map[string]bool{}
+		for _, key := range jwks.Keys {
+			seen[key.Kid] = true
+		}
+		for _, row := range extra {
+			var jwk JWK
+			if json.Unmarshal([]byte(row.PublicJWK), &jwk) != nil || jwk.Kid == "" || seen[jwk.Kid] {
+				continue
+			}
+			seen[jwk.Kid] = true
+			jwks.Keys = append(jwks.Keys, jwk)
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "max-age=3600")
+	w.Header().Set("Cache-Control", "public, max-age=60")
 	_ = json.NewEncoder(w).Encode(jwks)
 }
 
 func (h *Handler) HandleUserInfo(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("oidc.Handler.HandleUserInfo")()
 	scheme, tokenString := splitAuth(r.Header.Get("Authorization"))
+	fromQuery := false
+	if tokenString == "" {
+		tokenString = r.URL.Query().Get("access_token")
+		fromQuery = tokenString != ""
+		if fromQuery && r.Header.Get("DPoP") != "" {
+			scheme = "DPoP"
+		} else if fromQuery {
+			scheme = "Bearer"
+		}
+	}
 	if tokenString == "" {
 		writeOIDCError(w, http.StatusUnauthorized, "invalid_token", "Authorization header required")
 		return
+	}
+	if fromQuery {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Pragma", "no-cache")
 	}
 
 	if h.tokens == nil {
@@ -361,8 +485,22 @@ func (h *Handler) HandleUserInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.userInfoDPoP(w, r, at, scheme) {
+	dpopOK := h.userInfoDPoP(w, r, at, scheme)
+	if !dpopOK {
 		return
+	}
+	// A valid DPoP proof already constrains the sender. The certificate
+	// is required only when the token is not presented with that proof.
+	if at.CertThumbprint != "" && !strings.EqualFold(scheme, "DPoP") {
+		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+			writeOIDCError(w, http.StatusUnauthorized, "invalid_token", "client certificate required")
+			return
+		}
+		sum := sha256.Sum256(r.TLS.PeerCertificates[0].Raw)
+		if base64.RawURLEncoding.EncodeToString(sum[:]) != at.CertThumbprint {
+			writeOIDCError(w, http.StatusUnauthorized, "invalid_token", "client certificate mismatch")
+			return
+		}
 	}
 
 	if h.users == nil {
@@ -389,6 +527,9 @@ func (h *Handler) HandleUserInfo(w http.ResponseWriter, r *http.Request) {
 			if org, err := h.orgs.Get(at.OrgID); err == nil && org != nil && org.Slug != "" {
 				response["org_slug"] = org.Slug
 			}
+			if role := h.orgRole(at.OrgID, user.ID); role != "" {
+				response["org_role"] = role
+			}
 		}
 	}
 	mappings := []config.ClaimMapping{}
@@ -396,7 +537,7 @@ func (h *Handler) HandleUserInfo(w http.ResponseWriter, r *http.Request) {
 		mappings = h.cfg.OIDC.ClaimMappings
 	}
 	if len(mappings) > 0 {
-		for key, value := range applyClaimMappings(mappings, user, at.Scopes) {
+		for key, value := range applyClaimMappings(mappings, sub, user, at.Scopes) {
 			response[key] = value
 		}
 	} else {
@@ -519,7 +660,7 @@ func (h *Handler) HandleDiscovery(w http.ResponseWriter, r *http.Request) {
 		"claims_parameter_supported":                       true,
 		"request_parameter_supported":                      true,
 		"request_uri_parameter_supported":                  true,
-		"request_object_signing_alg_values_supported":      []string{"RS256", "ES256", "none"},
+		"request_object_signing_alg_values_supported":      []string{"RS256", "ES256"},
 		"require_pushed_authorization_requests":            false,
 		"backchannel_token_delivery_modes_supported":       []string{"poll"},
 		"backchannel_user_code_parameter_supported":        false,

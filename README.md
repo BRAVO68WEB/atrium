@@ -1,5 +1,15 @@
 # Atrium
 
+![Atrium](docs/brand/banner.png)
+
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![chi](https://img.shields.io/badge/chi-router-000000?logo=go&logoColor=white)](https://github.com/go-chi/chi)
+[![SQLite](https://img.shields.io/badge/SQLite-default-003B57?logo=sqlite&logoColor=white)](https://modernc.org/sqlite)
+[![Postgres](https://img.shields.io/badge/Postgres-optional-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-optional-FF4438?logo=redis&logoColor=white)](https://redis.io/)
+[![RabbitMQ](https://img.shields.io/badge/RabbitMQ-optional-FF6600?logo=rabbitmq&logoColor=white)](https://www.rabbitmq.com/)
+[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-OTLP-425CC7?logo=opentelemetry&logoColor=white)](https://opentelemetry.io/)
+[![Docker](https://img.shields.io/badge/Docker-GHCR%20%7C%20Hub-2496ED?logo=docker&logoColor=white)](docs/DEPLOY.md)
 [![codecov](https://codecov.io/gh/BRAVO68WEB/atrium/branch/main/graph/badge.svg)](https://codecov.io/gh/BRAVO68WEB/atrium)
 
 Atrium is a self-hosted identity server. It speaks OAuth 2.0 and OpenID
@@ -30,6 +40,7 @@ and traces turn on when you set them.
   management client
 - Dynamic client registration and client ID metadata documents
 - Social login, webhooks, audit, and login analytics
+- An operator console at `/dashboard` when `dashboard.enabled` is true
 
 Access tokens are opaque unless you set `security.access_token_format` to
 `jwt`.
@@ -45,9 +56,9 @@ just run
 With no `config.yaml`, the server listens on `http://localhost:8080`. When
 that file is present, `just run` uses its port and TLS settings.
 
-A `v*` tag publishes release archives and
-`ghcr.io/bravo68web/atrium` for amd64, arm64, and arm/v7. See
-[Deploy](docs/DEPLOY.md).
+A `v*` tag publishes release archives and the server image. The image
+is `bravo68web/atrium` and `ghcr.io/bravo68web/atrium`, for amd64,
+arm64, and arm/v7. See [Deploy](docs/DEPLOY.md).
 
 Postgres install:
 
@@ -65,6 +76,22 @@ just build
 
 `init` writes `config.yaml` and `internal/hashalgo/algo.go`. It leaves an
 existing file in place unless you pass `--force`.
+
+## Tech stack
+
+| Piece | Role |
+| --- | --- |
+| Go 1.26 | Server, `atrium-cli`, and `atrium-mobile` |
+| chi | HTTP router |
+| SQLite | Default database, one open connection |
+| Postgres | Optional database, through `database.dsn` |
+| Redis | Optional cache and approval queue |
+| RabbitMQ | Optional retry queue for webhooks and mail |
+| OpenTelemetry | Optional OTLP/HTTP traces |
+| Docker | Images on GHCR and Docker Hub |
+
+SQLite needs no extra service. Postgres, Redis, RabbitMQ, and traces
+stay off until you set them. See [Deploy](docs/DEPLOY.md).
 
 ## Documentation
 

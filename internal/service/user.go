@@ -43,15 +43,17 @@ func NewUserService(userRepo *repository.UserRepository, totpSvc *TOTPService, c
 }
 
 type NewUser struct {
-	Username      string
-	Password      string
-	Email         string
-	Phone         string
-	GivenName     string
-	FamilyName    string
-	EmailVerified bool
-	Disabled      bool
-	Attributes    map[string]string
+	Username         string
+	Password         string
+	Email            string
+	Phone            string
+	GivenName        string
+	FamilyName       string
+	EmailVerified    bool
+	Disabled         bool
+	MigrationPending bool
+	Attributes       map[string]string
+	UserMetadata     map[string]string
 }
 
 func (s *UserService) CreateUser(username, password, email, phone string) (*models.User, error) {
@@ -67,10 +69,16 @@ func (s *UserService) CreateUser(username, password, email, phone string) (*mode
 func (s *UserService) InsertUser(in NewUser) (*models.User, error) {
 	defer telemetry.Step("service.UserService.InsertUser")()
 	in.Email = normalizeEmail(in.Email)
-	if in.Username == "" || in.Password == "" {
+	if in.Username == "" {
+		return nil, fmt.Errorf("username is required")
+	}
+	if in.MigrationPending && in.Password != "" {
+		return nil, fmt.Errorf("a migrated user has no password yet")
+	}
+	if !in.MigrationPending && in.Password == "" {
 		return nil, fmt.Errorf("username and password are required")
 	}
-	if s.cfg != nil {
+	if in.Password != "" && s.cfg != nil {
 		if err := CheckPassword(s.cfg.Password, in.Username, in.Password); err != nil {
 			return nil, err
 		}
@@ -83,24 +91,37 @@ func (s *UserService) InsertUser(in NewUser) (*models.User, error) {
 	if err := s.reserveEmail("", in.Email); err != nil {
 		return nil, err
 	}
+	if err := CheckMetadata(in.Attributes); err != nil {
+		return nil, err
+	}
+	if err := CheckMetadata(in.UserMetadata); err != nil {
+		return nil, err
+	}
 
-	hashedPassword, err := s.hasher.Hash(in.Password)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
+	hashedPassword := ""
+	if in.Password != "" {
+		hashed, err := s.hasher.Hash(in.Password)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hash password: %w", err)
+		}
+		hashedPassword = hashed
 	}
 
 	user := &models.User{
-		ID:            uuid.New().String(),
-		Username:      in.Username,
-		PasswordHash:  hashedPassword,
-		Email:         in.Email,
-		PhoneNumber:   in.Phone,
-		GivenName:     in.GivenName,
-		FamilyName:    in.FamilyName,
-		EmailVerified: in.EmailVerified && in.Email != "",
-		Disabled:      in.Disabled,
-		Attributes:    in.Attributes,
-		CreatedAt:     time.Now(),
+		ID:               uuid.New().String(),
+		Username:         in.Username,
+		PasswordHash:     hashedPassword,
+		Email:            in.Email,
+		PhoneNumber:      in.Phone,
+		GivenName:        in.GivenName,
+		FamilyName:       in.FamilyName,
+		EmailVerified:    in.EmailVerified && in.Email != "",
+		Disabled:         in.Disabled,
+		HasPassword:      hashedPassword != "",
+		MigrationPending: in.MigrationPending,
+		Attributes:       in.Attributes,
+		UserMetadata:     in.UserMetadata,
+		CreatedAt:        time.Now(),
 	}
 
 	if err := s.userRepo.Create(user); err != nil {
@@ -111,6 +132,11 @@ func (s *UserService) InsertUser(in NewUser) (*models.User, error) {
 	}
 
 	return user, nil
+}
+
+func (s *UserService) DeleteUser(id string) error {
+	defer telemetry.Step("service.UserService.DeleteUser")()
+	return s.userRepo.Delete(id)
 }
 
 func (s *UserService) GetUser(id string) (*models.User, error) {
@@ -193,7 +219,7 @@ func (s *UserService) Authenticate(username, password string) (*models.User, err
 	if err != nil {
 		return nil, fmt.Errorf("invalid credentials")
 	}
-	if user.Disabled {
+	if user.Disabled || user.NeedsMigration() || strings.TrimSpace(user.PasswordHash) == "" || (s.cfg != nil && s.cfg.DisablePasswords) {
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
@@ -253,7 +279,50 @@ func (s *UserService) AuthenticateWithMFA(username, password, totpCode string) (
 
 func (s *UserService) SetAttributes(id string, attrs map[string]string) error {
 	defer telemetry.Step("service.UserService.SetAttributes")()
+	if err := CheckMetadata(attrs); err != nil {
+		return err
+	}
 	return s.userRepo.SetAttributes(id, attrs)
+}
+
+func (s *UserService) SetUserMetadata(id string, attrs map[string]string) error {
+	defer telemetry.Step("service.UserService.SetUserMetadata")()
+	if err := CheckMetadata(attrs); err != nil {
+		return err
+	}
+	return s.userRepo.SetUserMetadata(id, attrs)
+}
+
+func (s *UserService) MergeAttributes(user *models.User, patch map[string]*string) error {
+	defer telemetry.Step("service.UserService.MergeAttributes")()
+	if user == nil {
+		return fmt.Errorf("user is required")
+	}
+	next, err := MergeStringMap(user.Attributes, patch)
+	if err != nil {
+		return err
+	}
+	if err := s.SetAttributes(user.ID, next); err != nil {
+		return err
+	}
+	user.Attributes = next
+	return nil
+}
+
+func (s *UserService) MergeUserMetadata(user *models.User, patch map[string]*string) error {
+	defer telemetry.Step("service.UserService.MergeUserMetadata")()
+	if user == nil {
+		return fmt.Errorf("user is required")
+	}
+	next, err := MergeStringMap(user.UserMetadata, patch)
+	if err != nil {
+		return err
+	}
+	if err := s.SetUserMetadata(user.ID, next); err != nil {
+		return err
+	}
+	user.UserMetadata = next
+	return nil
 }
 
 func (s *UserService) UpdateProfile(user *models.User) error {

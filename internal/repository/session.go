@@ -20,9 +20,9 @@ func NewSessionRepository(db database.SQL) *SessionRepository {
 
 func (r *SessionRepository) Create(s *models.BrowserSession) error {
 	defer telemetry.Step("repository.SessionRepository.Create")()
-	_, err := r.db.Exec(`INSERT INTO sessions (id, user_id, username, auth_time, mfa_verified, user_agent, ip, created_at, expires_at, revoked)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		s.ID, s.UserID, s.Username, s.AuthTime, boolInt(s.MFAVerified), s.UserAgent, s.IP, s.CreatedAt, s.ExpiresAt, boolInt(s.Revoked),
+	_, err := r.db.Exec(`INSERT INTO sessions (id, user_id, username, auth_time, mfa_verified, user_agent, ip, created_at, expires_at, revoked, migration_password)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		s.ID, s.UserID, s.Username, s.AuthTime, boolInt(s.MFAVerified), s.UserAgent, s.IP, s.CreatedAt, s.ExpiresAt, boolInt(s.Revoked), boolInt(s.PasswordPending),
 	)
 	return err
 }
@@ -30,18 +30,19 @@ func (r *SessionRepository) Create(s *models.BrowserSession) error {
 func scanSession(scan func(dest ...any) error) (*models.BrowserSession, error) {
 	defer telemetry.Step("repository.scanSession")()
 	s := &models.BrowserSession{}
-	var mfa, revoked int
+	var mfa, revoked, passwordPending int
 	if err := scan(
-		&s.ID, &s.UserID, &s.Username, &s.AuthTime, &mfa, &s.UserAgent, &s.IP, &s.CreatedAt, &s.ExpiresAt, &revoked,
+		&s.ID, &s.UserID, &s.Username, &s.AuthTime, &mfa, &s.UserAgent, &s.IP, &s.CreatedAt, &s.ExpiresAt, &revoked, &passwordPending,
 	); err != nil {
 		return nil, err
 	}
 	s.MFAVerified = mfa != 0
 	s.Revoked = revoked != 0
+	s.PasswordPending = passwordPending != 0
 	return s, nil
 }
 
-const sessionColumns = `id, user_id, COALESCE(username, ''), auth_time, mfa_verified, COALESCE(user_agent, ''), COALESCE(ip, ''), created_at, expires_at, revoked`
+const sessionColumns = `id, user_id, COALESCE(username, ''), auth_time, mfa_verified, COALESCE(user_agent, ''), COALESCE(ip, ''), created_at, expires_at, revoked, COALESCE(migration_password, 0)`
 
 func (r *SessionRepository) Get(id string) (*models.BrowserSession, error) {
 	defer telemetry.Step("repository.SessionRepository.Get")()

@@ -29,12 +29,26 @@ func (r *PARRepository) Save(par *models.PushedAuthRequest) error {
 
 func (r *PARRepository) GetByRequestURI(requestURI string) (*models.PushedAuthRequest, error) {
 	defer telemetry.Step("repository.PARRepository.GetByRequestURI")()
-	query := `SELECT request_uri, client_id, request_params, expires_at
+	query := `SELECT request_uri, client_id, request_params, expires_at, used
 		FROM pushed_auth_requests WHERE request_uri = ?`
 
 	par := &models.PushedAuthRequest{}
+	var used int
 	err := r.db.QueryRow(query, requestURI).Scan(
-		&par.RequestURI, &par.ClientID, &par.RequestParams, &par.ExpiresAt,
+		&par.RequestURI, &par.ClientID, &par.RequestParams, &par.ExpiresAt, &used,
 	)
+	par.Used = used != 0
 	return par, err
+}
+
+func (r *PARRepository) MarkUsed(requestURI string) error {
+	defer telemetry.Step("repository.PARRepository.MarkUsed")()
+	_, err := r.db.Exec(`UPDATE pushed_auth_requests SET used = 1 WHERE request_uri = ?`, requestURI)
+	return err
+}
+
+func (r *PARRepository) Delete(requestURI string) error {
+	defer telemetry.Step("repository.PARRepository.Delete")()
+	_, err := r.db.Exec(`DELETE FROM pushed_auth_requests WHERE request_uri = ?`, requestURI)
+	return err
 }

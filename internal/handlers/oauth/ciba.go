@@ -28,7 +28,14 @@ func (h *Handler) HandleBCAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientID, clientSecret := presentedClient(r)
+	clientID, clientSecret, authErr := h.credentials(r)
+	if authErr != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error":             "invalid_client",
+			"error_description": "Invalid client credentials",
+		})
+		return
+	}
 
 	if clientID == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
@@ -210,7 +217,11 @@ func (h *Handler) HandleCIBAToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientID, clientSecret := presentedClient(r)
+	clientID, clientSecret, authErr := h.credentials(r)
+	if authErr != nil {
+		writeTokenError(w, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
+		return
+	}
 
 	cibaReq, err := h.cibaRepo.GetByID(authReqID)
 	if err != nil {
@@ -266,6 +277,13 @@ func (h *Handler) HandleCIBAToken(w http.ResponseWriter, r *http.Request) {
 		userID = queueReq.UserID
 	}
 
+	scopes, err := h.narrowScopes(userID, "", cibaReq.Scopes)
+	if err != nil {
+		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to resolve scopes")
+		return
+	}
+	cibaReq.Scopes = scopes
+
 	accessToken, err := h.issueAccessToken(r.Context(), cibaReq.ClientID, userID, strings.Join(cibaReq.Scopes, " "), tokenType)
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
@@ -297,6 +315,7 @@ func (h *Handler) HandleCIBAToken(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:   time.Now().Add(86400 * time.Second),
 	}
 
+	h.stampCert(r, accessTok)
 	if err := h.tokenRepo.SaveAccessToken(accessTok); err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to save access token")
 		return

@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -131,6 +132,11 @@ func runInit(opts initOptions) (initResult, error) {
 		return initResult{}, err
 	}
 	cfg.OIDC.PairwiseSalt = hex.EncodeToString(salt)
+	dataKey := make([]byte, 32)
+	if _, err := rand.Read(dataKey); err != nil {
+		return initResult{}, err
+	}
+	cfg.Security.DataKey = base64.StdEncoding.EncodeToString(dataKey)
 	if err := cfg.Save(out); err != nil {
 		return initResult{}, fmt.Errorf("write config file: %w", err)
 	}

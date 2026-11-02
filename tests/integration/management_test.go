@@ -112,14 +112,15 @@ func TestManagementAPI(t *testing.T) {
 	}
 
 	accessRows := apiList(t, http.MethodGet, base+"/api/tokens?user_id="+url.QueryEscape(userID), token, nil)
-	if !listHas(accessRows, "token", accessToken) {
+	accessID := firstString(accessRows, "id")
+	if accessID == "" || listHas(accessRows, "token", accessToken) {
 		t.Fatalf("tokens %v", accessRows)
 	}
-	revokedAccess := apiObject(t, http.MethodPost, base+"/api/tokens/"+url.PathEscape(accessToken)+"/revoke", token, nil)
+	revokedAccess := apiObject(t, http.MethodPost, base+"/api/tokens/"+url.PathEscape(accessID)+"/revoke", token, nil)
 	if revokedAccess["status"] != "revoked" {
 		t.Fatalf("revoke access %v", revokedAccess)
 	}
-	if !listHasField(apiList(t, http.MethodGet, base+"/api/tokens?user_id="+url.QueryEscape(userID), token, nil), "token", accessToken, "revoked", true) {
+	if !listHasField(apiList(t, http.MethodGet, base+"/api/tokens?user_id="+url.QueryEscape(userID), token, nil), "id", accessID, "revoked", true) {
 		t.Fatal("access token still active")
 	}
 
@@ -158,6 +159,10 @@ func TestManagementAPI(t *testing.T) {
 		t.Fatalf("enable %v", enabled)
 	}
 
+	// The consent helper authorizes directly. PAR stays on only for the flag check above.
+	apiObject(t, http.MethodPut, base+"/api/clients/"+clientID, token, map[string]any{
+		"require_pushed_authorization_requests": false,
+	})
 	approveBrowserConsent(t, base, "ada", "brand new horse", clientID, "https://app.example/cb", "openid profile")
 	consents := apiList(t, http.MethodGet, base+"/api/consents?user_id="+url.QueryEscape(userID), token, nil)
 	if !listHas(consents, "client_id", clientID) {

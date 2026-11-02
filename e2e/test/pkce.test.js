@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const { startServer } = require("../support/server");
 const { pkcePair, shortID } = require("../support/pkce");
-const { createUser, createClient, tokenRequest } = require("../support/oauth");
+const { createUser, createClient, tokenRequest, redirectError } = require("../support/oauth");
 const { newPage, authorize, closeBrowser, callbackURL } = require("../support/browser");
 
 describe("PKCE required", function () {
@@ -36,9 +36,9 @@ describe("PKCE required", function () {
     url.searchParams.set("redirect_uri", redirectURI);
     url.searchParams.set("response_type", "code");
     url.searchParams.set("scope", "openid");
-    const response = await fetch(url);
-    const body = await response.json();
-    assert.equal(response.status, 400);
+    const response = await fetch(url, { redirect: "manual" });
+    const body = redirectError(response);
+    assert.equal(body.status, 302);
     assert.equal(body.error, "invalid_request");
     assert.match(body.error_description, /code_challenge/);
   });
@@ -72,9 +72,9 @@ describe("PKCE required", function () {
     url.searchParams.set("scope", "openid");
     url.searchParams.set("code_challenge", "plain-verifier");
     url.searchParams.set("code_challenge_method", "plain");
-    const response = await fetch(url);
-    const body = await response.json();
-    assert.equal(response.status, 400);
+    const response = await fetch(url, { redirect: "manual" });
+    const body = redirectError(response);
+    assert.equal(body.status, 302);
     assert.match(body.error_description, /plain PKCE is disabled/);
   });
 });
@@ -106,7 +106,7 @@ describe("plain PKCE allowed", function () {
   });
 
   it("exchanges a plain verifier", async function () {
-    const verifier = "plain-verifier-value";
+    const verifier = "a".repeat(43);
     const url = new URL(`${server.base}/oauth/authorize`);
     url.searchParams.set("client_id", client.id);
     url.searchParams.set("redirect_uri", redirectURI);

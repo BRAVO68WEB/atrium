@@ -12,7 +12,11 @@ import (
 
 func (h *Handler) handleClientCredentialsToken(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("oauth.Handler.handleClientCredentialsToken")()
-	clientID, clientSecret := presentedClient(r)
+	clientID, clientSecret, authErr := h.credentials(r)
+	if authErr != nil {
+		writeTokenError(w, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
+		return
+	}
 
 	if clientID == "" {
 		writeTokenError(w, http.StatusBadRequest, "invalid_client", "Client credentials required")
@@ -95,6 +99,7 @@ func (h *Handler) handleClientCredentialsToken(w http.ResponseWriter, r *http.Re
 		ExpiresAt: time.Now().Add(h.cfg.Security.AccessTokenLifetime),
 	}
 
+	h.stampCert(r, accessTok)
 	if err := h.tokenRepo.SaveAccessToken(accessTok); err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to save access token: "+err.Error())
 		return
