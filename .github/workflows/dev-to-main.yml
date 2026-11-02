@@ -34,13 +34,12 @@ jobs:
             echo "dev is not ahead of main."
             exit 0
           fi
-          owner="${REPO%%/*}"
-          existing="$(gh pr list --repo "$REPO" --base main --head "${owner}:dev" --state open --json number --jq '.[0].number')"
+          existing="$(gh pr list --repo "$REPO" --base main --head dev --state open --json number --jq '.[0].number')"
           if [ -n "$existing" ] && [ "$existing" != "null" ]; then
             echo "Pull request #${existing} is already open."
             exit 0
           fi
-          gh pr create --repo "$REPO" --base main --head dev --draft \
+          if gh pr create --repo "$REPO" --base main --head dev --draft \
             --title "Draft: merge dev into main" \
             --body-file - <<'EOF'
           This draft stays open while `dev` is ahead of `main`.
@@ -48,3 +47,12 @@ jobs:
           Merge it when the release is ready.
           `main` only accepts a pull request from `dev`.
           EOF
+          then
+            exit 0
+          fi
+          existing="$(gh pr list --repo "$REPO" --base main --head dev --state open --json number --jq '.[0].number')"
+          if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+            echo "Pull request #${existing} is already open."
+            exit 0
+          fi
+          exit 1
