@@ -111,6 +111,15 @@ the integration flag shows the handlers, controllers, and
 repositories that suite calls. The project total is the union of the
 two profiles.
 
+A pull request is labeled from the paths it changes. New test files
+get `tests-added`. Edits to existing tests get `tests-updated`.
+Documentation, the database, OpenAPI, end-to-end tests, templates,
+controllers, workflows, configuration, OAuth, hashers, OIDC, the CLIs,
+Docker, mail, push, AAuth, telemetry, and the queue get their own
+labels. The author is assigned when they open the pull request.
+A push to `dev` opens one draft pull request into `main` while `dev`
+is ahead. Later commits on `dev` update that same draft.
+
 ## Related
 
 [Deploy](DEPLOY.md) is the server you point a manual client at.

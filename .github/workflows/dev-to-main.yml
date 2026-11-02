@@ -1,0 +1,50 @@
+name: Draft dev into main
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: dev-to-main
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    name: Open the draft pull request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out dev
+        uses: actions/checkout@v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Open a draft pull request when dev is ahead
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          git fetch origin main
+          ahead="$(git rev-list --count origin/main..HEAD)"
+          if [ "$ahead" = "0" ]; then
+            echo "dev is not ahead of main."
+            exit 0
+          fi
+          owner="${REPO%%/*}"
+          existing="$(gh pr list --repo "$REPO" --base main --head "${owner}:dev" --state open --json number --jq '.[0].number')"
+          if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+            echo "Pull request #${existing} is already open."
+            exit 0
+          fi
+          gh pr create --repo "$REPO" --base main --head dev --draft \
+            --title "Draft: merge dev into main" \
+            --body-file - <<'EOF'
+          This draft stays open while `dev` is ahead of `main`.
+          Commits that land on `dev` show up here.
+          Merge it when the release is ready.
+          `main` only accepts a pull request from `dev`.
+          EOF

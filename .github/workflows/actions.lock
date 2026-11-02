@@ -12,6 +12,11 @@ workflows:
         - 'codecov/codecov-action@v5.5.5'
         - 'golangci/golangci-lint-action@v9.3.0'
         - 'vegardit/fast-apt-mirror.sh@1.4.5'
+    '.github/workflows/dev-to-main.yml':
+        - 'actions/checkout@v4.4.0'
+    '.github/workflows/pr-assign.yml': []
+    '.github/workflows/pr-labels.yml':
+        - 'actions/checkout@v4.4.0'
     '.github/workflows/preview-tag.yml':
         - 'actions/checkout@v4.4.0'
     '.github/workflows/release.yml':
