@@ -244,6 +244,7 @@ oidc:
     - urn:ietf:params:oauth:grant-type:device_code
     - urn:openid:params:grant-type:ciba
     - urn:ietf:params:oauth:grant-type:token-exchange
+    - urn:atrium:params:oauth:grant-type:opaque-to-jwt
 ```
 
 `init` fills `management` and `oidc.pairwise_salt`. The lists under

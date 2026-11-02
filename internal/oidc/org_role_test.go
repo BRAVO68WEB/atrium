@@ -31,7 +31,7 @@ func TestTokensCarryTheOrgRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	access, err := handler.CreateAccessTokenJWT(context.Background(), "app", "user-1", "openid", "Bearer", time.Hour, "org-1", "acme-corp", "", "")
+	access, err := handler.CreateAccessTokenJWT(context.Background(), "app", "user-1", "openid", "Bearer", time.Hour, "org-1", "acme-corp", "", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

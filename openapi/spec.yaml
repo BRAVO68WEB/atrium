@@ -707,6 +707,7 @@ paths:
         - **device_code**: Poll for device authorization completion (RFC 8628)
         - **CIBA**: Poll for backchannel authentication completion
         - **token exchange**: Exchange a local access token, or, when `xaa.enabled` is true, exchange an ID token for an ID-JAG
+        - **opaque-to-jwt**: Exchange an opaque access token for a JWT. `claims` is a JSON object of extra claims
         - **jwt-bearer**: Redeem an ID-JAG when `xaa.enabled` is true. The grant is rejected while the flag is off
 
         Client can authenticate via HTTP Basic auth or `client_id`/`client_secret` in the body.
@@ -730,6 +731,7 @@ paths:
                     - urn:ietf:params:oauth:grant-type:device_code
                     - urn:openid:params:grant-type:ciba
                     - urn:ietf:params:oauth:grant-type:token-exchange
+                    - urn:atrium:params:oauth:grant-type:opaque-to-jwt
                     - urn:ietf:params:oauth:grant-type:jwt-bearer
                   description: The grant type to use. jwt-bearer is accepted only when xaa.enabled is true.
                 code:
@@ -761,7 +763,10 @@ paths:
                   example: "https://api.example.com"
                 subject_token:
                   type: string
-                  description: Token to exchange. An ID-JAG request sends an ID token.
+                  description: Token to exchange. An ID-JAG request sends an ID token. The opaque-to-JWT grant sends an opaque access token.
+                claims:
+                  type: string
+                  description: JSON object of extra JWT claims for the opaque-to-JWT grant. Values are strings, numbers, or booleans. Reserved claims are rejected.
                 subject_token_type:
                   type: string
                   description: urn:ietf:params:oauth:token-type:id_token when requesting an ID-JAG

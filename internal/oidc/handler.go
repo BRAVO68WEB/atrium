@@ -189,7 +189,7 @@ func (h *Handler) CreateIDTokenWithES256(ctx context.Context, clientID, userID, 
 // The profile is RFC 9068: typ at+jwt, aud is the resource or the issuer,
 // and client_id plus azp name the client. Callers still store the compact
 // token so revocation and UserInfo keep working.
-func (h *Handler) CreateAccessTokenJWT(ctx context.Context, clientID, userID, scope, _ string, lifetime time.Duration, orgID, orgSlug, resource, actor string) (string, error) {
+func (h *Handler) CreateAccessTokenJWT(ctx context.Context, clientID, userID, scope, _ string, lifetime time.Duration, orgID, orgSlug, resource, actor string, extra map[string]any) (string, error) {
 	defer telemetry.Step("oidc.Handler.CreateAccessTokenJWT")()
 	if h == nil || h.keySet == nil {
 		return "", fmt.Errorf("signing keys are not loaded")
@@ -232,6 +232,12 @@ func (h *Handler) CreateAccessTokenJWT(ctx context.Context, clientID, userID, sc
 	}
 	if actor != "" {
 		claims["act"] = map[string]string{"sub": actor}
+	}
+	for name, value := range extra {
+		if _, exists := claims[name]; exists {
+			continue
+		}
+		claims[name] = value
 	}
 	key, kid := h.keySet.GetRSAKey()
 	if key == nil {
