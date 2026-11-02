@@ -112,12 +112,20 @@ allows them:
 | Device code | `urn:ietf:params:oauth:grant-type:device_code` |
 | CIBA | `urn:openid:params:grant-type:ciba` |
 | Token exchange | `urn:ietf:params:oauth:grant-type:token-exchange` |
+| Opaque to JWT | `urn:atrium:params:oauth:grant-type:opaque-to-jwt` |
 | Password | `password` |
 | JWT bearer | `urn:ietf:params:oauth:grant-type:jwt-bearer` |
 
 The default discovery list includes every grant above except `password`
 and the JWT bearer grant. The JWT bearer grant is advertised only when
 `xaa.enabled` is true. See [Cross-app access](XAA.md).
+
+The opaque-to-JWT grant sends `subject_token`, the opaque access token
+this client already holds. `token` is accepted as the same field.
+`claims` is a JSON object. Each value is a string, number, or boolean.
+Reserved claims (`sub`, `iss`, `aud`, `exp`, `scope`, `org_id`, and the
+rest of that set) are rejected. The JWT keeps the opaque token's
+scopes, organization, and expiry. The opaque token stays valid.
 
 `atrium-cli client master` creates a client that includes `password`.
 The password grant sends the identifier in `username`. CIBA on this

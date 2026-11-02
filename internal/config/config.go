@@ -436,6 +436,7 @@ func DefaultConfig() *Config {
 				"urn:ietf:params:oauth:grant-type:device_code",
 				"urn:openid:params:grant-type:ciba",
 				"urn:ietf:params:oauth:grant-type:token-exchange",
+				OpaqueToJWTGrant,
 			},
 			SupportedAuthMethods: []string{
 				"client_secret_basic",

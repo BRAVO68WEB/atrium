@@ -425,6 +425,8 @@ func (h *Handler) HandleToken(w http.ResponseWriter, r *http.Request) {
 		h.HandleCIBAToken(w, r)
 	case "urn:ietf:params:oauth:grant-type:token-exchange":
 		h.handleTokenExchange(w, r)
+	case config.OpaqueToJWTGrant:
+		h.handleOpaqueToJWT(w, r)
 	case config.XAAJWTBearerGrant:
 		if h.cfg == nil || !h.cfg.XAA.Enabled {
 			writeTokenError(w, http.StatusBadRequest, "unsupported_grant_type", "Unsupported grant type: "+grantType)
@@ -795,7 +797,7 @@ func (h *Handler) issueAccessTokenFor(ctx context.Context, clientID, userID, sco
 		if h.oidcHandler == nil {
 			return "", fmt.Errorf("jwt access tokens require the oidc handler")
 		}
-		return h.oidcHandler.CreateAccessTokenJWT(ctx, clientID, userID, scope, tokenType, lifetime, orgID, orgSlug, resource, actor)
+		return h.oidcHandler.CreateAccessTokenJWT(ctx, clientID, userID, scope, tokenType, lifetime, orgID, orgSlug, resource, actor, nil)
 	}
 	return crypto.GenerateToken()
 }
