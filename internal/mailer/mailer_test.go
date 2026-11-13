@@ -12,9 +12,15 @@ func TestMIMEMessageUsesHTMLWhenPresent(t *testing.T) {
 	if !strings.Contains(plain, "Content-Type: text/plain") || strings.Contains(plain, "multipart/alternative") {
 		t.Fatalf("plain = %s", plain)
 	}
+	if !strings.Contains(plain, "Date: ") || !strings.Contains(plain, "Message-ID: <") || !strings.Contains(plain, "@example.com>") {
+		t.Fatalf("plain headers = %s", plain)
+	}
 	html := mimeMessage("ada@example.com", "from@example.com", "Hi", "hello", "<p>Hello</p>")
 	if !strings.Contains(html, "multipart/alternative") || !strings.Contains(html, "Content-Type: text/html") || !strings.Contains(html, "<p>Hello</p>") {
 		t.Fatalf("html = %s", html)
+	}
+	if !strings.Contains(html, "Date: ") || !strings.Contains(html, "Message-ID: <") {
+		t.Fatalf("html headers = %s", html)
 	}
 }
 
