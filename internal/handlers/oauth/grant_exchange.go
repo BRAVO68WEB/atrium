@@ -72,6 +72,15 @@ func (h *Handler) handleTokenExchange(w http.ResponseWriter, r *http.Request) {
 		writeTokenError(w, http.StatusBadRequest, "invalid_scope", "Scope is not allowed")
 		return
 	}
+	scopes, err = h.narrowScopes(subjectTokenInfo.UserID, subjectTokenInfo.OrgID, scopes)
+	if err != nil {
+		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to resolve scopes")
+		return
+	}
+	if len(scopes) == 0 {
+		writeTokenError(w, http.StatusBadRequest, "invalid_scope", "Scope is not allowed")
+		return
+	}
 
 	accessToken, err := h.issueAccessToken(r.Context(), clientID, subjectTokenInfo.UserID, strings.Join(scopes, " "), tokenType)
 	if err != nil {
@@ -89,6 +98,7 @@ func (h *Handler) handleTokenExchange(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt: time.Now().Add(h.cfg.Security.AccessTokenLifetime),
 	}
 
+	h.stampCert(r, accessTok)
 	if err := h.tokenRepo.SaveAccessToken(accessTok); err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to save access token")
 		return

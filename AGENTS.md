@@ -96,6 +96,7 @@ The `E2E` GitHub check runs `cd e2e && npm test` on every pull request. Docker m
 - **Config defaults**: Server binds `0.0.0.0:8080`, SQLite at `./atrium.db`
 - **MFA**: TOTP with QR code rendering (PNG for web, ASCII for CLI)
 - **Management API**: `/api` and `/ciba` require a client-credentials access token with scope `management`. `atrium-cli init` writes `management.client_id` and `management.client_secret`. Startup inserts that client when it is missing. The CLI and `atrium-mobile` send the bearer token (`--client-id`, `--client-secret`, or `management.*` in `--config`).
+- **Operator console**: `dashboard.enabled` serves `/dashboard`. Sign-in is the management client id and secret. The React app in `frontend/` is built into `internal/dashboard/dist` and embedded with `go build -tags embed`. `PUT /dashboard/api/config` writes the config file. A restart applies it. Docker sets `ATRIUM_IN_DOCKER=1` and `restart: unless-stopped` so the console can stop the process and have the container come back. The config mount is read-write.
 - **CIAM**: `/api/me` uses the user access token. Public reset and registration live under `/api/account`. SMTP is `smtp` in config and stays off until `enabled` is true.
 - **Sessions**: Browser sessions are SQLite rows. Cookie lifetime is `security.session_lifetime` (default 8h). `/device` approval uses that session. `/oauth/logout` sends OIDC back-channel logout tokens.
 - **Refresh tokens**: Rotation keeps `family_id`. Reuse revokes that family. List APIs return a public id and omit the secret.

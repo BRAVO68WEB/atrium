@@ -1,0 +1,22 @@
+{{/* Passwordless sign-in code. Field names: username, otp, csrf_token, plus oauth_fields. */}}
+{{template "head" .}}
+    <h1>Enter your code</h1>
+    {{if .Notice}}<p class="hint">{{.Notice}}</p>{{end}}
+    {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+    <p class="hint">We emailed a 6-digit code{{if .LoginHint}} to {{.LoginHint}}{{end}}. It expires in 10 minutes.</p>
+    <form method="POST" action="/login/otp">
+        {{template "oauth_fields" .}}
+        <input type="hidden" name="username" value="{{.LoginHint}}">
+        <div class="form-group">
+            <label for="otp">Code</label>
+            <input type="text" id="otp" name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" required autofocus>
+        </div>
+        <button type="submit">Sign in</button>
+    </form>
+    <form method="POST" action="/login/otp/resend">
+        {{template "oauth_fields" .}}
+        <input type="hidden" name="username" value="{{.LoginHint}}">
+        <button type="submit">Send a new code</button>
+    </form>
+{{template "card_close" .}}
+{{template "brand_footer" .}}

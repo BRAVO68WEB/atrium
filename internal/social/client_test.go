@@ -18,6 +18,46 @@ import (
 	"github.com/bravo68web/atrium/internal/config"
 )
 
+func TestGitLabPreset(t *testing.T) {
+	p, err := Resolve(config.SocialProvider{ID: "gl", Type: "gitlab"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Issuer != "https://gitlab.com" || p.Authorization != "https://gitlab.com/oauth/authorize" || p.Token != "https://gitlab.com/oauth/token" || p.Userinfo != "https://gitlab.com/oauth/userinfo" {
+		t.Fatalf("gitlab endpoints %+v", p)
+	}
+	if p.SubjectField != "sub" || p.UsernameField != "preferred_username" || len(p.Scopes) != 3 {
+		t.Fatalf("gitlab profile %+v", p)
+	}
+}
+
+func TestDiscoverIssuer(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/openid-configuration" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"issuer":                 "http://127.0.0.1",
+			"authorization_endpoint": "https://idp.example/authorize",
+			"token_endpoint":         "https://idp.example/token",
+			"userinfo_endpoint":      "https://idp.example/userinfo",
+			"jwks_uri":               "https://idp.example/jwks",
+		})
+	}))
+	defer srv.Close()
+	doc, err := DiscoverIssuer(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.AuthorizationEndpoint != "https://idp.example/authorize" || doc.TokenEndpoint != "https://idp.example/token" || doc.UserinfoEndpoint != "https://idp.example/userinfo" {
+		t.Fatalf("%+v", doc)
+	}
+	if _, err := DiscoverIssuer(context.Background(), "http://idp.example"); err == nil {
+		t.Fatal("expected a non-local http issuer to be rejected")
+	}
+}
+
 func TestFacebookAuthorizeSkipsPKCE(t *testing.T) {
 	p, err := Resolve(config.SocialProvider{ID: "facebook", Type: "facebook", ClientID: "cid"})
 	if err != nil {

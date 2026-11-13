@@ -116,6 +116,9 @@ func TestBrandSceneStaysInsideTheCard(t *testing.T) {
 	if !strings.Contains(login, `/branding/assets/scene.jpg`) {
 		t.Fatal("background image missing")
 	}
+	if !strings.Contains(login, `href="/favicon.png"`) {
+		t.Fatal("default favicon missing")
+	}
 	if logo < 0 || title < 0 || logo > title {
 		t.Fatal("logo is not above the title")
 	}

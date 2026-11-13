@@ -11,6 +11,18 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+func TestDashboardPreviewIgnoresDebugFlag(t *testing.T) {
+	ctrl := previewController(t, false)
+	rr := httptest.NewRecorder()
+	ctrl.ServePagePreview(rr, httptest.NewRequest(http.MethodGet, "/dashboard/preview/pages/login", nil), "login", "client")
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "Continue to Field Notes") {
+		t.Fatalf("preview %d %s", rr.Code, rr.Body.String())
+	}
+	if rr.Header().Get("X-Frame-Options") != "SAMEORIGIN" {
+		t.Fatalf("frame %s", rr.Header().Get("X-Frame-Options"))
+	}
+}
+
 func TestPreviewStaysOff(t *testing.T) {
 	ctrl := previewController(t, false)
 	if ctrl.PreviewEnabled() {

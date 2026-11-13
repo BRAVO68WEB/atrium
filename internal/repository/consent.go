@@ -71,12 +71,21 @@ func (r *ConsentRepository) Delete(userID, clientID string) error {
 	return err
 }
 
+func (r *ConsentRepository) ListByClient(clientID string) ([]*models.Consent, error) {
+	defer telemetry.Step("repository.ConsentRepository.ListByClient")()
+	return r.listWhere("client_id = ?", clientID)
+}
+
 func (r *ConsentRepository) ListByUser(userID string) ([]*models.Consent, error) {
 	defer telemetry.Step("repository.ConsentRepository.ListByUser")()
-	query := `SELECT id, user_id, client_id, scopes, granted_at, expires_at
-		FROM consents WHERE user_id = ? ORDER BY granted_at DESC`
+	return r.listWhere("user_id = ?", userID)
+}
 
-	rows, err := r.db.Query(query, userID)
+func (r *ConsentRepository) listWhere(clause, arg string) ([]*models.Consent, error) {
+	query := `SELECT id, user_id, client_id, scopes, granted_at, expires_at
+		FROM consents WHERE ` + clause + ` ORDER BY granted_at DESC`
+
+	rows, err := r.db.Query(query, arg)
 	if err != nil {
 		return nil, err
 	}

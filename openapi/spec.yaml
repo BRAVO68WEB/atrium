@@ -198,6 +198,9 @@ paths:
     get:
       tags: [CIAM]
       summary: Current user profile
+      description: |
+        Returns the signed-in profile, including `user_metadata`.
+        Does not return `attributes`.
       security: [{ bearerAuth: [] }]
       responses:
         "200":
@@ -205,10 +208,17 @@ paths:
     patch:
       tags: [CIAM]
       summary: Update the current user profile
+      description: |
+        Merges `user_metadata`. A string sets one key and `null` deletes one key.
+        Omitting `user_metadata` leaves it unchanged. Rejects `attributes`,
+        `disabled`, and `email_verified`. The stored object must stay within
+        16 KiB and 50 keys.
       security: [{ bearerAuth: [] }]
       responses:
         "200":
           description: Updated profile
+        "400":
+          description: Invalid metadata, or a field this route cannot change
 
   /api/me/consents:
     get:
@@ -336,6 +346,27 @@ paths:
           description: The management client is limited to a different organization
         "404":
           description: Organization not found
+    patch:
+      tags: [Management]
+      summary: Update an organization
+      description: |
+        Body may include `name`, `slug`, and `logo_url`. Omitted fields stay as they are.
+        An empty `logo_url` clears the logo. `slug` is lowercase letters, numbers, and hyphens.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: orgID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated organization
+        "400":
+          description: Invalid name, slug, or logo URL
+        "403":
+          description: The management client is limited to a different organization
+        "404":
+          description: Organization not found
 
   /api/orgs/{orgID}/domains:
     post:
@@ -357,6 +388,21 @@ paths:
           description: The client cannot change domains
 
   /api/orgs/{orgID}/members:
+    get:
+      tags: [Management]
+      summary: List organization members
+      description: Each row is a user in the organization, with username, email, name, and role.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: orgID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Members
+        "404":
+          description: Organization not found
     post:
       tags: [Management]
       summary: Add a user to an organization
@@ -661,6 +707,7 @@ paths:
         - **device_code**: Poll for device authorization completion (RFC 8628)
         - **CIBA**: Poll for backchannel authentication completion
         - **token exchange**: Exchange a local access token, or, when `xaa.enabled` is true, exchange an ID token for an ID-JAG
+        - **opaque-to-jwt**: Exchange an opaque access token for a JWT. `claims` is a JSON object of extra claims
         - **jwt-bearer**: Redeem an ID-JAG when `xaa.enabled` is true. The grant is rejected while the flag is off
 
         Client can authenticate via HTTP Basic auth or `client_id`/`client_secret` in the body.
@@ -684,6 +731,7 @@ paths:
                     - urn:ietf:params:oauth:grant-type:device_code
                     - urn:openid:params:grant-type:ciba
                     - urn:ietf:params:oauth:grant-type:token-exchange
+                    - urn:atrium:params:oauth:grant-type:opaque-to-jwt
                     - urn:ietf:params:oauth:grant-type:jwt-bearer
                   description: The grant type to use. jwt-bearer is accepted only when xaa.enabled is true.
                 code:
@@ -715,7 +763,10 @@ paths:
                   example: "https://api.example.com"
                 subject_token:
                   type: string
-                  description: Token to exchange. An ID-JAG request sends an ID token.
+                  description: Token to exchange. An ID-JAG request sends an ID token. The opaque-to-JWT grant sends an opaque access token.
+                claims:
+                  type: string
+                  description: JSON object of extra JWT claims for the opaque-to-JWT grant. Values are strings, numbers, or booleans. Reserved claims are rejected.
                 subject_token_type:
                   type: string
                   description: urn:ietf:params:oauth:token-type:id_token when requesting an ID-JAG
@@ -1252,6 +1303,7 @@ paths:
         keys to verify JWT signatures (ID tokens, access tokens).
 
         The server generates RSA-2048 and EC P-256 keys on startup.
+        Application signing keys are included in the same keys array.
       operationId: jwks
       responses:
         "200":
@@ -1521,8 +1573,13 @@ paths:
       tags: [Management]
       security: [{ bearerAuth: [] }]
       summary: List all users
-      description: Returns all registered users.
+      description: Returns all registered users. `username` is an exact match and returns one user or an empty list.
       operationId: listUsers
+      parameters:
+        - name: username
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         "200":
           description: List of users
@@ -1641,10 +1698,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OAuthError"
+    delete:
+      tags: [Management]
+      security: [{ bearerAuth: [] }]
+      summary: Delete a user and the rows that reference them
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: User deleted
+        "404":
+          description: User not found
     patch:
       tags: [Management]
-      summary: Update a user profile or attributes
-      description: Management can set `attributes`. Self-service `PATCH /api/me` cannot.
+      summary: Update a user profile or metadata
+      description: |
+        Merges `attributes` and `user_metadata` when either object is present.
+        A string sets one key and `null` deletes one key. An omitted object
+        stays unchanged. Each stored object must stay within 16 KiB and 50 keys.
+        Self-service `PATCH /api/me` can merge `user_metadata` only.
       security: [{ bearerAuth: [] }]
       parameters:
         - name: userID
@@ -1656,6 +1731,156 @@ paths:
           description: Updated user
         "404":
           description: User not found
+
+  /api/roles:
+    get:
+      tags: [Management]
+      summary: List roles
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Roles and the resource scopes on each role
+    post:
+      tags: [Management]
+      summary: Create a role
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201":
+          description: Role created
+        "409":
+          description: A role with that name already exists
+
+  /api/roles/{roleID}:
+    get:
+      tags: [Management]
+      summary: Get a role
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: roleID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Role
+        "404":
+          description: Role not found
+    patch:
+      tags: [Management]
+      summary: Rename a role or change its description
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: roleID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated role
+    delete:
+      tags: [Management]
+      summary: Delete a role and its assignments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: roleID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Role deleted
+
+  /api/roles/{roleID}/scopes:
+    put:
+      tags: [Management]
+      summary: Replace the scopes on a role
+      description: |
+        Each scope must already exist on the named resource.
+        `management` is rejected. This call replaces the previous set.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: roleID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Role with its new scopes
+        "400":
+          description: A scope is not on that resource
+
+  /api/users/{userID}/roles:
+    post:
+      tags: [Management]
+      summary: Assign a role to a user
+      description: |
+        `org_id` empty grants the role on every token. A set `org_id`
+        grants it only on tokens for that organization.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Role assigned
+    delete:
+      tags: [Management]
+      summary: Remove a role from a user
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Role removed
+
+  /api/users/{userID}/scopes:
+    post:
+      tags: [Management]
+      summary: Grant one resource scope directly
+      description: A direct grant is not wrapped in a role. `org_id` follows the same rule as a role assignment.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Scope granted
+        "400":
+          description: The scope is not on that resource, or the scope is management
+    delete:
+      tags: [Management]
+      summary: Remove one direct scope grant
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Scope removed
+
+  /api/users/{userID}/access:
+    get:
+      tags: [Management]
+      summary: List a user's stored roles and direct scopes
+      description: Returns the stored grants. It does not add scopes that were not assigned.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Stored roles and direct scopes
 
   /api/tokens:
     get:
@@ -1687,7 +1912,7 @@ paths:
                 items:
                   $ref: "#/components/schemas/AccessToken"
               example:
-                - token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+                - id: "c1d2e3f4-a5b6-7890-abcd-ef1234567890"
                   client_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
                   user_id: "b5c6d7e8-f9a0-1234-5678-9abcdef01234"
                   scopes: ["openid", "profile"]
@@ -1695,20 +1920,20 @@ paths:
                   expires_at: "2026-06-16T11:00:00Z"
                   revoked: false
 
-  /api/tokens/{token}/revoke:
+  /api/tokens/{id}/revoke:
     post:
       tags: [Management]
       security: [{ bearerAuth: [] }]
       summary: Revoke a token (admin)
-      description: Immediately revokes an access token by its value.
+      description: Immediately revokes an access token by its public id.
       operationId: revokeTokenAdmin
       parameters:
-        - name: token
+        - name: id
           in: path
           required: true
           schema:
             type: string
-          description: The access token to revoke
+          description: Public id of the access token
       responses:
         "200":
           description: Token revoked
@@ -2432,6 +2657,44 @@ paths:
         "200":
           description: Login events
 
+  /api/users/{userID}/migration-notice:
+    post:
+      tags: [Management]
+      summary: Email a migrated user to sign in and set a password
+      description: Sends the notice without a one-time code. The code is sent when the person submits the login form. Returns 409 when the user is not waiting for a password.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          description: Notice accepted by the mailer
+        "409":
+          description: User is not waiting for a password
+        "503":
+          description: SMTP is not configured
+
+  /api/users/{userID}/password/reset-email:
+    post:
+      tags: [Management]
+      summary: Email a password reset link
+      description: Refuses an empty password hash with 409. Does not send the password-changed notice.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          description: Reset mail accepted
+        "409":
+          description: User has no password
+        "503":
+          description: SMTP is not configured
+
   /api/users/{userID}/password:
     post:
       tags: [Management]
@@ -2682,6 +2945,84 @@ paths:
           description: Audit rows
         "403":
           description: A user token cannot read the audit log
+
+  /api/keys:
+    get:
+      tags: [Management]
+      summary: List signing keys
+      description: |
+        Public tenant RSA and EC keys, plus application public keys from the same set as `GET /oidc/jwks`.
+        Private key material is not returned. Application keys include `client_id`.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Signing keys
+
+  /api/clients/{clientID}/keys:
+    post:
+      tags: [Management]
+      summary: Create an application signing key
+      description: |
+        Creates the first RSA signing key for an application and returns the private PEM once.
+        The public key is added to `GET /oidc/jwks`. The management client cannot have one.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: clientID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: New signing key
+        "403":
+          description: The management client is not editable
+        "409":
+          description: The application already has a signing key
+
+  /api/clients/{clientID}/keys/rotate:
+    post:
+      tags: [Management]
+      summary: Rotate an application signing key
+      description: |
+        Retires the active application signing key for `oidc.key_retain` and creates the next one.
+        The private PEM is returned once. The previous public key stays in `GET /oidc/jwks` until it expires.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: clientID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rotated signing key
+        "403":
+          description: The management client is not editable
+        "404":
+          description: The application has no signing key
+
+  /api/clients/{clientID}/secret:
+    post:
+      tags: [Management]
+      summary: Reset a client secret
+      description: |
+        Replaces the client secret and returns the new secret once. The previous secret stops working immediately.
+        The management client cannot be reset here.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: clientID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: New client secret
+        "403":
+          description: The management client is not editable
+        "404":
+          description: Client not found
 
   /api/keys/rotate:
     post:
@@ -2943,6 +3284,9 @@ components:
             type: string
           description: Allowed scopes
           example: ["openid", "profile"]
+        skip_consent:
+          type: boolean
+          description: When true, authorize treats the user as already consented. prompt=consent still shows the page.
         token_endpoint_auth_method:
           type: string
           description: Client authentication method at token endpoint
@@ -3005,6 +3349,16 @@ components:
           type: string
           description: User phone number (E.164 format recommended)
           example: "+1-555-123-4567"
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+          description: Operator-owned string map stored on the new user.
+        user_metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Person-owned string map stored on the new user.
 
     User:
       type: object
@@ -3037,6 +3391,22 @@ components:
           format: date-time
           description: Account creation timestamp
           example: "2026-06-16T10:00:00Z"
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+          description: Operator-owned string map. Management reads and merges it.
+        user_metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Person-owned string map. The person reads and merges it at /api/me.
+        has_password:
+          type: boolean
+          description: False when password_hash is empty.
+        migration_pending:
+          type: boolean
+          description: True when this account was imported without a password and must set one after an email code.
 
     # ── Token ──
 
@@ -3080,7 +3450,7 @@ components:
       type: object
       description: Access token representation (for listing/introspection)
       example:
-        token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+        id: "c1d2e3f4-a5b6-7890-abcd-ef1234567890"
         client_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
         user_id: "b5c6d7e8-f9a0-1234-5678-9abcdef01234"
         scopes: ["openid", "profile"]
@@ -3089,10 +3459,10 @@ components:
         expires_at: "2026-06-16T11:00:00Z"
         revoked: false
       properties:
-        token:
+        id:
           type: string
-          description: The access token value
-          example: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+          description: Public id. The bearer is not stored or returned.
+          example: "c1d2e3f4-a5b6-7890-abcd-ef1234567890"
         client_id:
           type: string
           description: Client that requested the token

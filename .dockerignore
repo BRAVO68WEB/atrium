@@ -6,6 +6,7 @@ tmp
 certs
 e2e/node_modules
 e2e/.cache
+frontend/node_modules
 *.db
 *.db-journal
 *.db-wal

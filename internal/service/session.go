@@ -49,6 +49,28 @@ func (s *SessionService) Start(userID, username, userAgent, ip string, mfaVerifi
 	return sess, nil
 }
 
+// StartPasswordReset opens a browser session that cannot complete OAuth.
+// The person still has to set a password.
+func (s *SessionService) StartPasswordReset(userID, username, userAgent, ip string) (*models.BrowserSession, error) {
+	defer telemetry.Step("service.SessionService.StartPasswordReset")()
+	now := time.Now()
+	sess := &models.BrowserSession{
+		ID:              uuid.NewString(),
+		UserID:          userID,
+		Username:        username,
+		AuthTime:        now,
+		PasswordPending: true,
+		UserAgent:       userAgent,
+		IP:              ip,
+		CreatedAt:       now,
+		ExpiresAt:       now.Add(s.duration()),
+	}
+	if err := s.repo.Create(sess); err != nil {
+		return nil, err
+	}
+	return sess, nil
+}
+
 func (s *SessionService) Get(id string) (*models.BrowserSession, error) {
 	defer telemetry.Step("service.SessionService.Get")()
 	if s == nil || id == "" {

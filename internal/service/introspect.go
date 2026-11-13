@@ -30,6 +30,7 @@ type Introspection struct {
 	Aud       string          `json:"aud,omitempty"`
 	JTI       string          `json:"jti,omitempty"`
 	OrgID     string          `json:"org_id,omitempty"`
+	OrgRole   string          `json:"org_role,omitempty"`
 	Act       json.RawMessage `json:"act,omitempty"`
 }
 

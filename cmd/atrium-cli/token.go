@@ -44,14 +44,10 @@ func tokenCmd() *cobra.Command {
 			}
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			_, _ = fmt.Fprintf(w, "TOKEN\tCLIENT ID\tUSER ID\tTYPE\tEXPIRES\n")
+			_, _ = fmt.Fprintf(w, "ID\tCLIENT ID\tUSER ID\tTYPE\tEXPIRES\n")
 			for _, t := range tokens {
-				token := t["token"].(string)
-				if len(token) > 20 {
-					token = token[:20] + "..."
-				}
 				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-					token, t["client_id"], t["user_id"], t["token_type"], t["expires_at"])
+					t["id"], t["client_id"], t["user_id"], t["token_type"], t["expires_at"])
 			}
 			_ = w.Flush()
 			return nil
@@ -146,8 +142,8 @@ func tokenCmd() *cobra.Command {
 	}
 
 	revokeCmd := &cobra.Command{
-		Use:   "revoke [token]",
-		Short: "Revoke a token",
+		Use:   "revoke [id]",
+		Short: "Revoke an access token by its id",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			req, err := http.NewRequest("POST", serverURL+"/api/tokens/"+args[0]+"/revoke", nil)

@@ -108,6 +108,10 @@ func (c *AccountController) HandleRegister(w http.ResponseWriter, r *http.Reques
 
 func (c *AccountController) HandleForgot(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.AccountController.HandleForgot")()
+	if c.cfg != nil && c.cfg.Security.DisablePasswords {
+		writeError(w, http.StatusForbidden, "password_disabled", "Passwords are disabled")
+		return
+	}
 	var req struct {
 		Username string `json:"username"`
 		Email    string `json:"email"`
@@ -172,11 +176,37 @@ func (c *AccountController) HandlePatchMe(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	var req userPatch
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var fields map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&fields); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
 		return
 	}
+	for _, key := range []string{"attributes", "disabled", "email_verified"} {
+		if _, ok := fields[key]; ok {
+			writeError(w, http.StatusBadRequest, "invalid_request", "cannot change "+key)
+			return
+		}
+	}
+	blob, err := json.Marshal(fields)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
+		return
+	}
+	var req userPatch
+	if err := json.Unmarshal(blob, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
+		return
+	}
+	nextMeta, metaSet, err := mergedBag(user.UserMetadata, fields["user_metadata"])
+	if err != nil {
+		if writeMetadataError(w, err) {
+			return
+		}
+		writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body")
+		return
+	}
+	req.Disabled = nil
+	req.EmailVerified = nil
 	emailChanged := applyProfile(user, req)
 	if emailChanged {
 		user.EmailVerified = false
@@ -187,6 +217,16 @@ func (c *AccountController) HandlePatchMe(w http.ResponseWriter, r *http.Request
 		}
 		writeError(w, http.StatusInternalServerError, "server_error", "Failed to update profile")
 		return
+	}
+	if metaSet {
+		if err := c.users.SetUserMetadata(user.ID, nextMeta); err != nil {
+			if writeMetadataError(w, err) {
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "server_error", "Failed to update user metadata")
+			return
+		}
+		user.UserMetadata = nextMeta
 	}
 	if emailChanged {
 		_ = c.account.SendVerification(user)
@@ -303,10 +343,7 @@ func (c *AccountController) HandleRevokeRefresh(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusNotFound, "not_found", "Refresh token not found")
 		return
 	}
-	_ = c.tokens.RevokeRefreshToken(rt.Token)
-	if rt.AccessToken != "" {
-		_ = c.tokens.RevokeAccessToken(rt.AccessToken)
-	}
+	_ = c.tokens.RevokeRefreshByID(rt.ID)
 	if c.audit != nil {
 		c.audit.Write("user", user.ID, "token.revoke", "refresh_token", rt.ID, r, map[string]any{})
 	}
@@ -349,6 +386,10 @@ func (c *AccountController) HandleActivity(w http.ResponseWriter, r *http.Reques
 
 func (c *AccountController) HandleForgotPage(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.AccountController.HandleForgotPage")()
+	if c.cfg != nil && c.cfg.Security.DisablePasswords {
+		c.render(w, r, "forgot.html", map[string]any{"Error": "", "Status": "This server signs in with an email code or link. Passwords are not used."})
+		return
+	}
 	c.render(w, r, "forgot.html", map[string]any{"Error": "", "Status": ""})
 }
 
@@ -361,6 +402,10 @@ func (c *AccountController) HandleForgotSubmit(w http.ResponseWriter, r *http.Re
 	}
 	username := r.FormValue("username")
 	if !c.botOK(w, r, username) {
+		return
+	}
+	if c.cfg != nil && c.cfg.Security.DisablePasswords {
+		c.render(w, r, "forgot.html", map[string]any{"Error": "", "Status": "This server signs in with an email code or link. Passwords are not used."})
 		return
 	}
 	err := c.account.Forgot(username, c.account.RequestIP(r))
@@ -728,6 +773,10 @@ func (c *AccountController) caller(w http.ResponseWriter, r *http.Request) (*mod
 
 func (c *AccountController) writeForgot(w http.ResponseWriter, r *http.Request, id string) {
 	defer telemetry.Step("controller.AccountController.writeForgot")()
+	if c.cfg != nil && c.cfg.Security.DisablePasswords {
+		writeError(w, http.StatusForbidden, "password_disabled", "Passwords are disabled")
+		return
+	}
 	err := c.account.Forgot(id, c.account.RequestIP(r))
 	if errors.Is(err, mailer.ErrDisabled) {
 		writeError(w, http.StatusServiceUnavailable, "mailer_disabled", "SMTP is not configured")
@@ -864,6 +913,10 @@ func publicUser(user *models.User) map[string]any {
 	if user.LastLoginAt != nil {
 		last = user.LastLoginAt.Format(time.RFC3339)
 	}
+	meta := user.UserMetadata
+	if meta == nil {
+		meta = map[string]string{}
+	}
 	return map[string]any{
 		"id":             user.ID,
 		"username":       user.Username,
@@ -873,6 +926,7 @@ func publicUser(user *models.User) map[string]any {
 		"given_name":     user.GivenName,
 		"family_name":    user.FamilyName,
 		"disabled":       user.Disabled,
+		"user_metadata":  meta,
 		"last_login_at":  last,
 		"created_at":     user.CreatedAt,
 	}
