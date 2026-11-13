@@ -1,7 +1,9 @@
 package mailer
 
 import (
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/mail"
@@ -186,14 +188,28 @@ func (m *smtpMailer) deliver(toAddr, fromAddr, msg string) error {
 
 func mimeMessage(to, from, subject, text, htmlBody string) string {
 	text = sanitizeMailText(text)
+	head := fmt.Sprintf("Date: %s\r\nMessage-ID: %s\r\nTo: %s\r\nFrom: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\n",
+		time.Now().UTC().Format(time.RFC1123Z), messageID(from), to, from, subject)
 	if strings.TrimSpace(htmlBody) == "" {
-		return fmt.Sprintf("To: %s\r\nFrom: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
-			to, from, subject, text)
+		return head + "Content-Type: text/plain; charset=UTF-8\r\n\r\n" + text
 	}
 	htmlBody = sanitizeMailText(htmlBody)
 	boundary := "atrium-mail-boundary"
-	return fmt.Sprintf("To: %s\r\nFrom: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=%s\r\n\r\n--%s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s\r\n--%s\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s\r\n--%s--\r\n",
-		to, from, subject, boundary, boundary, text, boundary, htmlBody, boundary)
+	return fmt.Sprintf("%sContent-Type: multipart/alternative; boundary=%s\r\n\r\n--%s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s\r\n--%s\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s\r\n--%s--\r\n",
+		head, boundary, boundary, text, boundary, htmlBody, boundary)
+}
+
+// messageID builds a RFC 5322 message id. The domain comes from the validated sender.
+func messageID(from string) string {
+	buf := make([]byte, 12)
+	if _, err := rand.Read(buf); err != nil {
+		buf = []byte(strconv.FormatInt(time.Now().UnixNano(), 16))
+	}
+	domain := "localhost"
+	if at := strings.LastIndex(from, "@"); at >= 0 && at < len(from)-1 {
+		domain = from[at+1:]
+	}
+	return "<" + hex.EncodeToString(buf) + "@" + domain + ">"
 }
 
 func sanitizeMailText(text string) string {
