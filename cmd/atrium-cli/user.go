@@ -175,7 +175,91 @@ func userCmd() *cobra.Command {
 	exportCmd.Flags().StringP("output", "o", "", "Write the document to this file")
 	exportCmd.Flags().Bool("include-secrets", false, "Include password hashes and TOTP secrets")
 
-	cmd.AddCommand(listCmd, createCmd, getCmd, passwordCmd, disableCmd, enableCmd, importCmd, exportCmd)
+	roleAssign := &cobra.Command{
+		Use:   "role [user-id]",
+		Short: "Grant or remove a role",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			roleID, _ := cmd.Flags().GetString("role")
+			orgID, _ := cmd.Flags().GetString("org-id")
+			remove, _ := cmd.Flags().GetBool("remove")
+			if roleID == "" {
+				return fmt.Errorf("role is required")
+			}
+			body, _ := json.Marshal(map[string]string{"role_id": roleID, "org_id": orgID})
+			endpoint := serverURL + "/api/users/" + args[0] + "/roles"
+			var resp *http.Response
+			var err error
+			if remove {
+				resp, err = apiDelete(endpoint, "application/json", bytes.NewReader(body))
+			} else {
+				resp, err = apiPost(endpoint, "application/json", bytes.NewReader(body))
+			}
+			if err != nil {
+				return err
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+				var result map[string]any
+				_ = json.NewDecoder(resp.Body).Decode(&result)
+				return fmt.Errorf("failed to update role: %v", result["error_description"])
+			}
+			if remove {
+				fmt.Println("Role removed")
+				return nil
+			}
+			fmt.Println("Role granted")
+			return nil
+		},
+	}
+	roleAssign.Flags().String("role", "", "Role id")
+	roleAssign.Flags().String("org-id", "", "Organization id or slug. Empty grants the role on every token.")
+	roleAssign.Flags().Bool("remove", false, "Remove the grant")
+
+	scopeAssign := &cobra.Command{
+		Use:   "scope [user-id]",
+		Short: "Grant or remove one resource scope",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resource, _ := cmd.Flags().GetString("resource")
+			scope, _ := cmd.Flags().GetString("scope")
+			orgID, _ := cmd.Flags().GetString("org-id")
+			remove, _ := cmd.Flags().GetBool("remove")
+			if resource == "" || scope == "" {
+				return fmt.Errorf("resource and scope are required")
+			}
+			body, _ := json.Marshal(map[string]string{"resource": resource, "scope": scope, "org_id": orgID})
+			endpoint := serverURL + "/api/users/" + args[0] + "/scopes"
+			var resp *http.Response
+			var err error
+			if remove {
+				resp, err = apiDelete(endpoint, "application/json", bytes.NewReader(body))
+			} else {
+				resp, err = apiPost(endpoint, "application/json", bytes.NewReader(body))
+			}
+			if err != nil {
+				return err
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+				var result map[string]any
+				_ = json.NewDecoder(resp.Body).Decode(&result)
+				return fmt.Errorf("failed to update scope: %v", result["error_description"])
+			}
+			if remove {
+				fmt.Println("Scope removed")
+				return nil
+			}
+			fmt.Println("Scope granted")
+			return nil
+		},
+	}
+	scopeAssign.Flags().String("resource", "", "Resource URI")
+	scopeAssign.Flags().String("scope", "", "Scope name")
+	scopeAssign.Flags().String("org-id", "", "Organization id or slug. Empty grants the scope on every token.")
+	scopeAssign.Flags().Bool("remove", false, "Remove the grant")
+
+	cmd.AddCommand(listCmd, createCmd, getCmd, passwordCmd, disableCmd, enableCmd, importCmd, exportCmd, roleAssign, scopeAssign)
 	return cmd
 }
 

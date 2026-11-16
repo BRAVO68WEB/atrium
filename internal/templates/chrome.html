@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{.Brand.PageTitle}} - {{.Brand.ProductName}}</title>
-    {{if .Brand.FaviconURL}}<link rel="icon" href="{{.Brand.FaviconURL}}">{{end}}
+    <link rel="icon" type="image/png" href="{{if .Brand.FaviconURL}}{{.Brand.FaviconURL}}{{else}}/favicon.png{{end}}">
     <style>
         :root {
             --brand-primary: {{.Brand.PrimaryColor}};

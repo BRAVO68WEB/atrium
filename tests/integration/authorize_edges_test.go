@@ -31,13 +31,17 @@ func TestAuthorizePromptNoneAndBadPKCE(t *testing.T) {
 	query.Set("scope", "openid")
 	query.Set("state", "edge")
 	query.Set("prompt", "none")
-	noneResp, err := http.Get(ts.URL + "/oauth/authorize?" + query.Encode())
+	noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	noneResp, err := noFollow.Get(ts.URL + "/oauth/authorize?" + query.Encode())
 	if err != nil {
 		t.Fatal(err)
 	}
 	noneBody := readBody(t, noneResp)
-	if noneResp.StatusCode != http.StatusFound || !strings.Contains(noneBody, "login_required") {
-		t.Fatalf("prompt none %d %s", noneResp.StatusCode, noneBody)
+	noneLoc := noneResp.Header.Get("Location")
+	if noneResp.StatusCode != http.StatusFound || !strings.HasPrefix(noneLoc, "https://app.example/cb?") || !strings.Contains(noneLoc, "error=login_required") || !strings.Contains(noneLoc, "state=edge") {
+		t.Fatalf("prompt none %d %s %s", noneResp.StatusCode, noneLoc, noneBody)
 	}
 
 	browser := browserClient()
@@ -66,13 +70,13 @@ func TestAuthorizePromptNoneAndBadPKCE(t *testing.T) {
 	bad.Set("redirect_uri", "https://app.example/cb")
 	bad.Set("code_challenge", "abc")
 	bad.Set("code_challenge_method", "S512")
-	badResp, err := http.Get(ts.URL + "/oauth/authorize?" + bad.Encode())
+	badResp, err := noFollow.Get(ts.URL + "/oauth/authorize?" + bad.Encode())
 	if err != nil {
 		t.Fatal(err)
 	}
 	badBody := readBody(t, badResp)
-	if badResp.StatusCode != http.StatusBadRequest || !strings.Contains(badBody, "invalid_request") {
-		t.Fatalf("pkce %d %s", badResp.StatusCode, badBody)
+	if badResp.StatusCode != http.StatusFound || !strings.Contains(badResp.Header.Get("Location"), "error=invalid_request") {
+		t.Fatalf("pkce %d %s %s", badResp.StatusCode, badResp.Header.Get("Location"), badBody)
 	}
 }
 

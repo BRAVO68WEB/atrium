@@ -6,9 +6,9 @@ tmp_dir = "tmp"
 
 [build]
   bin = "./tmp/atrium"
-  cmd = "go build -o ./tmp/atrium ./cmd/atrium"
+  cmd = "go build -tags embed -o ./tmp/atrium ./cmd/atrium"
   delay = 1000
-  exclude_dir = ["assets", "tmp", "vendor", "docs", "tests", "bin"]
+  exclude_dir = ["assets", "tmp", "vendor", "docs", "tests", "bin", "frontend", "dist"]
   exclude_file = []
   exclude_regex = ["_test.go"]
   exclude_unchanged = false

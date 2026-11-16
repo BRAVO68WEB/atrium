@@ -40,6 +40,7 @@ type CreateClientInput struct {
 	PostLogoutRedirectURIs                     []string
 	DCREnabled                                 bool
 	CIMDEnabled                                bool
+	SkipConsent                                bool
 	SubjectType                                string
 	SectorIdentifierURI                        string
 	JWKS                                       string
@@ -103,6 +104,7 @@ func (s *ClientService) CreateClient(input CreateClientInput) (*models.Client, e
 		RegistrationSource:                         "management",
 		DCREnabled:                                 input.DCREnabled,
 		CIMDEnabled:                                input.CIMDEnabled,
+		SkipConsent:                                input.SkipConsent,
 		SubjectType:                                input.SubjectType,
 		SectorIdentifierURI:                        input.SectorIdentifierURI,
 		JWKS:                                       input.JWKS,
@@ -164,6 +166,18 @@ func (s *ClientService) ValidateClient(clientID, clientSecret string) (*models.C
 	}
 
 	return client, nil
+}
+
+func (s *ClientService) ResetSecret(id string) (string, error) {
+	defer telemetry.Step("service.ClientService.ResetSecret")()
+	if _, err := s.clientRepo.GetByID(id); err != nil {
+		return "", err
+	}
+	secret := generateSecret()
+	if err := s.clientRepo.ResetSecret(id, secret); err != nil {
+		return "", err
+	}
+	return secret, nil
 }
 
 func (s *ClientService) ValidateGrantType(client *models.Client, grantType string) error {

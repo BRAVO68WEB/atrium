@@ -36,6 +36,7 @@ email:
 security:
   issuer: http://localhost:8080
   hash_algo: internal/hashalgo/algo.go
+  data_key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 management:
   client_id: management
   client_secret: change-me

@@ -2,6 +2,7 @@ package service
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -100,4 +101,63 @@ func TestOrgResolveHonorsFlags(t *testing.T) {
 		t.Fatalf("domain=%s err=%v", domain, err)
 	}
 	_ = time.Now()
+}
+
+func TestOrgUpdate(t *testing.T) {
+	db, err := database.New(filepath.Join(t.TempDir(), "org.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{}
+	cfg.Org.Enabled = true
+	svc := NewOrgService(repository.NewOrgRepository(db), cfg)
+	org, err := svc.Create("Acme", "acme", []string{"acme.example"}, "https://cdn.example/a.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := svc.Create("Beta", "beta", nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "Acme Labs"
+	updated, err := svc.Update(org.ID, &name, nil, nil)
+	if err != nil || updated.Name != "Acme Labs" || updated.Slug != "acme" || updated.LogoURL != "https://cdn.example/a.png" {
+		t.Fatalf("name update %+v err=%v", updated, err)
+	}
+	if len(updated.Domains) != 1 || updated.Domains[0] != "acme.example" {
+		t.Fatalf("domains %+v", updated.Domains)
+	}
+	slug := "acme-labs"
+	logo := ""
+	updated, err = svc.Update(org.Slug, nil, &slug, &logo)
+	if err != nil || updated.Slug != "acme-labs" || updated.LogoURL != "" || updated.Name != "Acme Labs" {
+		t.Fatalf("slug update %+v err=%v", updated, err)
+	}
+	taken := other.Slug
+	if _, err := svc.Update(updated.ID, nil, &taken, nil); err == nil || !strings.Contains(err.Error(), "already in use") {
+		t.Fatalf("duplicate slug err=%v", err)
+	}
+	bad := "not a url"
+	if _, err := svc.Update(updated.ID, nil, nil, &bad); err == nil {
+		t.Fatal("expected a bad logo url to fail")
+	}
+	blank := "  "
+	if _, err := svc.Update(updated.ID, &blank, nil, nil); err == nil {
+		t.Fatal("expected an empty name to fail")
+	}
+	if _, err := db.Exec(`INSERT INTO users (id, username, password_hash, email, given_name, family_name) VALUES (?, ?, ?, ?, ?, ?)`,
+		"user-1", "ada", "x", "ada@acme.example", "Ada", "Lovelace"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.AddMember(org.ID, "user-1", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	members, err := svc.Members(updated.ID)
+	if err != nil || len(members) != 1 || members[0].Username != "ada" || members[0].Email != "ada@acme.example" || members[0].Role != "admin" || members[0].GivenName != "Ada" {
+		t.Fatalf("members %+v err=%v", members, err)
+	}
 }

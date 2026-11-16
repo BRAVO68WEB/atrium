@@ -12,6 +12,19 @@ func TestRedirectMustBeRegistered(t *testing.T) {
 	if !isValidRedirectURI("https://app.example/cb", []string{"https://app.example/cb"}) {
 		t.Fatal("registered redirect was rejected")
 	}
+	if isValidRedirectURI("https://appXexample/cb", []string{"https://app.example/cb"}) {
+		t.Fatal("a dot in a strict redirect acted as a wildcard")
+	}
+	pattern := []string{`regex:https://127\.0\.0\.1:9443/Callback.*`}
+	if !isValidRedirectURI("https://127.0.0.1:9443/Callback/Modified", pattern) {
+		t.Fatal("saved callback pattern rejected Callback/Modified")
+	}
+	if isValidRedirectURI("https://evil.example/Callback/Modified", pattern) {
+		t.Fatal("saved callback pattern matched another host")
+	}
+	if isValidRedirectURI("https://app.example/cb", []string{"regex:("}) {
+		t.Fatal("a broken regex matched a redirect")
+	}
 }
 
 func TestClientGrantGatesResponseType(t *testing.T) {

@@ -47,6 +47,11 @@ func apiPost(rawURL, contentType string, body io.Reader) (*http.Response, error)
 	return mgmt.Post(rawURL, contentType, body)
 }
 
+func apiDelete(rawURL, contentType string, body io.Reader) (*http.Response, error) {
+	syncMgmt()
+	return mgmt.Delete(rawURL, contentType, body)
+}
+
 func apiPostForm(rawURL string, data url.Values) (*http.Response, error) {
 	syncMgmt()
 	return mgmt.PostForm(rawURL, data)

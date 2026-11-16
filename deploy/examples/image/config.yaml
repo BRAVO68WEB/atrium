@@ -7,6 +7,7 @@ database:
   migrations: true
 security:
   issuer: http://localhost:8080
+  data_key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 management:
   client_id: management
   client_secret: change-me

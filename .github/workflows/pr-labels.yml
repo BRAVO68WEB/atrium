@@ -1,0 +1,42 @@
+name: Pull request labels
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  labels:
+    name: Label changed files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the base branch
+        uses: actions/checkout@v4.4.0
+
+      - name: Create missing labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: .github/scripts/pr-labels.sh --ensure
+
+      - name: Apply labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          gh api --paginate "repos/${REPO}/pulls/${PR}/files" \
+            --jq '.[] | "\(.status)\t\(.filename)"' \
+            | .github/scripts/pr-labels.sh > /tmp/pr-labels
+          if [ ! -s /tmp/pr-labels ]; then
+            echo "No matching labels."
+            exit 0
+          fi
+          while IFS= read -r label; do
+            [ -n "$label" ] || continue
+            gh pr edit "$PR" --add-label "$label"
+          done < /tmp/pr-labels

@@ -29,26 +29,27 @@ func TestActorDelegation(t *testing.T) {
 	}
 	challenge := crypto.GenerateCodeChallenge(verifier)
 
+	noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	missingPKCE := actorAuthorizeQuery(app.ID, actor.ID, "", "")
-	missing, err := http.Get(ts.URL + "/oauth/authorize?" + missingPKCE)
+	missing, err := noFollow.Get(ts.URL + "/oauth/authorize?" + missingPKCE)
 	if err != nil {
 		t.Fatal(err)
 	}
 	missingBody, _ := io.ReadAll(missing.Body)
 	_ = missing.Body.Close()
-	if missing.StatusCode != http.StatusBadRequest || !strings.Contains(string(missingBody), "S256") {
-		t.Fatalf("missing pkce %d %s", missing.StatusCode, missingBody)
+	if missing.StatusCode != http.StatusFound || !strings.Contains(missing.Header.Get("Location"), "S256") {
+		t.Fatalf("missing pkce %d %s %s", missing.StatusCode, missing.Header.Get("Location"), missingBody)
 	}
 
 	unknown := actorAuthorizeQuery(app.ID, "not-an-actor", challenge, "S256")
-	unknownResp, err := http.Get(ts.URL + "/oauth/authorize?" + unknown)
+	unknownResp, err := noFollow.Get(ts.URL + "/oauth/authorize?" + unknown)
 	if err != nil {
 		t.Fatal(err)
 	}
 	unknownBody, _ := io.ReadAll(unknownResp.Body)
 	_ = unknownResp.Body.Close()
-	if unknownResp.StatusCode != http.StatusBadRequest || !strings.Contains(string(unknownBody), "not recognized") {
-		t.Fatalf("unknown actor %d %s", unknownResp.StatusCode, unknownBody)
+	if unknownResp.StatusCode != http.StatusFound || !strings.Contains(unknownResp.Header.Get("Location"), "not+recognized") {
+		t.Fatalf("unknown actor %d %s %s", unknownResp.StatusCode, unknownResp.Header.Get("Location"), unknownBody)
 	}
 
 	jar, _ := cookiejar.New(nil)

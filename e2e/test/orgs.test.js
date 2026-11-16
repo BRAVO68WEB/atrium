@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const { startServer } = require("../support/server");
 const { pkcePair, shortID } = require("../support/pkce");
-const { createUser, createClient, tokenRequest, decodeJwt, api } = require("../support/oauth");
+const { createUser, createClient, tokenRequest, decodeJwt, api, redirectError } = require("../support/oauth");
 const { newPage, authorize, closeBrowser, callbackURL } = require("../support/browser");
 
 describe("organizations", function () {
@@ -163,8 +163,8 @@ describe("organizations", function () {
     const none = authorizeURL(pkcePair());
     none.searchParams.set("prompt", "none");
     const response = await page.request.get(none.toString(), { maxRedirects: 0 });
-    assert.equal(response.status(), 302);
-    const body = await response.json();
+    const body = redirectError(response);
+    assert.equal(body.status, 302);
     assert.equal(body.error, "interaction_required");
     await page.context().close();
   });

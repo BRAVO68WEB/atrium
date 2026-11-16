@@ -32,7 +32,7 @@ var DefaultDelays = []time.Duration{
 	10 * time.Minute,
 }
 
-// Job is one delivery. Body is the webhook JSON. Mail uses To, Subject, and Text.
+// Job is one delivery. Body is the webhook JSON. Mail uses To, Subject, Text, and optional HTML.
 type Job struct {
 	ID      string `json:"id"`
 	Kind    string `json:"kind"`
@@ -43,6 +43,7 @@ type Job struct {
 	To      string `json:"to,omitempty"`
 	Subject string `json:"subject,omitempty"`
 	Text    string `json:"text,omitempty"`
+	HTML    string `json:"html,omitempty"`
 }
 
 // Handler runs one attempt. A nil error acknowledges the job.

@@ -146,6 +146,22 @@ func TestNotifyType(t *testing.T) {
 	}
 }
 
+func TestUserMetadataClaimSource(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.OIDC.ClaimMappings = []ClaimMapping{{Claim: "locale", Source: "user.locale"}}
+	if err := ValidatePlatform(cfg); err != nil {
+		t.Fatal(err)
+	}
+	cfg.OIDC.ClaimMappings = []ClaimMapping{{Claim: "locale", Source: "user."}}
+	if err := ValidatePlatform(cfg); err == nil {
+		t.Fatal("expected an empty user source to fail")
+	}
+	cfg.OIDC.ClaimMappings = []ClaimMapping{{Claim: "locale", Source: "attr.plan"}}
+	if err := ValidatePlatform(cfg); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBrandingRejectsBadValues(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Branding.PrimaryColor = "red"

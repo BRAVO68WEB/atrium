@@ -3,6 +3,34 @@ const assert = require("node:assert/strict");
 const MGMT_ID = "e2e-mgmt";
 const MGMT_SECRET = "e2e-mgmt-secret";
 
+function headerValue(response, name) {
+  if (response.headers && typeof response.headers.get === "function") {
+    return response.headers.get(name) || "";
+  }
+  if (typeof response.headers === "function") {
+    const all = response.headers();
+    const want = name.toLowerCase();
+    for (const [key, value] of Object.entries(all)) {
+      if (key.toLowerCase() === want) {
+        return value;
+      }
+    }
+  }
+  return "";
+}
+
+function redirectError(response) {
+  const location = headerValue(response, "location");
+  const target = new URL(location);
+  const fragment = new URLSearchParams(target.hash.startsWith("#") ? target.hash.slice(1) : "");
+  const status = typeof response.status === "function" ? response.status() : response.status;
+  return {
+    status,
+    error: target.searchParams.get("error") || fragment.get("error"),
+    error_description: target.searchParams.get("error_description") || fragment.get("error_description"),
+  };
+}
+
 async function readBody(response) {
   const text = await response.text();
   let body = text;
@@ -118,6 +146,7 @@ module.exports = {
   MGMT_ID,
   MGMT_SECRET,
   readBody,
+  redirectError,
   managementToken,
   api,
   createUser,

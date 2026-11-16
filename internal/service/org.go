@@ -178,6 +178,18 @@ func (s *OrgService) AddDomain(orgID, domain string) error {
 	return s.repo.AddDomain(orgID, domain)
 }
 
+func (s *OrgService) Members(id string) ([]models.OrgMember, error) {
+	defer telemetry.Step("service.OrgService.Members")()
+	if !s.Enabled() {
+		return nil, ErrOrgDisabled
+	}
+	org, err := s.Get(id)
+	if err != nil {
+		return nil, ErrOrgInvalid
+	}
+	return s.repo.ListMembers(org.ID)
+}
+
 func (s *OrgService) AddMember(orgID, userID, role string) error {
 	defer telemetry.Step("service.OrgService.AddMember")()
 	if !s.Enabled() {
@@ -237,6 +249,59 @@ func (s *OrgService) Get(idOrSlug string) (*models.Organization, error) {
 		return org, nil
 	}
 	return s.repo.GetBySlug(idOrSlug)
+}
+
+// Update changes the name, slug, and logo. A nil field keeps the stored value.
+// An empty logo clears it. The id does not change.
+func (s *OrgService) Update(id string, name, slug, logoURL *string) (*models.Organization, error) {
+	defer telemetry.Step("service.OrgService.Update")()
+	if !s.Enabled() {
+		return nil, ErrOrgDisabled
+	}
+	org, err := s.Get(id)
+	if err != nil {
+		return nil, ErrOrgInvalid
+	}
+	nextName := org.Name
+	if name != nil {
+		nextName = strings.TrimSpace(*name)
+		if nextName == "" {
+			return nil, fmt.Errorf("name is required")
+		}
+	}
+	nextSlug := org.Slug
+	if slug != nil {
+		nextSlug = strings.ToLower(strings.TrimSpace(*slug))
+		if !validSlug(nextSlug) {
+			return nil, fmt.Errorf("slug must be lowercase letters, numbers, and hyphens")
+		}
+		if nextSlug != org.Slug {
+			existing, lookErr := s.repo.GetBySlug(nextSlug)
+			if lookErr == nil && existing.ID != org.ID {
+				return nil, fmt.Errorf("slug is already in use")
+			}
+		}
+	}
+	nextLogo := org.LogoURL
+	if logoURL != nil {
+		nextLogo, err = normalizeLogoURL(*logoURL)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if nextName == org.Name && nextSlug == org.Slug && nextLogo == org.LogoURL {
+		return org, nil
+	}
+	org.Name = nextName
+	org.Slug = nextSlug
+	org.LogoURL = nextLogo
+	if err := s.repo.Update(org); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "unique") {
+			return nil, fmt.Errorf("slug is already in use")
+		}
+		return nil, err
+	}
+	return s.repo.Get(org.ID)
 }
 
 // EmailDomain returns the host part of an email address.

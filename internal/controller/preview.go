@@ -202,13 +202,55 @@ func previewCatalog() []previewPage {
 
 // PreviewEnabled reports whether /preview is mounted.
 func (c *WebController) PreviewEnabled() bool {
-	defer telemetry.Step("controller.WebController.PreviewEnabled")(
-
-	// HandlePreview renders one auth page with sample data, or the catalog.
-	)
+	defer telemetry.Step("controller.WebController.PreviewEnabled")()
 	return c != nil && c.cfg != nil && c.cfg.Debug.UI
 }
 
+// PreviewPage is one auth screen the dashboard can show.
+type PreviewPage struct {
+	Name     string   `json:"name"`
+	Label    string   `json:"label"`
+	Variants []string `json:"variants"`
+}
+
+// PreviewPages lists the auth screens and their sample variants.
+func (c *WebController) PreviewPages() []PreviewPage {
+	defer telemetry.Step("controller.WebController.PreviewPages")()
+	pages := previewCatalog()
+	sort.Slice(pages, func(i, j int) bool { return pages[i].Label < pages[j].Label })
+	out := make([]PreviewPage, 0, len(pages))
+	for _, page := range pages {
+		variants := make([]string, 0, len(page.Variants))
+		for _, variant := range page.Variants {
+			if variant != "" {
+				variants = append(variants, variant)
+			}
+		}
+		out = append(out, PreviewPage{Name: page.Name, Label: page.Label, Variants: variants})
+	}
+	return out
+}
+
+// ServePagePreview renders one sample auth page. It does not require debug.ui.
+func (c *WebController) ServePagePreview(w http.ResponseWriter, r *http.Request, name, variant string) {
+	defer telemetry.Step("controller.WebController.ServePagePreview")()
+	for _, item := range previewCatalog() {
+		if item.Name != name {
+			continue
+		}
+		view := item.render(variant)
+		if view.Params == nil {
+			view.Params = map[string]string{}
+		}
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline' 'self'; img-src 'self' data:; script-src 'self'; frame-ancestors 'self'")
+		c.renderPreview(w, r, view)
+		return
+	}
+	http.NotFound(w, r)
+}
+
+// HandlePreview renders one auth page with sample data, or the catalog.
 func (c *WebController) HandlePreview(w http.ResponseWriter, r *http.Request) {
 	defer telemetry.Step("controller.WebController.HandlePreview")()
 	if !c.PreviewEnabled() {

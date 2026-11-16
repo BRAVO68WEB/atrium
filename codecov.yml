@@ -1,3 +1,7 @@
+codecov:
+  notify:
+    after_n_builds: 2
+
 coverage:
   status:
     project:
@@ -6,8 +10,100 @@ coverage:
         threshold: 1%
     patch:
       default:
+        target: 45%
+        threshold: 1%
+
+comment:
+  layout: "condensed_header, diff, flags, components"
+
+flag_management:
+  default_rules:
+    carryforward: false
+  individual_flags:
+    - name: unit
+      paths:
+        - internal/**
+        - pkg/**
+        - cmd/**
+      carryforward: false
+      statuses:
+        - type: project
+          target: auto
+          threshold: 1%
+          informational: true
+    - name: integration
+      paths:
+        - internal/**
+        - pkg/**
+        - cmd/**
+      carryforward: false
+      statuses:
+        - type: project
+          target: auto
+          threshold: 1%
+          informational: true
+    - name: e2e
+      carryforward: false
+      statuses:
+        - type: project
+          target: auto
+          informational: true
+
+component_management:
+  default_rules:
+    statuses:
+      - type: project
         target: auto
         threshold: 1%
+        informational: true
+  individual_components:
+    - component_id: protocol
+      name: Protocol
+      paths:
+        - internal/handlers/oauth/**
+        - internal/oidc/**
+        - internal/oobcode/**
+        - pkg/crypto/**
+    - component_id: account
+      name: Account
+      paths:
+        - internal/controller/**
+        - internal/service/**
+        - internal/templates/**
+        - internal/mailer/**
+        - internal/social/**
+    - component_id: data
+      name: Data
+      paths:
+        - internal/repository/**
+        - internal/database/**
+        - internal/models/**
+    - component_id: clients
+      name: Clients
+      paths:
+        - cmd/**
+        - internal/mgmtclient/**
+    - component_id: platform
+      name: Platform
+      paths:
+        - internal/config/**
+        - internal/auth/**
+        - internal/cache/**
+        - internal/queue/**
+        - internal/notify/**
+        - internal/telemetry/**
+        - internal/route/**
+        - internal/app/**
+        - internal/server/**
+        - internal/hashalgo/**
+        - internal/push/**
+        - internal/aauth/**
+        - pkg/passhash/**
+        - internal/branding/**
+        - internal/background/**
+        - internal/log/**
+        - internal/testpg/**
+        - internal/version/**
 
 # These paths are tests, examples, or docs. They are not the server.
 ignore:

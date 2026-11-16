@@ -6,6 +6,7 @@ import (
 
 	"github.com/bravo68web/atrium/internal/models"
 	"github.com/bravo68web/atrium/internal/testpg"
+	"github.com/bravo68web/atrium/pkg/crypto"
 )
 
 type rowStore struct {
@@ -311,8 +312,8 @@ func TestSaveAndGetRefreshToken(t *testing.T) {
 		t.Fatalf("GetRefreshToken failed: %v", err)
 	}
 
-	if found.AccessToken != "access-token-1" {
-		t.Errorf("Expected AccessToken %q, got %q", "access-token-1", found.AccessToken)
+	if found.AccessToken != crypto.CredentialHash("access-token-1") {
+		t.Errorf("Expected stored access key %q, got %q", crypto.CredentialHash("access-token-1"), found.AccessToken)
 	}
 }
 

@@ -16,12 +16,13 @@ import (
 )
 
 type storedKey struct {
-	Kid      string
-	Alg      string
-	Status   string
-	RSA      *rsa.PrivateKey
-	EC       *ecdsa.PrivateKey
-	RetireAt time.Time
+	Kid       string
+	Alg       string
+	Status    string
+	RSA       *rsa.PrivateKey
+	EC        *ecdsa.PrivateKey
+	CreatedAt time.Time
+	RetireAt  time.Time
 }
 
 func LoadKeySet(db database.SQL) (*KeySet, error) {
@@ -30,14 +31,14 @@ func LoadKeySet(db database.SQL) (*KeySet, error) {
 	if db == nil {
 		return newMemoryKeySet()
 	}
-	rows, err := db.Query(`SELECT kid, alg, status, private_pem, COALESCE(retire_at, '') FROM signing_keys`)
+	rows, err := db.Query(`SELECT kid, alg, status, private_pem, COALESCE(created_at, ''), COALESCE(retire_at, '') FROM signing_keys`)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
-		var kid, alg, status, pemText, retire string
-		if err := rows.Scan(&kid, &alg, &status, &pemText, &retire); err != nil {
+		var kid, alg, status, pemText, created, retire string
+		if err := rows.Scan(&kid, &alg, &status, &pemText, &created, &retire); err != nil {
 			return nil, err
 		}
 		key, err := parsePrivatePEM(alg, pemText)
@@ -45,6 +46,9 @@ func LoadKeySet(db database.SQL) (*KeySet, error) {
 			return nil, err
 		}
 		item := storedKey{Kid: kid, Alg: alg, Status: status, RSA: key.RSA, EC: key.EC}
+		if created != "" {
+			item.CreatedAt, _ = time.Parse(time.RFC3339, created)
+		}
 		if retire != "" {
 			item.RetireAt, _ = time.Parse(time.RFC3339, retire)
 		}
@@ -80,7 +84,7 @@ func newMemoryKeySet() (*KeySet, error) {
 
 func (ks *KeySet) generate(alg string) error {
 	defer telemetry.Step("oidc.KeySet.generate")()
-	item := storedKey{Alg: alg, Status: "active", Kid: generateKid()}
+	item := storedKey{Alg: alg, Status: "active", Kid: generateKid(), CreatedAt: time.Now().UTC()}
 	var pemText string
 	var err error
 	switch alg {
@@ -110,7 +114,7 @@ func (ks *KeySet) generate(alg string) error {
 		return nil
 	}
 	_, err = ks.db.Exec(`INSERT INTO signing_keys (kid, alg, status, private_pem, created_at) VALUES (?, ?, 'active', ?, ?)`,
-		item.Kid, alg, pemText, time.Now().UTC().Format(time.RFC3339))
+		item.Kid, alg, pemText, item.CreatedAt.Format(time.RFC3339))
 	return err
 }
 
@@ -203,15 +207,15 @@ func (ks *KeySet) Reload() error {
 	if ks == nil || ks.db == nil {
 		return nil
 	}
-	rows, err := ks.db.Query(`SELECT kid, alg, status, private_pem, COALESCE(retire_at, '') FROM signing_keys`)
+	rows, err := ks.db.Query(`SELECT kid, alg, status, private_pem, COALESCE(created_at, ''), COALESCE(retire_at, '') FROM signing_keys`)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = rows.Close() }()
 	var next []storedKey
 	for rows.Next() {
-		var kid, alg, status, pemText, retire string
-		if err := rows.Scan(&kid, &alg, &status, &pemText, &retire); err != nil {
+		var kid, alg, status, pemText, created, retire string
+		if err := rows.Scan(&kid, &alg, &status, &pemText, &created, &retire); err != nil {
 			return err
 		}
 		key, err := parsePrivatePEM(alg, pemText)
@@ -219,6 +223,9 @@ func (ks *KeySet) Reload() error {
 			return err
 		}
 		item := storedKey{Kid: kid, Alg: alg, Status: status, RSA: key.RSA, EC: key.EC}
+		if created != "" {
+			item.CreatedAt, _ = time.Parse(time.RFC3339, created)
+		}
 		if retire != "" {
 			item.RetireAt, _ = time.Parse(time.RFC3339, retire)
 		}
@@ -231,6 +238,52 @@ func (ks *KeySet) Reload() error {
 	ks.keys = next
 	ks.mu.Unlock()
 	return nil
+}
+
+// SigningKeyInfo is the public description of one tenant signing key.
+type SigningKeyInfo struct {
+	Kid       string `json:"kid"`
+	Alg       string `json:"alg"`
+	Kty       string `json:"kty"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"created_at,omitempty"`
+	RetireAt  string `json:"retire_at,omitempty"`
+}
+
+// SigningKeys lists the issuer RSA and EC keys. Private key material is not included.
+// status is active, retiring, or expired.
+func (ks *KeySet) SigningKeys() []SigningKeyInfo {
+	defer telemetry.Step("oidc.KeySet.SigningKeys")()
+	if ks == nil {
+		return nil
+	}
+	ks.mu.RLock()
+	defer ks.mu.RUnlock()
+	now := time.Now()
+	out := make([]SigningKeyInfo, 0)
+	for _, key := range ks.keys {
+		if key.RSA == nil && key.EC == nil {
+			continue
+		}
+		info := SigningKeyInfo{Kid: key.Kid, Alg: key.Alg, Kty: "EC", Status: "expired"}
+		if key.RSA != nil {
+			info.Kty = "RSA"
+		}
+		switch {
+		case key.Status == "active":
+			info.Status = "active"
+		case key.RetireAt.After(now):
+			info.Status = "retiring"
+		}
+		if !key.CreatedAt.IsZero() {
+			info.CreatedAt = key.CreatedAt.UTC().Format(time.RFC3339)
+		}
+		if !key.RetireAt.IsZero() {
+			info.RetireAt = key.RetireAt.UTC().Format(time.RFC3339)
+		}
+		out = append(out, info)
+	}
+	return out
 }
 
 func (ks *KeySet) ToJWKS() JWKS {

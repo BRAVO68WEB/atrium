@@ -10,8 +10,10 @@ import (
 const (
 	XAAIDJAGTokenType = "urn:ietf:params:oauth:token-type:id-jag"
 	XAAJWTBearerGrant = "urn:ietf:params:oauth:grant-type:jwt-bearer"
-	XAAIDJAGProfile   = "urn:ietf:params:oauth:grant-profile:id-jag"
-	XAAIDJAGTyp       = "oauth-id-jag+jwt"
+	// OpaqueToJWTGrant exchanges an opaque access token for a JWT.
+	OpaqueToJWTGrant = "urn:atrium:params:oauth:grant-type:opaque-to-jwt"
+	XAAIDJAGProfile  = "urn:ietf:params:oauth:grant-profile:id-jag"
+	XAAIDJAGTyp      = "oauth-id-jag+jwt"
 )
 
 // XAAConfig is Cross-App Access. Enabled stays false unless set, so a

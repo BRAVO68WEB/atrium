@@ -38,6 +38,7 @@ type RequestObjectClaims struct {
 	Nonce               string `json:"nonce,omitempty"`
 	CodeChallenge       string `json:"code_challenge,omitempty"`
 	CodeChallengeMethod string `json:"code_challenge_method,omitempty"`
+	ResponseMode        string `json:"response_mode,omitempty"`
 	Prompt              string `json:"prompt,omitempty"`
 	LoginHint           string `json:"login_hint,omitempty"`
 	Resource            string `json:"resource,omitempty"`
@@ -101,6 +102,9 @@ func (s *JARService) ValidateRequestObject(requestJWT string, client *models.Cli
 	if claims.Issuer != "" && claims.Issuer != client.ID {
 		return nil, fmt.Errorf("iss mismatch: expected %s, got %s", client.ID, claims.Issuer)
 	}
+	if claims.ClientID != "" && claims.ClientID != client.ID {
+		return nil, fmt.Errorf("client_id mismatch: expected %s, got %s", client.ID, claims.ClientID)
+	}
 
 	// Validate aud (if present)
 	if len(claims.Audience) > 0 {
@@ -147,6 +151,9 @@ func (s *JARService) ValidateRequestObject(requestJWT string, client *models.Cli
 	if claims.CodeChallengeMethod != "" {
 		params["code_challenge_method"] = claims.CodeChallengeMethod
 	}
+	if claims.ResponseMode != "" {
+		params["response_mode"] = claims.ResponseMode
+	}
 	if claims.Prompt != "" {
 		params["prompt"] = claims.Prompt
 	}
@@ -168,6 +175,12 @@ func jarAlgOK(alg string) bool {
 	default:
 		return false
 	}
+}
+
+// ClientPublicKey returns the client's signing key that matches the JWT header.
+func (s *JARService) ClientPublicKey(client *models.Client, header map[string]interface{}) (interface{}, error) {
+	defer telemetry.Step("service.JARService.ClientPublicKey")()
+	return s.resolveClientKey(client, header)
 }
 
 func (s *JARService) resolveClientKey(client *models.Client, header map[string]interface{}) (interface{}, error) {

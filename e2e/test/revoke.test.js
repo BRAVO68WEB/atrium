@@ -31,7 +31,7 @@ describe("revocation", function () {
     }
   });
 
-  it("hides another client's token and still revokes with the wrong hint", async function () {
+  it("rejects another client's token and still revokes with the wrong hint", async function () {
     const issued = await tokenRequest(server.base, {
       grant_type: "password",
       username: user.username,
@@ -41,7 +41,8 @@ describe("revocation", function () {
     assert.equal(issued.status, 200, JSON.stringify(issued.body));
 
     const foreign = await revoke(server.base, other, issued.body.access_token);
-    assert.equal(foreign.status, 200, JSON.stringify(foreign.body));
+    assert.equal(foreign.status, 400, JSON.stringify(foreign.body));
+    assert.equal(foreign.body.error, "invalid_grant");
     const still = await introspect(server.base, owner, issued.body.access_token);
     assert.equal(still.body.active, true);
 
