@@ -82,7 +82,7 @@ func (h *Handler) handleTokenExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := h.issueAccessToken(r.Context(), clientID, subjectTokenInfo.UserID, strings.Join(scopes, " "), tokenType)
+	accessToken, err := h.issueAccessToken(r.Context(), clientID, subjectTokenInfo.UserID, strings.Join(scopes, " "), tokenType, dpopJKT)
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
 		return

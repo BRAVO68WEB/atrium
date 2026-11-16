@@ -66,9 +66,14 @@ func (h *Handler) revokeDPoP(w http.ResponseWriter, r *http.Request, client *mod
 }
 
 // boundRefreshDPoP keeps a refreshed token on the key that issued it.
-// A client that requires DPoP still needs a proof when the old token had none.
+// A client that requires DPoP does not upgrade an older unbound session:
+// the user signs in again and gets a new key.
 func (h *Handler) boundRefreshDPoP(w http.ResponseWriter, r *http.Request, client *models.Client, boundJKT string) (string, bool) {
 	defer telemetry.Step("oauth.Handler.boundRefreshDPoP")()
+	if client != nil && client.DPoPBoundAccessTokens && boundJKT == "" {
+		writeTokenError(w, http.StatusBadRequest, "invalid_grant", "Session is not bound to a device key. Sign in again.")
+		return "", false
+	}
 	if (client == nil || !client.DPoPBoundAccessTokens) && boundJKT == "" {
 		return "", true
 	}

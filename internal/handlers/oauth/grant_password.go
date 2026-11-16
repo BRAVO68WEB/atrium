@@ -117,7 +117,7 @@ func (h *Handler) handlePasswordToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resource := r.Form.Get("resource")
-	accessToken, err := h.issueAccessTokenFor(r.Context(), clientID, user.ID, strings.Join(scopes, " "), tokenType, orgID, orgSlug, resource, "")
+	accessToken, err := h.issueAccessTokenFor(r.Context(), clientID, user.ID, strings.Join(scopes, " "), tokenType, orgID, orgSlug, resource, "", dpopJKT)
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
 		return
