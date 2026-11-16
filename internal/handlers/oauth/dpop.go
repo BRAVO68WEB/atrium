@@ -3,6 +3,7 @@ package oauth
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/bravo68web/atrium/internal/models"
 	"github.com/bravo68web/atrium/internal/service"
@@ -101,6 +102,23 @@ func boundTokenType(client *models.Client) string {
 	return "Bearer"
 }
 
+// proofURIs is the request URI, then the public issuer URI when they differ.
+// Resource servers and this API call the token endpoint on an internal host.
+// The browser signs the public issuer. Replay is recorded only after htu matches,
+// so a mismatch on the internal host can be retried safely.
+func proofURIs(scheme, host, path, issuer string) []string {
+	primary := fmt.Sprintf("%s://%s%s", scheme, host, path)
+	public := strings.TrimRight(strings.TrimSpace(issuer), "/")
+	if public == "" {
+		return []string{primary}
+	}
+	candidate := public + path
+	if candidate == primary {
+		return []string{primary}
+	}
+	return []string{primary, candidate}
+}
+
 func (h *Handler) ValidateDPoPProof(r *http.Request, accessToken string) (*service.DPoPProof, error) {
 	defer telemetry.Step("oauth.Handler.ValidateDPoPProof")()
 	dpopHeader := r.Header.Get("DPoP")
@@ -108,12 +126,28 @@ func (h *Handler) ValidateDPoPProof(r *http.Request, accessToken string) (*servi
 		return nil, fmt.Errorf("DPoP header is required")
 	}
 
-	// Build full URI for DPoP validation
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	fullURI := fmt.Sprintf("%s://%s%s", scheme, r.Host, r.URL.Path)
-
-	return h.dpopSvc.ValidateDPoPProof(r.Context(), dpopHeader, r.Method, fullURI, accessToken)
+	issuer := ""
+	if h.cfg != nil {
+		issuer = h.cfg.Security.Issuer
+	}
+	var last error
+	for i, uri := range proofURIs(scheme, r.Host, r.URL.Path, issuer) {
+		proof, err := h.dpopSvc.ValidateDPoPProof(r.Context(), dpopHeader, r.Method, uri, accessToken)
+		if err == nil {
+			return proof, nil
+		}
+		last = err
+		if i == 0 && strings.Contains(err.Error(), "htu mismatch") {
+			continue
+		}
+		return nil, err
+	}
+	if last == nil {
+		last = fmt.Errorf("DPoP proof is invalid")
+	}
+	return nil, last
 }
