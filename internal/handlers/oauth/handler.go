@@ -780,12 +780,12 @@ func (h *Handler) stampCert(r *http.Request, token *models.AccessToken) {
 	token.CertThumbprint = h.mtlsSvc.GetCertificateThumbprint(cert)
 }
 
-func (h *Handler) issueAccessToken(ctx context.Context, clientID, userID, scope, tokenType string) (string, error) {
+func (h *Handler) issueAccessToken(ctx context.Context, clientID, userID, scope, tokenType, dpopJKT string) (string, error) {
 	defer telemetry.Step("oauth.Handler.issueAccessToken")()
-	return h.issueAccessTokenFor(ctx, clientID, userID, scope, tokenType, "", "", "", "")
+	return h.issueAccessTokenFor(ctx, clientID, userID, scope, tokenType, "", "", "", "", dpopJKT)
 }
 
-func (h *Handler) issueAccessTokenFor(ctx context.Context, clientID, userID, scope, tokenType, orgID, orgSlug, resource, actor string) (string, error) {
+func (h *Handler) issueAccessTokenFor(ctx context.Context, clientID, userID, scope, tokenType, orgID, orgSlug, resource, actor, dpopJKT string) (string, error) {
 	defer telemetry.Step("oauth.Handler.issueAccessTokenFor")()
 	format := ""
 	var lifetime time.Duration
@@ -797,7 +797,11 @@ func (h *Handler) issueAccessTokenFor(ctx context.Context, clientID, userID, sco
 		if h.oidcHandler == nil {
 			return "", fmt.Errorf("jwt access tokens require the oidc handler")
 		}
-		return h.oidcHandler.CreateAccessTokenJWT(ctx, clientID, userID, scope, tokenType, lifetime, orgID, orgSlug, resource, actor, nil)
+		var extra map[string]any
+		if dpopJKT != "" {
+			extra = map[string]any{"cnf": map[string]string{"jkt": dpopJKT}}
+		}
+		return h.oidcHandler.CreateAccessTokenJWT(ctx, clientID, userID, scope, tokenType, lifetime, orgID, orgSlug, resource, actor, extra)
 	}
 	return crypto.GenerateToken()
 }

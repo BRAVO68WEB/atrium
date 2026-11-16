@@ -256,7 +256,7 @@ func (h *Handler) HandleDeviceToken(w http.ResponseWriter, r *http.Request) {
 	}
 	dc.Scopes = scopes
 
-	accessToken, err := h.issueAccessToken(r.Context(), dc.ClientID, userID, strings.Join(dc.Scopes, " "), tokenType)
+	accessToken, err := h.issueAccessToken(r.Context(), dc.ClientID, userID, strings.Join(dc.Scopes, " "), tokenType, dpopJKT)
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
 		return

@@ -462,7 +462,7 @@ func (h *Handler) issueAuthorizationResponse(w http.ResponseWriter, r *http.Requ
 	}
 
 	if needsToken {
-		accessToken, err = h.issueAccessTokenFor(r.Context(), client.ID, session.UserID, scope, "Bearer", orgID, orgSlug, resource, "")
+		accessToken, err = h.issueAccessTokenFor(r.Context(), client.ID, session.UserID, scope, "Bearer", orgID, orgSlug, resource, "", "")
 		if err != nil {
 			writeOAuthError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token", state)
 			return

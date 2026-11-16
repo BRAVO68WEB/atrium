@@ -148,7 +148,7 @@ func (h *Handler) handleAuthorizationCodeToken(w http.ResponseWriter, r *http.Re
 	}
 	authCode.Scopes = scopes
 
-	accessToken, err := h.issueAccessTokenFor(r.Context(), authCode.ClientID, authCode.UserID, strings.Join(authCode.Scopes, " "), tokenType, authCode.OrgID, orgSlug, authCode.Resource, authCode.RequestedActor)
+	accessToken, err := h.issueAccessTokenFor(r.Context(), authCode.ClientID, authCode.UserID, strings.Join(authCode.Scopes, " "), tokenType, authCode.OrgID, orgSlug, authCode.Resource, authCode.RequestedActor, dpopJKT)
 	if err != nil {
 		writeTokenError(w, http.StatusInternalServerError, "server_error", "Failed to generate access token")
 		return
